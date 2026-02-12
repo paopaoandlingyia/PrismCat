@@ -28,16 +28,19 @@ function AppLayout() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-6">
               {/* Logo */}
-              <div className="flex items-center gap-3">
+              <a
+                href="https://github.com/paopaoandlingyia/PrismCat"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 transition-opacity hover:opacity-80"
+              >
                 <div className="relative">
                   <PrismCatLogo className="h-9 w-9" />
                 </div>
-                <div>
-                  <h1 className="text-xl font-bold prism-gradient-text tracking-tight">
-                    {t('app.title')}
-                  </h1>
-                </div>
-              </div>
+                <h1 className="text-xl font-bold prism-gradient-text tracking-tight">
+                  {t('app.title')}
+                </h1>
+              </a>
 
               {/* 导航 */}
               <nav className="hidden md:flex items-center gap-2 ml-10">

@@ -4,17 +4,9 @@
 
 - [项目简介](#项目简介)
 - [架构说明](#架构说明)
+- [快速开始 (Docker 推荐)](#快速开始-docker-推荐)
 - [本地开发](#本地开发)
-- [生产环境部署（云端）](#生产环境部署云端)
-  - [前置条件](#前置条件)
-  - [第一步：编译与打包](#第一步编译与打包)
-  - [第二步：服务器环境准备](#第二步服务器环境准备)
-  - [第三步：上传与目录结构](#第三步上传与目录结构)
-  - [第四步：修改配置文件](#第四步修改配置文件)
-  - [第五步：域名与 DNS 配置](#第五步域名与-dns-配置)
-  - [第六步：Nginx 反向代理](#第六步nginx-反向代理)
-  - [第七步：HTTPS（SSL 证书）](#第七步httpsssl-证书)
-  - [第八步：使用 systemd 管理服务](#第八步使用-systemd-管理服务)
+- [生产环境部署 (手动方式)](#生产环境部署-手动方式)
 - [验证部署](#验证部署)
 - [常见问题](#常见问题)
 
@@ -61,6 +53,43 @@ PrismCat 🐱 是一个 **LLM API 透传代理 & 日志记录工具**。
 
 ---
 
+## 快速开始 (Docker 推荐)
+
+这是部署 PrismCat 最快且最推荐的方式。你只需要安装了 Docker 和 Docker Compose。
+
+### 1. 创建部署目录
+```bash
+mkdir prismcat && cd prismcat
+```
+
+### 2. 创建 `docker-compose.yml`
+```yaml
+services:
+  prismcat:
+    image: ghcr.io/paopaoandlingyia/prismcat:latest
+    ports:
+      - "8080:8080"
+    environment:
+      # 允许访问控制面板的 Host (多个用逗号隔开)
+      - PRISMCAT_UI_HOSTS=localhost,127.0.0.1,你的服务器IP
+      # 基础代理域名
+      - PRISMCAT_PROXY_DOMAINS=localhost,你的服务器IP
+      # 日志保留天数
+      - PRISMCAT_RETENTION_DAYS=30
+    volumes:
+      - ./data:/app/data
+    restart: always
+```
+
+### 3. 启动
+```bash
+docker compose up -d
+```
+
+> 💡 **提示**：通过环境变量，你可以完全跳过手动修改 `config.yaml` 的步骤。程序会自动创建必要的数据库和目录。
+
+---
+
 ## 本地开发
 
 ### 前端开发模式（热更新）
@@ -87,7 +116,9 @@ npm run dev
 
 ---
 
-## 生产环境部署（云端）
+## 生产环境部署 (手动方式)
+
+如果你不想使用 Docker，可以按照以下步骤手动在 Linux 服务器上配置。
 
 ### 前置条件
 
@@ -508,12 +539,4 @@ server:
 
 ### Q: 可以使用 Docker 吗？
 
-当前没有提供 Dockerfile，但你可以轻松创建一个：
-```dockerfile
-FROM debian:bookworm-slim
-WORKDIR /app
-COPY prismcat config.yaml ./
-RUN mkdir -p data
-EXPOSE 8080
-CMD ["./prismcat", "-config", "config.yaml"]
-```
+**非常建议使用！** 我们提供了多阶段构建的 Dockerfile，支持通过环境变量快速配置。详细信息请参考 [快速开始 (Docker 推荐)](#快速开始-docker-推荐)。

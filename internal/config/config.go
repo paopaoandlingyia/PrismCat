@@ -196,7 +196,31 @@ func Load(path string) (*Config, error) {
 		c.Storage.BlobDir = "./data/blobs"
 	}
 
-	// 确保数据库目录存在
+	// 覆盖环境变量 (云端/容器化部署优先)
+	if envPort := os.Getenv("PRISMCAT_PORT"); envPort != "" {
+		if p, err := parsePort(envPort); err == nil {
+			c.Server.Port = p
+		}
+	}
+	if envUIHosts := os.Getenv("PRISMCAT_UI_HOSTS"); envUIHosts != "" {
+		c.Server.UIHosts = splitCSV(envUIHosts)
+	}
+	if envProxyDomains := os.Getenv("PRISMCAT_PROXY_DOMAINS"); envProxyDomains != "" {
+		c.Server.ProxyDomains = splitCSV(envProxyDomains)
+	}
+	if envDB := os.Getenv("PRISMCAT_DB_PATH"); envDB != "" {
+		c.Storage.Database = envDB
+	}
+	if envBlobDir := os.Getenv("PRISMCAT_BLOB_DIR"); envBlobDir != "" {
+		c.Storage.BlobDir = envBlobDir
+	}
+	if envRetention := os.Getenv("PRISMCAT_RETENTION_DAYS"); envRetention != "" {
+		if d, err := parsePort(envRetention); err == nil { // reuse parsePort for int
+			c.Storage.RetentionDays = d
+		}
+	}
+
+	// 确保目录存在
 	dbDir := filepath.Dir(c.Storage.Database)
 	if err := os.MkdirAll(dbDir, 0755); err != nil {
 		return nil, fmt.Errorf("创建数据库目录失败: %w", err)
@@ -209,6 +233,23 @@ func Load(path string) (*Config, error) {
 
 	cfg = &c
 	return &c, nil
+}
+
+func parsePort(s string) (int, error) {
+	var n int
+	_, err := fmt.Sscanf(s, "%d", &n)
+	return n, err
+}
+
+func splitCSV(s string) []string {
+	parts := strings.Split(s, ",")
+	res := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if trimmed := strings.TrimSpace(p); trimmed != "" {
+			res = append(res, trimmed)
+		}
+	}
+	return res
 }
 
 // Update applies an in-memory update under an exclusive lock.
