@@ -1,0 +1,29 @@
+# === 编译产物（仅根目录）===
+/prismcat
+/prismcat.exe
+/prismcat.exe~
+
+# === 运行时数据 ===
+/data/
+/config.yaml
+
+# === 前端构建产物 & 嵌入到后端的 UI 文件 ===
+web/dist/
+web/node_modules/
+internal/server/ui/
+
+# === 系统 / 编辑器文件 ===
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# === IDE ===
+.vscode/
+.idea/
+
+# === 其他 ===
+.gemini/
+.agent/
+仅启动后端服务(开发用).bat
+快速编译并运行.bat

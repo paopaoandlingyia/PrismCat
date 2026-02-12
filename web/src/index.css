@@ -1,0 +1,329 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--card));
+  --color-popover-foreground: hsl(var(--card-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --radius-radius: var(--radius);
+}
+
+/* 全局样式变量 */
+:root {
+  /* 主色调 - 参考棱镜光谱 */
+  --color-prism-violet: 263 70% 50%;
+  --color-prism-indigo: 235 70% 55%;
+  --color-prism-blue: 210 90% 55%;
+  --color-prism-cyan: 185 90% 45%;
+  --color-prism-green: 145 70% 45%;
+  --color-prism-yellow: 45 95% 55%;
+  --color-prism-orange: 25 95% 55%;
+  --color-prism-red: 0 85% 55%;
+
+  /* --- 亮色模式 (Light Mode) --- */
+  --background: 0 0% 100%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+  --primary: 263 70% 50%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 210 40% 96%;
+  --secondary-foreground: 222 47% 11%;
+  --muted: 210 40% 96%;
+  --muted-foreground: 215 16% 47%;
+  --accent: 210 40% 96%;
+  --accent-foreground: 222 47% 11%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 214 32% 91%;
+  --input: 214 32% 91%;
+  --ring: 263 70% 50%;
+  --radius: 0.4rem;
+
+  --chart-1: 263 70% 50%;
+  --chart-2: 215 70% 50%;
+  --chart-3: 185 70% 45%;
+  --chart-4: 45 95% 55%;
+  --chart-5: 0 85% 55%;
+}
+
+.dark {
+  /* --- 暗色模式 (Dark Mode) --- */
+  --background: 222 47% 11%;
+  --foreground: 210 40% 98%;
+  --card: 222 47% 12%;
+  --card-foreground: 210 40% 98%;
+  --popover: 222 47% 12%;
+  --popover-foreground: 210 40% 98%;
+  --primary: 217 91% 60%;
+  --primary-foreground: 222 47% 11%;
+  --secondary: 217 33% 17%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 217 33% 17%;
+  --muted-foreground: 215 20% 65%;
+  --accent: 217 33% 17%;
+  --accent-foreground: 210 40% 98%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 217 33% 25%;
+  --input: 217 33% 25%;
+  --ring: 217 91% 60%;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border-color: hsl(var(--border));
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  min-height: 100vh;
+}
+
+button {
+  cursor: pointer;
+}
+
+[role="button"] {
+  cursor: pointer;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--secondary));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground));
+}
+
+/* 代码块样式 */
+pre,
+code {
+  font-family: 'Fira Code', 'JetBrains Mono', Consolas, Monaco, monospace;
+}
+
+/* 动画 */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+
+  to {
+    transform: translateX(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* 棱镜渐变 */
+.prism-gradient {
+  background: linear-gradient(135deg,
+      hsl(var(--color-prism-violet)) 0%,
+      hsl(var(--color-prism-blue)) 25%,
+      hsl(var(--color-prism-cyan)) 50%,
+      hsl(var(--color-prism-green)) 75%,
+      hsl(var(--color-prism-yellow)) 100%);
+}
+
+.prism-gradient-text {
+  background: linear-gradient(90deg,
+      hsl(var(--color-prism-violet)) 0%,
+      hsl(var(--color-prism-blue)) 50%,
+      hsl(var(--color-prism-cyan)) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* react-datepicker 主题适配 */
+.react-datepicker {
+  background-color: hsl(var(--popover)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  color: hsl(var(--foreground)) !important;
+  font-family: inherit !important;
+  border-radius: 0.4rem !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
+}
+
+.react-datepicker__header {
+  background-color: hsl(var(--muted)) !important;
+  border-bottom: 1px solid hsl(var(--border)) !important;
+  border-radius: 0.4rem 0.4rem 0 0 !important;
+}
+
+.react-datepicker__current-month,
+.react-datepicker-time__header {
+  color: hsl(var(--foreground)) !important;
+  font-weight: 600 !important;
+}
+
+.react-datepicker__day-name {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+.react-datepicker__day {
+  color: hsl(var(--foreground)) !important;
+  border-radius: 4px !important;
+}
+
+.react-datepicker__day:hover {
+  background-color: hsl(var(--accent)) !important;
+}
+
+.react-datepicker__day--selected,
+.react-datepicker__time-list-item--selected {
+  background-color: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+}
+
+.react-datepicker__time-container {
+  border-left: 1px solid hsl(var(--border)) !important;
+  background-color: hsl(var(--popover)) !important;
+  width: 100px !important;
+}
+
+.react-datepicker__time {
+  background-color: hsl(var(--popover)) !important;
+}
+
+.react-datepicker__time-box {
+  width: 100% !important;
+  background-color: hsl(var(--popover)) !important;
+}
+
+.react-datepicker__time-list-item {
+  color: hsl(var(--foreground)) !important;
+  background-color: hsl(var(--popover)) !important;
+}
+
+.react-datepicker__time-list-item:hover {
+  background-color: hsl(var(--accent)) !important;
+}
+
+.react-datepicker__day--today {
+  color: hsl(var(--primary)) !important;
+  font-weight: bold !important;
+}
+
+.react-datepicker__day--outside-month {
+  color: hsl(var(--muted-foreground)) !important;
+  opacity: 0.5;
+}
+
+.react-datepicker__close-icon::after {
+  background-color: hsl(var(--primary)) !important;
+}
+
+.react-datepicker-popper {
+  z-index: 9999 !important;
+}
+
+/* 隐藏三角形 */
+.react-datepicker__triangle {
+  display: none !important;
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+/* Dark variant handled by system-wide dark setting */
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}

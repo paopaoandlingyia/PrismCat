@@ -1,0 +1,78 @@
+# PrismCat 配置文件
+# 复制此文件为 config.yaml 并根据需要修改
+
+server:
+  # 监听端口
+  port: 8080
+
+  # 主机名（用于判断是否为 UI 请求）
+  ui_hosts:
+    - "localhost"
+    - "127.0.0.1"
+
+  # 代理域名后缀（用于 Host 路由）
+  # 例如: openai.localhost -> upstream=openai
+  # 上云时可改为: prismcat.example.com，然后用 openai.prismcat.example.com 访问
+  proxy_domains:
+    - "localhost"
+
+  # 优雅关闭超时（秒）
+  shutdown_timeout_seconds: 10
+
+  # CORS（主要用于本地开发/调试 UI）
+  # 生产/上云建议配置为明确的来源列表
+  cors_allow_origins:
+    - "*"
+  cors_allow_methods:
+    - "GET"
+    - "POST"
+    - "PUT"
+    - "DELETE"
+    - "OPTIONS"
+  cors_allow_headers:
+    - "Content-Type"
+    - "Authorization"
+
+# 上游路由配置
+# 格式: 子域名 -> 上游地址
+upstreams:
+  openai:
+    # 匹配 openai.localhost:8080
+    target: "https://api.openai.com"
+    # 可选：超时设置（秒）
+    timeout: 120
+
+  gemini:
+    # 匹配 gemini.localhost:8080
+    target: "https://generativelanguage.googleapis.com"
+    timeout: 120
+
+# 日志配置
+logging:
+  # 最大请求体记录大小（字节）
+  max_request_body: 1048576   # 1MB
+  # 最大响应体记录大小（字节）
+  max_response_body: 10485760 # 10MB
+
+  # 大 body 自动分离到 blob 存储（内容寻址 + 去重）
+  # request_logs 表只保留预览片段 + hash/ref，详情可按需加载完整内容
+  detach_body_over_bytes: 262144 # 256KB；设为 0 可禁用；留空则默认 256KB
+  body_preview_bytes: 4096       # 4KB；设为 0 可关闭预览
+
+  # 需要脱敏的请求头
+  sensitive_headers:
+    - "Authorization"
+    - "x-api-key"
+    - "api-key"
+
+# 存储配置
+storage:
+  # SQLite 数据库路径
+  database: "./data/prismcat.db"
+  # 日志保留天数；0 = 永久保留
+  retention_days: 30
+
+  # blob 存储（用于分离大 body）
+  blob_store: "fs"
+  blob_dir: "./data/blobs"
+
