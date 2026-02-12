@@ -218,6 +218,16 @@ func (s *Server) Start() error {
 
 		// 判断是 UI 请求还是代理请求
 		if s.cfg.IsUIHost(r.Host) {
+			// 如果设置了密码，检查 Basic Auth
+			if serverCfg.UIPassword != "" {
+				user, pass, ok := r.BasicAuth()
+				if !ok || pass != serverCfg.UIPassword {
+					w.Header().Set("WWW-Authenticate", `Basic realm="PrismCat Control Panel"`)
+					http.Error(w, "Unauthorized", http.StatusUnauthorized)
+					return
+				}
+				_ = user // 仅验证密码，忽略用户名
+			}
 			mux.ServeHTTP(w, r)
 		} else {
 			s.proxy.ServeHTTP(w, r)

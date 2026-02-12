@@ -25,6 +25,7 @@ type Config struct {
 type ServerConfig struct {
 	Port    int      `yaml:"port"`
 	UIHosts []string `yaml:"ui_hosts"`
+	UIPassword string    `yaml:"ui_password"`
 
 	// ProxyDomains defines the base domains used for host-based upstream routing.
 	// For example, if ProxyDomains contains "localhost", then requests to
@@ -218,6 +219,9 @@ func Load(path string) (*Config, error) {
 		if d, err := parsePort(envRetention); err == nil { // reuse parsePort for int
 			c.Storage.RetentionDays = d
 		}
+	}
+	if envPassword := os.Getenv("PRISMCAT_UI_PASSWORD"); envPassword != "" {
+		c.Server.UIPassword = envPassword
 	}
 
 	// 确保目录存在
