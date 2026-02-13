@@ -199,7 +199,7 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
                             <Button
                                 variant="outline"
                                 size="sm"
-                                className="ml-auto h-7 px-2.5 text-[10px] font-bold gap-1.5 border-border/50 hover:bg-primary/5 hover:text-primary hover:border-primary/30 transition-all"
+                                className="ml-auto h-7 px-2.5 text-[11px] font-semibold gap-1.5 border-primary/20 bg-primary/5 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all shadow-sm"
                                 onClick={async () => {
                                     const navigateToPlayground = (body: string) => {
                                         onClose()
@@ -310,12 +310,12 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
                                         <span className="text-xs font-bold text-muted-foreground/70">{formatSize(log.request_body_size)}</span>
                                         {log.request_body_ref && (
                                             <Badge variant="outline" className="h-5 text-[10px] border-indigo-500/40 text-indigo-600 dark:text-indigo-400 bg-indigo-500/5 px-1.5 font-bold">
-                                                DETACHED
+                                                {t('log_detail.detached_tag', 'DETACHED')}
                                             </Badge>
                                         )}
                                         {log.truncated && (
                                             <Badge variant="outline" className="h-5 text-[10px] border-yellow-500/40 text-yellow-600 dark:text-yellow-500 bg-yellow-500/5 px-1.5 font-bold">
-                                                TRUNCATED
+                                                {t('log_detail.truncated_tag', 'TRUNCATED')}
                                             </Badge>
                                         )}
                                     </div>
@@ -431,12 +431,12 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
                                         <span className="text-xs font-bold text-muted-foreground/70">{formatSize(log.response_body_size)}</span>
                                         {log.response_body_ref && (
                                             <Badge variant="outline" className="h-5 text-[10px] border-indigo-500/40 text-indigo-600 dark:text-indigo-400 bg-indigo-500/5 px-1.5 font-bold">
-                                                DETACHED
+                                                {t('log_detail.detached_tag', 'DETACHED')}
                                             </Badge>
                                         )}
                                         {log.truncated && (
                                             <Badge variant="outline" className="h-5 text-[10px] border-yellow-500/40 text-yellow-600 dark:text-yellow-500 bg-yellow-500/5 px-1.5 font-bold">
-                                                TRUNCATED
+                                                {t('log_detail.truncated_tag', 'TRUNCATED')}
                                             </Badge>
                                         )}
                                     </div>

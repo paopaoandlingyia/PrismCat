@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { Plus, Trash2, Save, Database, FileText, Upload, AlertCircle, ShieldAlert, HardDrive, Clock, Globe, Copy } from 'lucide-react'
+import { Plus, Trash2, Save, Database, FileText, Upload, AlertCircle, ShieldAlert, HardDrive, Clock, Globe, Copy, ArrowRight } from 'lucide-react'
 import { Badge } from "@/components/ui/badge"
 import { fetchUpstreams, addUpstream, removeUpstream, fetchConfig, updateConfig } from '@/lib/api'
 import type { Upstream, AppConfig } from '@/lib/api'
@@ -192,11 +192,14 @@ export function Settings() {
                 </TabsList>
 
                 {/* 上游配置 */}
-                <TabsContent value="upstreams" className="mt-6 space-y-6">
-                    <div className="space-y-4">
-                        <h3 className="text-lg font-black tracking-tight uppercase">{t('upstream_manager.add_new')}</h3>
-                        <form onSubmit={handleAddUpstream} className="grid sm:grid-cols-4 gap-6 items-end">
-                            <div className="space-y-2 sm:col-span-1">
+                <TabsContent value="upstreams" className="mt-6 space-y-8">
+                    <div className="space-y-4 bg-muted/10 p-6 rounded-2xl">
+                        <h3 className="text-sm font-black tracking-widest uppercase text-foreground/60 flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                            {t('upstream_manager.add_new')}
+                        </h3>
+                        <form onSubmit={handleAddUpstream} className="grid sm:grid-cols-12 gap-4 items-end">
+                            <div className="space-y-2 sm:col-span-3">
                                 <Label htmlFor="name" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/70">{t('upstream_manager.name')}</Label>
                                 <div className="relative group">
                                     <Input
@@ -204,39 +207,39 @@ export function Settings() {
                                         value={newName}
                                         onChange={e => setNewName(e.target.value)}
                                         placeholder="openai"
-                                        className="h-10 bg-background/50 border-border/50 group-hover:border-primary/40 focus:border-primary transition-all pr-12 font-bold"
+                                        className="h-11 bg-background border-border/50 group-hover:border-primary/40 focus:border-primary transition-all pr-12 font-bold rounded-xl"
                                         required
                                     />
-                                    <div className="absolute right-3 top-3 text-[10px] font-black text-muted-foreground/30 pointer-events-none group-hover:text-primary/30 transition-colors">.{domainSuffix}</div>
+                                    <div className="absolute right-3 top-3.5 text-[10px] font-black text-muted-foreground/30 pointer-events-none group-hover:text-primary/30 transition-colors">.{domainSuffix}</div>
                                 </div>
                             </div>
-                            <div className="space-y-2 sm:col-span-2">
+                            <div className="space-y-2 sm:col-span-5">
                                 <Label htmlFor="target" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/70">{t('upstream_manager.target')}</Label>
                                 <Input
                                     id="target"
                                     value={newTarget}
                                     onChange={e => setNewTarget(e.target.value)}
                                     placeholder="https://api.openai.com"
-                                    className="h-10 bg-background/50 border-border/50 hover:border-primary/40 focus:border-primary transition-all font-mono text-xs"
+                                    className="h-11 bg-background border-border/50 hover:border-primary/40 focus:border-primary transition-all font-mono text-xs rounded-xl"
                                     required
                                 />
                             </div>
-                            <div className="space-y-2">
+                            <div className="space-y-2 sm:col-span-2">
                                 <Label htmlFor="timeout" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/70">{t('upstream_manager.timeout')}</Label>
-                                <div className="flex gap-2">
-                                    <Input
-                                        id="timeout"
-                                        type="number"
-                                        value={newTimeout}
-                                        onChange={e => setNewTimeout(Number(e.target.value))}
-                                        className="h-10 bg-background/50 border-border/50 text-center font-bold"
-                                        min="1"
-                                    />
-                                    <Button type="submit" className="h-10 shrink-0 font-black px-6 shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90">
-                                        <Plus className="w-4 h-4 mr-1" />
-                                        {t('common.add', 'ADD')}
-                                    </Button>
-                                </div>
+                                <Input
+                                    id="timeout"
+                                    type="number"
+                                    value={newTimeout}
+                                    onChange={e => setNewTimeout(Number(e.target.value))}
+                                    className="h-11 bg-background border-border/50 text-center font-bold rounded-xl"
+                                    min="1"
+                                />
+                            </div>
+                            <div className="sm:col-span-2">
+                                <Button type="submit" className="w-full h-11 shrink-0 font-black shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 rounded-xl">
+                                    <Plus className="w-4 h-4 mr-1" />
+                                    {t('common.add', 'ADD')}
+                                </Button>
                             </div>
                         </form>
                     </div>
@@ -246,55 +249,73 @@ export function Settings() {
                             {t('settings.tabs.upstreams')} ({upstreams.length})
                         </Label>
                         {upstreams.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-12 rounded-xl border border-dashed border-border/40 bg-card/10 text-muted-foreground">
-                                <Upload className="h-8 w-8 mb-3 opacity-20" />
-                                <p className="text-sm font-bold uppercase tracking-tight opacity-40">{t('upstream_manager.no_upstreams')}</p>
+                            <div className="flex flex-col items-center justify-center py-16 rounded-2xl border border-dashed border-border/40 bg-card/5 text-muted-foreground">
+                                <Upload className="h-10 w-10 mb-4 opacity-10" />
+                                <p className="text-sm font-bold uppercase tracking-widest opacity-30">{t('upstream_manager.no_upstreams')}</p>
                             </div>
                         ) : (
                             upstreams.map(u => (
-                                <div key={u.name} className="flex items-center gap-4 bg-card/40 px-4 py-3.5 rounded-xl border border-border/30 hover:border-primary/40 hover:bg-card/60 transition-all group">
-                                    <div className="w-10 h-10 rounded-lg bg-primary/5 flex items-center justify-center shrink-0 border border-primary/10">
-                                        <span className="text-primary font-black text-lg uppercase leading-none">{u.name.charAt(0)}</span>
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 mb-0.5">
-                                            <span className="font-black text-sm uppercase tracking-tight text-foreground/90">{u.name}</span>
-                                            <Badge variant="outline" className="text-[9px] font-black border-border/50 text-muted-foreground/50 h-4 px-1 leading-none tracking-widest">.{domainSuffix}</Badge>
+                                <div key={u.name} className="relative flex flex-col sm:flex-row sm:items-center gap-4 bg-card/40 px-5 py-4 rounded-2xl border border-border/30 hover:border-primary/40 hover:bg-card/60 transition-all group overflow-hidden">
+                                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary/0 group-hover:bg-primary/40 transition-all" />
+
+                                    <div className="flex items-center gap-4 flex-1 min-w-0">
+                                        <div className="w-11 h-11 rounded-xl bg-primary/5 flex items-center justify-center shrink-0 border border-primary/10 group-hover:scale-105 transition-transform">
+                                            <span className="text-primary font-black text-xl uppercase leading-none">{u.name.charAt(0)}</span>
                                         </div>
-                                        <div className="text-[10px] text-muted-foreground font-mono truncate opacity-60 flex items-center" title={u.target}>
-                                            <Globe className="h-3 w-3 mr-1" />
+
+                                        <div className="flex-1 min-w-0 space-y-0.5">
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-black text-sm uppercase tracking-tight text-foreground/90">{u.name}</span>
+                                                <Badge variant="secondary" className="text-[10px] font-black bg-primary/10 text-primary border-none h-4 px-1.5 leading-none tracking-widest">.{domainSuffix}</Badge>
+                                            </div>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <button
+                                                        onClick={() => {
+                                                            navigator.clipboard.writeText(getProxyUrl(u.name))
+                                                            toast.success(t('log_detail.copy_success'))
+                                                        }}
+                                                        className="flex items-center gap-1.5 text-xs font-mono text-primary/60 hover:text-primary transition-colors cursor-pointer text-left"
+                                                    >
+                                                        <span className="truncate underline decoration-primary/10 underline-offset-4 font-bold">{getProxyUrl(u.name)}</span>
+                                                        <Copy className="h-3 w-3 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                    </button>
+                                                </TooltipTrigger>
+                                                <TooltipContent>{t('settings.copy_proxy_url')}</TooltipContent>
+                                            </Tooltip>
+                                        </div>
+                                    </div>
+
+                                    <div className="hidden lg:flex items-center justify-center px-4">
+                                        <div className="flex flex-col items-center gap-0.5">
+                                            <ArrowRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary/50 transition-colors" />
+                                            <span className="text-[8px] font-black uppercase tracking-tighter text-muted-foreground/20 group-hover:text-primary/20">FORWARD</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex-1 min-w-0 sm:max-w-[30%] space-y-1">
+                                        <div className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/40">{t('upstream_manager.target')}</div>
+                                        <div className="text-[11px] text-foreground/60 font-mono truncate bg-muted/20 px-0.5 py-0.5 rounded-md flex items-center" title={u.target}>
+                                            <Globe className="h-3 w-3 mr-2 text-muted-foreground/20" />
                                             {u.target}
                                         </div>
                                     </div>
-                                    <div className="hidden sm:flex items-center gap-1.5">
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
-                                                <button
-                                                    onClick={() => {
-                                                        navigator.clipboard.writeText(getProxyUrl(u.name))
-                                                        toast.success(t('log_detail.copy_success'))
-                                                    }}
-                                                    className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground/50 bg-muted/30 px-2.5 py-1.5 rounded-md border border-border/20 hover:border-primary/40 hover:text-primary/70 hover:bg-primary/5 transition-all cursor-pointer max-w-[260px]"
-                                                >
-                                                    <span className="truncate">{getProxyUrl(u.name)}</span>
-                                                    <Copy className="h-3 w-3 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                                </button>
-                                            </TooltipTrigger>
-                                            <TooltipContent>{t('settings.copy_proxy_url')}</TooltipContent>
-                                        </Tooltip>
-                                        <div className="flex items-center gap-1 text-[10px] font-black text-muted-foreground/40 bg-muted/30 px-2 py-1 rounded-md border border-border/20 uppercase">
-                                            <Clock className="h-3 w-3" />
+
+                                    <div className="flex items-center justify-between sm:justify-end gap-4 mt-2 sm:mt-0">
+                                        <div className="flex items-center gap-1.5 text-[10px] font-black text-muted-foreground/60 bg-muted/40 px-2.5 py-1.5 rounded-lg border border-border/20 uppercase">
+                                            <Clock className="h-3 w-3 text-muted-foreground/30" />
+                                            <span className="opacity-30">TIMEOUT</span>
                                             {u.timeout}S
                                         </div>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => handleRemoveUpstream(u.name)}
+                                            className="h-9 w-9 text-muted-foreground/20 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </Button>
                                     </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => handleRemoveUpstream(u.name)}
-                                        className="h-8 w-8 text-muted-foreground/30 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </Button>
                                 </div>
                             ))
                         )}

@@ -48,9 +48,11 @@ export function LogFilters({
         onSearch({ ...draft, offset: 0 })
     }
 
-    // 重置所有条件（仅重置本地状态，不触发查询）
+    // 重置所有条件并立即触发查询
     const handleReset = () => {
-        setDraft({ ...DEFAULT_FILTER })
+        const resetFilter = { ...DEFAULT_FILTER }
+        setDraft(resetFilter)
+        onSearch(resetFilter)
     }
 
     // 分页计算
@@ -71,7 +73,7 @@ export function LogFilters({
     const hasChanges = isPathChanged || isUpstreamChanged || isMethodChanged || isTimeChanged
 
     return (
-        <div className="flex flex-col gap-4 px-4 py-2">
+        <div className="flex flex-col gap-4 px-4 pr-6 py-2">
             {/* 第一行：筛选条件 */}
             <div className="flex flex-wrap items-center gap-4">
                 {/* 搜索框 */}
@@ -158,17 +160,6 @@ export function LogFilters({
                 </div>
 
                 <div className="flex items-center gap-2 ml-auto">
-                    {/* 重置按钮 */}
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleReset}
-                        className="text-muted-foreground hover:text-foreground h-10 px-4"
-                    >
-                        <RotateCcw className="h-4 w-4 mr-2" />
-                        <span>{t('filters.reset')}</span>
-                    </Button>
-
                     {/* 查询按钮 */}
                     <Button
                         variant="default"
@@ -184,6 +175,17 @@ export function LogFilters({
                     >
                         <Search className={cn("h-4 w-4 mr-2", loading && "animate-spin")} />
                         <span>{t('filters.search')}</span>
+                    </Button>
+
+                    {/* 重置按钮 */}
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleReset}
+                        className="text-muted-foreground hover:text-foreground h-10 px-4 border-border/50 bg-background/50"
+                    >
+                        <RotateCcw className="h-4 w-4 mr-2" />
+                        <span>{t('filters.reset')}</span>
                     </Button>
                 </div>
             </div>

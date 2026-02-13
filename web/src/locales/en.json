@@ -43,7 +43,7 @@
         "time_now": "Now",
         "time_now_btn": "Now",
         "time_clear": "Clear",
-        "reset": "Reset",
+        "reset": "Reload/Reset",
         "search": "Search"
     },
     "stats": {
@@ -82,7 +82,9 @@
         "stream_merged": "Merged View",
         "stream_raw": "Raw Data",
         "stream_merge_info": "Merged {{count}} stream chunks",
-        "stream_merge_format": "Format: {{format}}"
+        "stream_merge_format": "Format: {{format}}",
+        "detached_tag": "DETACHED",
+        "truncated_tag": "TRUNCATED"
     },
     "json_viewer": {
         "items": "{{count}} items",

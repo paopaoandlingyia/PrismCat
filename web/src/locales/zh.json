@@ -45,7 +45,7 @@
         "time_now": "现在",
         "time_now_btn": "此刻",
         "time_clear": "清除",
-        "reset": "重置",
+        "reset": "刷新/重置",
         "search": "查询"
     },
     "stats": {
@@ -84,7 +84,9 @@
         "stream_merged": "合并查看",
         "stream_raw": "原始数据",
         "stream_merge_info": "已合并 {{count}} 个流式分片",
-        "stream_merge_format": "格式: {{format}}"
+        "stream_merge_format": "格式: {{format}}",
+        "detached_tag": "已分离",
+        "truncated_tag": "已截断"
     },
     "json_viewer": {
         "items": "{{count}} 项",
