@@ -7,12 +7,12 @@ export interface RequestLog {
     method: string
     path: string
     query?: string
-    request_headers?: Record<string, string>
+    request_headers?: Record<string, string[]>
     request_body?: string
     request_body_ref?: string
     request_body_size: number
     status_code: number
-    response_headers?: Record<string, string>
+    response_headers?: Record<string, string[]>
     response_body?: string
     response_body_ref?: string
     response_body_size: number
@@ -184,8 +184,9 @@ export interface ReplayRequest {
 
 export interface ReplayResponse {
     status_code: number
-    headers: Record<string, string>
+    headers: Record<string, string[]>
     body: string
+    truncated?: boolean
 }
 
 export async function sendReplay(req: ReplayRequest): Promise<ReplayResponse> {

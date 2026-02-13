@@ -290,10 +290,14 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
                             />
                             {expandedSections.requestHeaders && log.request_headers && (
                                 <div className="p-4 rounded-lg bg-slate-50 dark:bg-background/50 border border-border/40 space-y-2 font-mono text-[11px] leading-relaxed">
-                                    {Object.entries(log.request_headers).map(([key, value]) => (
-                                        <div key={key} className="flex group/line">
+                                    {Object.entries(log.request_headers).map(([key, vv]) => (
+                                        <div key={key} className="flex flex-col sm:flex-row sm:gap-2 group/line">
                                             <span className="text-primary/70 shrink-0 font-bold">{key}:</span>
-                                            <span className="ml-2 text-foreground/70 break-all select-text">{value}</span>
+                                            <div className="flex flex-col">
+                                                {vv.map((v, i) => (
+                                                    <span key={i} className="text-foreground/70 break-all select-text">{v}{i < vv.length - 1 ? ';' : ''}</span>
+                                                ))}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -411,10 +415,14 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
                             />
                             {expandedSections.responseHeaders && log.response_headers && (
                                 <div className="p-4 rounded-xl bg-background/50 border border-border/40 space-y-2 font-mono text-[11px] leading-relaxed">
-                                    {Object.entries(log.response_headers).map(([key, value]) => (
-                                        <div key={key} className="flex group/line">
+                                    {Object.entries(log.response_headers).map(([key, vv]) => (
+                                        <div key={key} className="flex flex-col sm:flex-row sm:gap-2 group/line">
                                             <span className="text-green-500/70 shrink-0 font-bold">{key}:</span>
-                                            <span className="ml-2 text-foreground/70 break-all select-text">{value}</span>
+                                            <div className="flex flex-col">
+                                                {vv.map((v, i) => (
+                                                    <span key={i} className="text-foreground/70 break-all select-text">{v}{i < vv.length - 1 ? ';' : ''}</span>
+                                                ))}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>

@@ -453,11 +453,31 @@ func (r *SQLiteRepository) scanLog(scanner interface{ Scan(...interface{}) error
 	log.Truncated = truncated == 1
 
 	if reqHeaders != "" && reqHeaders != "null" {
-		_ = json.Unmarshal([]byte(reqHeaders), &log.RequestHeaders)
+		log.RequestHeaders = unmarshalHeaders(reqHeaders)
 	}
 	if respHeaders != "" && respHeaders != "null" {
-		_ = json.Unmarshal([]byte(respHeaders), &log.ResponseHeaders)
+		log.ResponseHeaders = unmarshalHeaders(respHeaders)
 	}
 
 	return &log, nil
+}
+
+func unmarshalHeaders(data string) map[string][]string {
+	// First try unmarshaling as map[string][]string (new format)
+	var multi map[string][]string
+	if err := json.Unmarshal([]byte(data), &multi); err == nil {
+		return multi
+	}
+
+	// Fallback to map[string]string (old format)
+	var single map[string]string
+	if err := json.Unmarshal([]byte(data), &single); err == nil {
+		res := make(map[string][]string)
+		for k, v := range single {
+			res[k] = []string{v}
+		}
+		return res
+	}
+
+	return nil
 }

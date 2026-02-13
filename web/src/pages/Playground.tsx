@@ -76,12 +76,16 @@ export function Playground() {
             if (r.path) setPath(r.path)
             if (r.body) setBody(r.body)
             if (r.headers && typeof r.headers === 'object') {
-                const entries: HeaderEntry[] = Object.entries(r.headers as Record<string, string>)
+                const entries: HeaderEntry[] = Object.entries(r.headers as Record<string, string | string[]>)
                     .filter(([k]) => {
                         const skip = ['host', 'connection', 'keep-alive', 'transfer-encoding', 'te', 'trailer', 'upgrade', 'proxy-authorization', 'proxy-authenticate', 'proxy-connection']
                         return !skip.includes(k.toLowerCase())
                     })
-                    .map(([key, value]) => ({ key, value, id: crypto.randomUUID() }))
+                    .map(([key, value]) => ({
+                        key,
+                        value: Array.isArray(value) ? value.join('; ') : value,
+                        id: crypto.randomUUID()
+                    }))
                 if (entries.length > 0) setHeaders(entries)
             }
             window.history.replaceState({}, '')
@@ -386,6 +390,11 @@ export function Playground() {
                                 {response.body && (
                                     <span className="text-[10px] font-mono text-muted-foreground/50">
                                         {formatSize(response.body.length)}
+                                        {response.truncated && (
+                                            <span className="ml-1 text-amber-500 font-black">
+                                                (TRUNCATED)
+                                            </span>
+                                        )}
                                     </span>
                                 )}
                                 <div className="ml-auto">
@@ -420,10 +429,14 @@ export function Playground() {
                                 {t('playground.response_headers')} ({Object.keys(response.headers).length})
                             </summary>
                             <div className="px-4 pb-3 space-y-1 font-mono text-[11px]">
-                                {Object.entries(response.headers).map(([k, v]) => (
-                                    <div key={k} className="flex">
+                                {Object.entries(response.headers).map(([k, vv]) => (
+                                    <div key={k} className="flex flex-col sm:flex-row sm:gap-2">
                                         <span className="text-green-500/70 shrink-0 font-bold">{k}:</span>
-                                        <span className="ml-2 text-foreground/70 break-all">{v}</span>
+                                        <div className="flex flex-col">
+                                            {vv.map((v, i) => (
+                                                <span key={i} className="text-foreground/70 break-all">{v}{i < vv.length - 1 ? ';' : ''}</span>
+                                            ))}
+                                        </div>
                                     </div>
                                 ))}
                             </div>

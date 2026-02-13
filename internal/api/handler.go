@@ -444,14 +444,19 @@ func (h *Handler) handleReplay(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	// Read response body (limit to 2MB to avoid memory issues).
-	const maxRespBody = 2 * 1024 * 1024
-	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, maxRespBody))
+	// Read response body (limit to 10MB to avoid memory issues).
+	const maxRespBody = 10 * 1024 * 1024
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxRespBody+1))
+	truncated := false
+	if int64(len(respBody)) > maxRespBody {
+		respBody = respBody[:maxRespBody]
+		truncated = true
+	}
 
-	respHeaders := make(map[string]string)
+	respHeaders := make(map[string][]string)
 	for k, vv := range resp.Header {
 		if len(vv) > 0 {
-			respHeaders[k] = vv[0]
+			respHeaders[k] = vv
 		}
 	}
 
@@ -459,6 +464,7 @@ func (h *Handler) handleReplay(w http.ResponseWriter, r *http.Request) {
 		"status_code": resp.StatusCode,
 		"headers":     respHeaders,
 		"body":        string(respBody),
+		"truncated":   truncated,
 	})
 }
 

@@ -186,17 +186,17 @@ func (p *Proxy) finalizeAndSaveLog(log *storage.RequestLog, startTime time.Time,
 	p.saveLogSnapshot(log)
 }
 
-func firstHeaderValue(headers map[string]string, key string) string {
+func firstHeaderValue(headers map[string][]string, key string) string {
 	if headers == nil {
 		return ""
 	}
-	if v, ok := headers[key]; ok {
-		return v
+	if vv, ok := headers[key]; ok && len(vv) > 0 {
+		return vv[0]
 	}
 	// Best-effort: tolerate different casing.
-	for k, v := range headers {
-		if strings.EqualFold(k, key) {
-			return v
+	for k, vv := range headers {
+		if strings.EqualFold(k, key) && len(vv) > 0 {
+			return vv[0]
 		}
 	}
 	return ""
@@ -225,34 +225,43 @@ func (p *Proxy) copyHeaders(dst, src http.Header) {
 }
 
 // sanitizeHeaders masks configured sensitive headers.
-func (p *Proxy) sanitizeHeaders(headers http.Header, sensitiveHeaders []string) map[string]string {
-	result := make(map[string]string)
+func (p *Proxy) sanitizeHeaders(headers http.Header, sensitiveHeaders []string) map[string][]string {
+	result := make(map[string][]string)
 	for k, vv := range headers {
 		if len(vv) == 0 {
 			continue
 		}
 
-		value := vv[0]
-		for _, sensitive := range sensitiveHeaders {
-			if strings.EqualFold(k, sensitive) {
-				if len(value) > 10 {
-					value = value[:5] + "***" + value[len(value)-3:]
-				} else {
-					value = "***"
+		newValues := make([]string, len(vv))
+		for i, value := range vv {
+			isSensitive := false
+			for _, sensitive := range sensitiveHeaders {
+				if strings.EqualFold(k, sensitive) {
+					isSensitive = true
+					break
 				}
-				break
+			}
+
+			if isSensitive {
+				if len(value) > 10 {
+					newValues[i] = value[:5] + "***" + value[len(value)-3:]
+				} else {
+					newValues[i] = "***"
+				}
+			} else {
+				newValues[i] = value
 			}
 		}
-		result[k] = value
+		result[k] = newValues
 	}
 	return result
 }
 
-func (p *Proxy) headerToMap(headers http.Header) map[string]string {
-	result := make(map[string]string)
+func (p *Proxy) headerToMap(headers http.Header) map[string][]string {
+	result := make(map[string][]string)
 	for k, vv := range headers {
 		if len(vv) > 0 {
-			result[k] = vv[0]
+			result[k] = vv
 		}
 	}
 	return result

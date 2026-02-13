@@ -139,18 +139,24 @@ func cloneRequestLog(in *RequestLog) *RequestLog {
 		return nil
 	}
 	out := *in
-	out.RequestHeaders = cloneStringMap(in.RequestHeaders)
-	out.ResponseHeaders = cloneStringMap(in.ResponseHeaders)
+	out.RequestHeaders = cloneHeaders(in.RequestHeaders)
+	out.ResponseHeaders = cloneHeaders(in.ResponseHeaders)
 	return &out
 }
 
-func cloneStringMap(in map[string]string) map[string]string {
+func cloneHeaders(in map[string][]string) map[string][]string {
 	if len(in) == 0 {
 		return nil
 	}
-	out := make(map[string]string, len(in))
-	for k, v := range in {
-		out[k] = v
+	out := make(map[string][]string, len(in))
+	for k, vv := range in {
+		if vv == nil {
+			out[k] = nil
+			continue
+		}
+		newVv := make([]string, len(vv))
+		copy(newVv, vv)
+		out[k] = newVv
 	}
 	return out
 }

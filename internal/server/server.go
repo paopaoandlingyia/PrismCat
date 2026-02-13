@@ -210,7 +210,22 @@ func (s *Server) Start() error {
 
 	var activeRequests atomic.Int64
 
-	// 创建主处理器：根据 Host 路由
+	// authMiddleware handles password protection for UI and API
+	authMiddleware := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if serverCfg.UIPassword != "" {
+				_, pass, ok := r.BasicAuth()
+				if !ok || pass != serverCfg.UIPassword {
+					w.Header().Set("WWW-Authenticate", `Basic realm="PrismCat Control Panel"`)
+					http.Error(w, "Unauthorized", http.StatusUnauthorized)
+					return
+				}
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+
+	// Create main handler with routing and auth
 	mainHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		activeRequests.Add(1)
 		defer activeRequests.Add(-1)
@@ -222,25 +237,15 @@ func (s *Server) Start() error {
 			return
 		}
 
-		// 判断是 UI 请求还是代理请求
+		// Routing: UI Host (Control Panel + API) vs Proxy Host
 		if s.cfg.IsUIHost(r.Host) {
-			// 如果设置了密码，检查 Basic Auth
-			if serverCfg.UIPassword != "" {
-				user, pass, ok := r.BasicAuth()
-				if !ok || pass != serverCfg.UIPassword {
-					w.Header().Set("WWW-Authenticate", `Basic realm="PrismCat Control Panel"`)
-					http.Error(w, "Unauthorized", http.StatusUnauthorized)
-					return
-				}
-				_ = user // 仅验证密码，忽略用户名
-			}
-			mux.ServeHTTP(w, r)
+			authMiddleware(mux).ServeHTTP(w, r)
 		} else {
 			s.proxy.ServeHTTP(w, r)
 		}
 	})
 
-	addr := fmt.Sprintf(":%d", serverCfg.Port)
+	addr := fmt.Sprintf("%s:%d", serverCfg.Addr, serverCfg.Port)
 	s.server = &http.Server{
 		Addr:         addr,
 		Handler:      mainHandler,

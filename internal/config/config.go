@@ -23,6 +23,7 @@ type Config struct {
 
 // ServerConfig 服务器配置
 type ServerConfig struct {
+	Addr       string   `yaml:"addr"`
 	Port       int      `yaml:"port"`
 	UIHosts    []string `yaml:"ui_hosts"`
 	UIPassword string   `yaml:"ui_password"`
@@ -204,6 +205,9 @@ func Load(path string) (*Config, error) {
 	}
 
 	// 覆盖环境变量 (云端/容器化部署优先)
+	if envAddr := os.Getenv("PRISMCAT_ADDR"); envAddr != "" {
+		c.Server.Addr = envAddr
+	}
 	if envPort := os.Getenv("PRISMCAT_PORT"); envPort != "" {
 		if p, err := parsePort(envPort); err == nil {
 			c.Server.Port = p

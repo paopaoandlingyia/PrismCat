@@ -12,20 +12,20 @@ type RequestLog struct {
 	TargetURL string `json:"target_url"` // 实际请求的上游 URL
 
 	// 请求信息
-	Method          string            `json:"method"`
-	Path            string            `json:"path"`
-	Query           string            `json:"query,omitempty"`
-	RequestHeaders  map[string]string `json:"request_headers,omitempty"`
-	RequestBody     string            `json:"request_body,omitempty"`
-	RequestBodyRef  string            `json:"request_body_ref,omitempty"`
-	RequestBodySize int64             `json:"request_body_size"`
+	Method          string              `json:"method"`
+	Path            string              `json:"path"`
+	Query           string              `json:"query,omitempty"`
+	RequestHeaders  map[string][]string `json:"request_headers,omitempty"`
+	RequestBody     string              `json:"request_body,omitempty"`
+	RequestBodyRef  string              `json:"request_body_ref,omitempty"`
+	RequestBodySize int64               `json:"request_body_size"`
 
 	// 响应信息
-	StatusCode       int               `json:"status_code"`
-	ResponseHeaders  map[string]string `json:"response_headers,omitempty"`
-	ResponseBody     string            `json:"response_body,omitempty"`
-	ResponseBodyRef  string            `json:"response_body_ref,omitempty"`
-	ResponseBodySize int64             `json:"response_body_size"`
+	StatusCode       int                 `json:"status_code"`
+	ResponseHeaders  map[string][]string `json:"response_headers,omitempty"`
+	ResponseBody     string              `json:"response_body,omitempty"`
+	ResponseBodyRef  string              `json:"response_body_ref,omitempty"`
+	ResponseBodySize int64               `json:"response_body_size"`
 
 	// 元数据
 	Streaming bool   `json:"streaming"`       // 是否为流式响应
