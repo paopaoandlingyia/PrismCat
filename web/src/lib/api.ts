@@ -125,6 +125,8 @@ export interface AppConfig {
         max_request_body: number
         max_response_body: number
         sensitive_headers: string[]
+        detach_body_over_bytes: number
+        body_preview_bytes: number
     }
     storage: {
         database: string
@@ -137,6 +139,8 @@ export interface ConfigUpdate {
         max_request_body?: number
         max_response_body?: number
         sensitive_headers?: string[]
+        detach_body_over_bytes?: number
+        body_preview_bytes?: number
     }
     storage?: {
         retention_days?: number

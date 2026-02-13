@@ -188,19 +188,25 @@ func (s *Server) Start() error {
 	s.api.RegisterRoutes(mux)
 
 	// 静态文件服务（UI）- 支持 SPA 路由
-	uiContent, err := fs.Sub(uiFS, "ui")
-	if err != nil {
-		// 如果没有嵌入的 UI，尝试从本地目录加载
-		log.Println("未找到嵌入的 UI，尝试从本地目录加载...")
-		if _, err := os.Stat("./web/dist"); err == nil {
-			mux.Handle("/", spaHandler{staticPath: "./web/dist", indexFile: "index.html"})
-		} else {
-			// 提供简单的占位页面
-			mux.HandleFunc("/", s.placeholderUI)
+	var uiHandler http.Handler
+	if uiContent, err := fs.Sub(uiFS, "ui"); err == nil {
+		// `go:embed` requires the directory to exist at compile time; we keep a
+		// tracked placeholder file so builds work even when UI isn't built.
+		// If index.html isn't embedded, fall back to local dist or placeholder.
+		if f, err := uiContent.Open("index.html"); err == nil {
+			_ = f.Close()
+			uiHandler = spaFSHandler{fs: http.FS(uiContent), indexFile: "index.html"}
 		}
-	} else {
-		mux.Handle("/", spaFSHandler{fs: http.FS(uiContent), indexFile: "index.html"})
 	}
+	if uiHandler == nil {
+		log.Println("未找到可用的嵌入 UI，尝试从本地目录加载...")
+		if _, err := os.Stat("./web/dist/index.html"); err == nil {
+			uiHandler = spaHandler{staticPath: "./web/dist", indexFile: "index.html"}
+		} else {
+			uiHandler = http.HandlerFunc(s.placeholderUI)
+		}
+	}
+	mux.Handle("/", uiHandler)
 
 	var activeRequests atomic.Int64
 

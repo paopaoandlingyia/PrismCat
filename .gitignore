@@ -10,7 +10,10 @@
 # === 前端构建产物 & 嵌入到后端的 UI 文件 ===
 web/dist/
 web/node_modules/
-internal/server/ui/
+# Keep a tracked placeholder so `//go:embed all:ui` still compiles on a clean clone.
+# The real UI build output is copied here during build/release.
+internal/server/ui/*
+!internal/server/ui/.keep
 
 # === 系统 / 编辑器文件 ===
 .DS_Store

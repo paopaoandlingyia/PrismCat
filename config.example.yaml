@@ -75,4 +75,8 @@ storage:
   # blob 存储（用于分离大 body）
   blob_store: "fs"
   blob_dir: "./data/blobs"
-
+  
+  # async_buffer controls the capacity of the async log queue.
+  # Larger values allow handling higher burst throughput but use more memory.
+  # Default: 4096
+  # async_buffer: 4096

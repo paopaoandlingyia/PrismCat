@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { Plus, Trash2, Save, Database, FileText, Upload, AlertCircle, ShieldAlert, HardDrive, Clock, Globe, Copy } from 'lucide-react'
 import { Badge } from "@/components/ui/badge"
 import { fetchUpstreams, addUpstream, removeUpstream, fetchConfig, updateConfig } from '@/lib/api'
@@ -45,12 +45,26 @@ export function Settings() {
     const [maxRequestBody, setMaxRequestBody] = useState(1)
     const [maxResponseBody, setMaxResponseBody] = useState(10)
     const [sensitiveHeaders, setSensitiveHeaders] = useState('')
+    const [detachBodyOver, setDetachBodyOver] = useState(256)
+    const [bodyPreview, setBodyPreview] = useState(4096)
 
     // 表单状态 - 存储配置
     const [retentionDays, setRetentionDays] = useState(30)
 
     // 从 config 中提取域名后缀（如 localhost / prismcat.example.com）
     const domainSuffix = config?.server?.proxy_domains?.[0] || 'localhost'
+
+    // 基于浏览器当前访问地址推断代理入口的前缀
+    const proxyBase = useMemo(() => {
+        const proto = window.location.protocol // 'http:' or 'https:'
+        const port = window.location.port
+        const portSuffix = port && port !== '80' && port !== '443' ? `:${port}` : ''
+        return { proto, portSuffix }
+    }, [])
+
+    const getProxyUrl = useCallback((name: string) => {
+        return `${proxyBase.proto}//${name}.${domainSuffix}${proxyBase.portSuffix}`
+    }, [proxyBase, domainSuffix])
 
     const loadData = useCallback(async () => {
         setLoading(true)
@@ -62,10 +76,12 @@ export function Settings() {
             setUpstreams(upstreamsData || [])
             setConfig(configData)
 
-            // 初始化表单
-            setMaxRequestBody(Math.round(configData.logging.max_request_body / (1024 * 1024)))
-            setMaxResponseBody(Math.round(configData.logging.max_response_body / (1024 * 1024)))
+            // 初始化表单 - 统一使用 KB
+            setMaxRequestBody(Math.round(configData.logging.max_request_body / 1024))
+            setMaxResponseBody(Math.round(configData.logging.max_response_body / 1024))
             setSensitiveHeaders(configData.logging.sensitive_headers.join('\n'))
+            setDetachBodyOver(Math.round(configData.logging.detach_body_over_bytes / 1024))
+            setBodyPreview(Math.round(configData.logging.body_preview_bytes / 1024))
             setRetentionDays(configData.storage.retention_days)
         } catch (err) {
             console.error('Failed to load settings:', err)
@@ -112,9 +128,11 @@ export function Settings() {
         try {
             await updateConfig({
                 logging: {
-                    max_request_body: maxRequestBody * 1024 * 1024,
-                    max_response_body: maxResponseBody * 1024 * 1024,
+                    max_request_body: maxRequestBody * 1024,
+                    max_response_body: maxResponseBody * 1024,
                     sensitive_headers: sensitiveHeaders.split('\n').map(s => s.trim()).filter(Boolean),
+                    detach_body_over_bytes: detachBodyOver * 1024,
+                    body_preview_bytes: bodyPreview * 1024,
                 },
             })
             toast.success(t('settings.config_saved'))
@@ -248,9 +266,26 @@ export function Settings() {
                                             {u.target}
                                         </div>
                                     </div>
-                                    <div className="hidden sm:flex items-center gap-1 text-[10px] font-black text-muted-foreground/40 bg-muted/30 px-2 py-1 rounded-md border border-border/20 uppercase">
-                                        <Clock className="h-3 w-3" />
-                                        {u.timeout}S
+                                    <div className="hidden sm:flex items-center gap-1.5">
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <button
+                                                    onClick={() => {
+                                                        navigator.clipboard.writeText(getProxyUrl(u.name))
+                                                        toast.success(t('log_detail.copy_success'))
+                                                    }}
+                                                    className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground/50 bg-muted/30 px-2.5 py-1.5 rounded-md border border-border/20 hover:border-primary/40 hover:text-primary/70 hover:bg-primary/5 transition-all cursor-pointer max-w-[260px]"
+                                                >
+                                                    <span className="truncate">{getProxyUrl(u.name)}</span>
+                                                    <Copy className="h-3 w-3 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                </button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>{t('settings.copy_proxy_url')}</TooltipContent>
+                                        </Tooltip>
+                                        <div className="flex items-center gap-1 text-[10px] font-black text-muted-foreground/40 bg-muted/30 px-2 py-1 rounded-md border border-border/20 uppercase">
+                                            <Clock className="h-3 w-3" />
+                                            {u.timeout}S
+                                        </div>
                                     </div>
                                     <Button
                                         variant="ghost"
@@ -280,7 +315,7 @@ export function Settings() {
                                 <div className="space-y-3">
                                     <div className="flex justify-between items-center">
                                         <Label htmlFor="max-req" className="text-xs font-black uppercase tracking-wider">{t('settings.max_request_body')}</Label>
-                                        <Badge variant="secondary" className="font-mono text-[10px] font-bold">{maxRequestBody} MB</Badge>
+                                        <Badge variant="secondary" className="font-mono text-[10px] font-bold">{maxRequestBody} KB</Badge>
                                     </div>
                                     <Input
                                         id="max-req"
@@ -295,7 +330,7 @@ export function Settings() {
                                 <div className="space-y-3">
                                     <div className="flex justify-between items-center">
                                         <Label htmlFor="max-res" className="text-xs font-black uppercase tracking-wider">{t('settings.max_response_body')}</Label>
-                                        <Badge variant="secondary" className="font-mono text-[10px] font-bold">{maxResponseBody} MB</Badge>
+                                        <Badge variant="secondary" className="font-mono text-[10px] font-bold">{maxResponseBody} KB</Badge>
                                     </div>
                                     <Input
                                         id="max-res"
@@ -306,6 +341,39 @@ export function Settings() {
                                         min="1"
                                     />
                                     <p className="text-[10px] text-muted-foreground/60 leading-relaxed italic">{t('settings.max_response_body_hint')}</p>
+                                </div>
+                            </div>
+
+                            <div className="grid gap-8 md:grid-cols-2">
+                                <div className="space-y-3">
+                                    <div className="flex justify-between items-center">
+                                        <Label htmlFor="detach-over" className="text-xs font-black uppercase tracking-wider">{t('settings.detach_body_over_bytes')}</Label>
+                                        <Badge variant="secondary" className="font-mono text-[10px] font-bold">{detachBodyOver} KB</Badge>
+                                    </div>
+                                    <Input
+                                        id="detach-over"
+                                        type="number"
+                                        value={detachBodyOver}
+                                        onChange={e => setDetachBodyOver(Number(e.target.value))}
+                                        className="h-10 bg-background/50 border-border/50 font-bold"
+                                        min="0"
+                                    />
+                                    <p className="text-[10px] text-muted-foreground/60 leading-relaxed italic">{t('settings.detach_body_over_bytes_hint')}</p>
+                                </div>
+                                <div className="space-y-3">
+                                    <div className="flex justify-between items-center">
+                                        <Label htmlFor="preview-bytes" className="text-xs font-black uppercase tracking-wider">{t('settings.body_preview_bytes')}</Label>
+                                        <Badge variant="secondary" className="font-mono text-[10px] font-bold">{bodyPreview} KB</Badge>
+                                    </div>
+                                    <Input
+                                        id="preview-bytes"
+                                        type="number"
+                                        value={bodyPreview}
+                                        onChange={e => setBodyPreview(Number(e.target.value))}
+                                        className="h-10 bg-background/50 border-border/50 font-bold"
+                                        min="0"
+                                    />
+                                    <p className="text-[10px] text-muted-foreground/60 leading-relaxed italic">{t('settings.body_preview_bytes_hint')}</p>
                                 </div>
                             </div>
 

@@ -190,6 +190,7 @@ func (h *Handler) handleUpstreams(w http.ResponseWriter, r *http.Request) {
 			Target  string `json:"target"`
 			Timeout int    `json:"timeout"`
 		}
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			h.jsonError(w, "无效的请求体", http.StatusBadRequest)
 			return
@@ -287,6 +288,7 @@ func (h *Handler) handleConfig(w http.ResponseWriter, r *http.Request) {
 				RetentionDays *int `json:"retention_days"`
 			} `json:"storage"`
 		}
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			h.jsonError(w, "无效的请求体", http.StatusBadRequest)
 			return
@@ -379,6 +381,7 @@ func (h *Handler) handleReplay(w http.ResponseWriter, r *http.Request) {
 		Headers  map[string]string `json:"headers"`
 		Body     string            `json:"body"`
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 100<<20) // 100MB
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.jsonError(w, "无效的请求体", http.StatusBadRequest)
 		return

@@ -23,9 +23,9 @@ type Config struct {
 
 // ServerConfig 服务器配置
 type ServerConfig struct {
-	Port    int      `yaml:"port"`
-	UIHosts []string `yaml:"ui_hosts"`
-	UIPassword string    `yaml:"ui_password"`
+	Port       int      `yaml:"port"`
+	UIHosts    []string `yaml:"ui_hosts"`
+	UIPassword string   `yaml:"ui_password"`
 
 	// ProxyDomains defines the base domains used for host-based upstream routing.
 	// For example, if ProxyDomains contains "localhost", then requests to
@@ -118,7 +118,10 @@ type StorageConfig struct {
 	// Supported values: "fs" (filesystem). (Others can be added later, e.g. "sqlite", "s3".)
 	BlobStore string `yaml:"blob_store"`
 	// BlobDir is used when BlobStore == "fs".
+	// BlobDir is used when BlobStore == "fs".
 	BlobDir string `yaml:"blob_dir"`
+	// AsyncBuffer controls the capacity of the async log queue.
+	AsyncBuffer int `yaml:"async_buffer"`
 }
 
 var (
@@ -196,6 +199,9 @@ func Load(path string) (*Config, error) {
 	if c.Storage.BlobDir == "" {
 		c.Storage.BlobDir = "./data/blobs"
 	}
+	if c.Storage.AsyncBuffer <= 0 {
+		c.Storage.AsyncBuffer = 4096
+	}
 
 	// 覆盖环境变量 (云端/容器化部署优先)
 	if envPort := os.Getenv("PRISMCAT_PORT"); envPort != "" {
@@ -220,9 +226,24 @@ func Load(path string) (*Config, error) {
 			c.Storage.RetentionDays = d
 		}
 	}
+	if envAsyncBuffer := os.Getenv("PRISMCAT_ASYNC_BUFFER"); envAsyncBuffer != "" {
+		if b, err := parsePort(envAsyncBuffer); err == nil {
+			c.Storage.AsyncBuffer = b
+		}
+	}
 	if envPassword := os.Getenv("PRISMCAT_UI_PASSWORD"); envPassword != "" {
 		c.Server.UIPassword = envPassword
 	}
+
+	// Normalize case/spacing for host-based matching.
+	c.Server.UIHosts = normalizeLowerList(c.Server.UIHosts)
+	c.Server.ProxyDomains = normalizeLowerList(c.Server.ProxyDomains)
+
+	normalizedUpstreams, err := normalizeUpstreams(c.Upstreams)
+	if err != nil {
+		return nil, err
+	}
+	c.Upstreams = normalizedUpstreams
 
 	// 确保目录存在
 	dbDir := filepath.Dir(c.Storage.Database)
@@ -254,6 +275,48 @@ func splitCSV(s string) []string {
 		}
 	}
 	return res
+}
+
+func normalizeLower(s string) string {
+	return strings.ToLower(strings.TrimSpace(s))
+}
+
+func normalizeLowerList(in []string) []string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(in))
+	seen := make(map[string]struct{}, len(in))
+	for _, v := range in {
+		n := normalizeLower(v)
+		if n == "" {
+			continue
+		}
+		if _, ok := seen[n]; ok {
+			continue
+		}
+		seen[n] = struct{}{}
+		out = append(out, n)
+	}
+	return out
+}
+
+func normalizeUpstreams(in map[string]UpstreamConfig) (map[string]UpstreamConfig, error) {
+	if in == nil {
+		return make(map[string]UpstreamConfig), nil
+	}
+	out := make(map[string]UpstreamConfig, len(in))
+	for k, v := range in {
+		n := normalizeLower(k)
+		if n == "" {
+			continue
+		}
+		if _, exists := out[n]; exists {
+			return nil, fmt.Errorf("重复的 upstream 名称（大小写不敏感）: %q", n)
+		}
+		out[n] = v
+	}
+	return out, nil
 }
 
 // Update applies an in-memory update under an exclusive lock.
@@ -336,6 +399,10 @@ func (c *Config) AddUpstream(name string, config UpstreamConfig) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	name = normalizeLower(name)
+	if name == "" {
+		return fmt.Errorf("upstream name is empty")
+	}
 	c.Upstreams[name] = config
 	return nil // 实际上应该由调用者决定是否立即 Save
 }
@@ -345,6 +412,10 @@ func (c *Config) RemoveUpstream(name string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	name = normalizeLower(name)
+	if name == "" {
+		return fmt.Errorf("upstream name is empty")
+	}
 	delete(c.Upstreams, name)
 	return nil
 }
@@ -367,8 +438,9 @@ func (c *Config) IsUIHost(host string) bool {
 		}
 	}
 
+	host = normalizeLower(host)
 	for _, h := range c.Server.UIHosts {
-		if h == host {
+		if normalizeLower(h) == host {
 			return true
 		}
 	}
@@ -379,6 +451,10 @@ func (c *Config) IsUIHost(host string) bool {
 func (c *Config) GetUpstream(subdomain string) (*UpstreamConfig, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+	subdomain = normalizeLower(subdomain)
+	if subdomain == "" {
+		return nil, false
+	}
 	up, ok := c.Upstreams[subdomain]
 	if !ok {
 		return nil, false

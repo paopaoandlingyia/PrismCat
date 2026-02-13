@@ -3,8 +3,10 @@ package storage
 import (
 	"context"
 	"log"
+	"strings"
 	"time"
 	"unicode/utf8"
+	"unsafe"
 
 	"github.com/prismcat/prismcat/internal/config"
 )
@@ -46,7 +48,7 @@ func (r *DetachingRepository) SaveLog(logEntry *RequestLog) error {
 	ctx := context.Background()
 
 	if logEntry.RequestBodyRef == "" && int64(len(logEntry.RequestBody)) > detachOver {
-		ref, err := r.blobs.Put(ctx, []byte(logEntry.RequestBody))
+		ref, err := r.blobs.Put(ctx, stringBytes(logEntry.RequestBody))
 		if err != nil {
 			log.Printf("blob put (request) failed: %v", err)
 		} else {
@@ -57,7 +59,7 @@ func (r *DetachingRepository) SaveLog(logEntry *RequestLog) error {
 	}
 
 	if logEntry.ResponseBodyRef == "" && int64(len(logEntry.ResponseBody)) > detachOver {
-		ref, err := r.blobs.Put(ctx, []byte(logEntry.ResponseBody))
+		ref, err := r.blobs.Put(ctx, stringBytes(logEntry.ResponseBody))
 		if err != nil {
 			log.Printf("blob put (response) failed: %v", err)
 		} else {
@@ -77,12 +79,34 @@ func truncateUTF8(s string, maxBytes int64) string {
 	if int64(len(s)) <= maxBytes {
 		return s
 	}
-	b := []byte(s)
-	cut := b[:maxBytes]
-	for len(cut) > 0 && !utf8.Valid(cut) {
-		cut = cut[:len(cut)-1]
+
+	// Avoid allocating a full []byte copy for large bodies. We only need to find a
+	// safe UTF-8 boundary <= maxBytes.
+	cut := int(maxBytes)
+	if cut > len(s) {
+		cut = len(s)
 	}
-	return string(cut)
+	// If we cut in the middle of a multi-byte rune, step back to the rune start.
+	for cut > 0 && (s[cut]&0xC0) == 0x80 {
+		cut--
+	}
+	// Best-effort validation (the input is expected to be valid UTF-8 already).
+	for cut > 0 && !utf8.ValidString(s[:cut]) {
+		cut--
+		for cut > 0 && (s[cut]&0xC0) == 0x80 {
+			cut--
+		}
+	}
+	// Copy the preview so we don't retain the full original body in memory.
+	return strings.Clone(s[:cut])
+}
+
+func stringBytes(s string) []byte {
+	if s == "" {
+		return nil
+	}
+	// Read-only view over the string data to avoid an extra allocation for large bodies.
+	return unsafe.Slice(unsafe.StringData(s), len(s))
 }
 
 func (r *DetachingRepository) GetLog(id string) (*RequestLog, error) {

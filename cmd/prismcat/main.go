@@ -20,10 +20,15 @@ func main() {
 	if _, err := os.Stat(*configPath); os.IsNotExist(err) {
 		// 尝试使用示例配置
 		if _, err := os.Stat("config.example.yaml"); err == nil {
-			log.Println("未找到 config.yaml，正在从 config.example.yaml 复制...")
-			data, _ := os.ReadFile("config.example.yaml")
-			os.WriteFile("config.yaml", data, 0644)
-			*configPath = "config.yaml"
+			log.Printf("未找到配置文件 %q，正在从 config.example.yaml 复制...", *configPath)
+
+			data, err := os.ReadFile("config.example.yaml")
+			if err != nil {
+				log.Fatalf("读取示例配置失败: %v", err)
+			}
+			if err := os.WriteFile(*configPath, data, 0644); err != nil {
+				log.Fatalf("写入配置文件失败: %v", err)
+			}
 		} else {
 			log.Fatal("配置文件不存在: ", *configPath)
 		}
@@ -34,11 +39,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("加载配置失败: %v", err)
 	}
-	log.Printf("配置已加载: DetachBodyOverBytes=%d, BodyPreviewBytes=%d", 
+	log.Printf("配置已加载: DetachBodyOverBytes=%d, BodyPreviewBytes=%d",
 		cfg.Logging.DetachBodyOverBytes, cfg.Logging.BodyPreviewBytes)
 
 	// 初始化存储
-	repo, err := storage.NewSQLiteRepository(cfg.Storage.Database)
+	sqliteRepo, err := storage.NewSQLiteRepository(cfg.Storage.Database)
 	if err != nil {
 		log.Fatalf("初始化存储失败: %v", err)
 	}
@@ -56,14 +61,13 @@ func main() {
 		log.Fatalf("不支持的 blob_store: %s", cfg.Storage.BlobStore)
 	}
 
-	// 1. 最底层是 SQLite
+	// 1. SQLite
+	// 2. Detaching：在异步 worker 中将大 Body 写入 blob store（避免阻塞代理热路径）
+	// 3. Async：异步写入 SQLite（并保持顺序）
+	detachingRepo := storage.NewDetachingRepository(sqliteRepo, blobStore, cfg)
 	// 2. 包装一层 Async，用于处理最终的磁盘 IO 写入
-	asyncRepo := storage.NewAsyncRepository(repo, 4096)
+	asyncRepo := storage.NewAsyncRepository(detachingRepo, cfg.Storage.AsyncBuffer)
 	defer asyncRepo.Close()
-
-	// 3. 最外层是 Detaching，确保在进入异步队列前就已经完成了大 Body 的脱离处理
-	// 这样可以保证 UI 在任何时候查到的都是处理（截断）后的对象
-	detachedRepo := storage.NewDetachingRepository(asyncRepo, blobStore, cfg)
 
 	// Best-effort log retention cleanup.
 	stopRetention := make(chan struct{})
@@ -89,7 +93,7 @@ func main() {
 				// Best-effort blob GC for filesystem blob store.
 				if fsStore, ok := blobStore.(*storage.FileBlobStore); ok {
 					if lastBlobGC.IsZero() || time.Since(lastBlobGC) >= 24*time.Hour {
-						if refs, err := repo.ListBlobRefs(); err != nil {
+						if refs, err := sqliteRepo.ListBlobRefs(); err != nil {
 							log.Printf("blob GC list refs failed: %v", err)
 						} else if n, err := fsStore.GarbageCollect(context.Background(), refs, time.Hour); err != nil {
 							log.Printf("blob GC failed: %v", err)
@@ -113,7 +117,7 @@ func main() {
 	defer close(stopRetention)
 
 	// 启动服务器
-	srv := server.New(cfg, detachedRepo, blobStore)
+	srv := server.New(cfg, asyncRepo, blobStore)
 	if err := srv.Start(); err != nil {
 		log.Fatalf("服务器错误: %v", err)
 	}
