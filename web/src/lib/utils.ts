@@ -5,6 +5,13 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+export function generateId() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID()
+  }
+  return Math.random().toString(36).substring(2, 11)
+}
+
 // 日期格式化
 export function formatDate(date: Date | string, locale: string = 'zh-CN'): string {
   const d = new Date(date)

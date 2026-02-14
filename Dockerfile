@@ -25,7 +25,6 @@ WORKDIR /app
 RUN apk add --no-cache ca-certificates tzdata
 
 COPY --from=backend-builder /app/prismcat .
-COPY config.example.yaml ./config.yaml
 
 # 创建数据目录并声明卷
 RUN mkdir -p data
@@ -39,4 +38,4 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:8080/api/health || exit 1
 
-CMD ["./prismcat", "-config", "config.yaml"]
+CMD ["./prismcat", "-config", "data/config.yaml"]

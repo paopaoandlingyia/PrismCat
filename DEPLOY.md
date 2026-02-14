@@ -67,17 +67,31 @@ mkdir prismcat && cd prismcat
 services:
   prismcat:
     image: ghcr.io/paopaoandlingyia/prismcat:latest
+    container_name: prismcat
     ports:
       - "8080:8080"
     environment:
+      # --- 基础配置 ---
       # 允许访问控制面板的 Host (多个用逗号隔开)
-      - PRISMCAT_UI_HOSTS=localhost,127.0.0.1,你的服务器IP
-      # 基础代理域名
-      - PRISMCAT_PROXY_DOMAINS=localhost,你的服务器IP
-      # 日志保留天数
+      - PRISMCAT_UI_HOSTS=localhost,127.0.0.1,你的服务器IP,prismcat.example.com
+      # 基础代理域名 (用于 Host 路由)
+      - PRISMCAT_PROXY_DOMAINS=localhost,prismcat.example.com
+      
+      # --- 安全配置 ---
+      # 设置进入控制面板的 basic auth 密码 (留空则不启用密码)
+      - PRISMCAT_UI_PASSWORD=你的强烈建议设置的密码
+      
+      # --- 存储策略 ---
+      # 日志保留天数 (超过会自动清理)
       - PRISMCAT_RETENTION_DAYS=30
+      
+      # --- 时区设置 (推荐) ---
+      - TZ=Asia/Shanghai
     volumes:
+      # 持久化数据 (数据库和 Blob 附件)
       - ./data:/app/data
+      # (可选) 挂载自定义配置文件，如果挂载了该文件，环境变量中冲突的项可能会失效
+      # - ./config.yaml:/app/config.yaml
     restart: always
 ```
 

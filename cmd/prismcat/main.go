@@ -5,6 +5,8 @@ import (
 	"flag"
 	"log"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/prismcat/prismcat/internal/config"
@@ -12,25 +14,61 @@ import (
 	"github.com/prismcat/prismcat/internal/storage"
 )
 
+const defaultYAML = `
+server:
+  addr: 0.0.0.0
+  port: 8080
+  ui_hosts:
+    - localhost
+    - 127.0.0.1
+  proxy_domains:
+    - localhost
+
+logging:
+  max_request_body: 1048576       # 1MB
+  max_response_body: 10485760     # 10MB
+  sensitive_headers:
+    - Authorization
+    - api-key
+    - x-api-key
+  detach_body_over_bytes: 262144  # 256KB
+  body_preview_bytes: 4096        # 4KB
+
+storage:
+  database: "data/prismcat.db"
+  retention_days: 7
+  blob_store: "fs"
+  blob_dir: "data/blobs"
+`
+
 func main() {
 	configPath := flag.String("config", "config.yaml", "配置文件路径")
 	flag.Parse()
 
 	// 检查配置文件是否存在
 	if _, err := os.Stat(*configPath); os.IsNotExist(err) {
-		// 尝试使用示例配置
-		if _, err := os.Stat("config.example.yaml"); err == nil {
-			log.Printf("未找到配置文件 %q，正在从 config.example.yaml 复制...", *configPath)
+		log.Printf("未找到配置文件 %q，尝试初始化...", *configPath)
 
-			data, err := os.ReadFile("config.example.yaml")
-			if err != nil {
-				log.Fatalf("读取示例配置失败: %v", err)
-			}
-			if err := os.WriteFile(*configPath, data, 0644); err != nil {
-				log.Fatalf("写入配置文件失败: %v", err)
-			}
+		var configData []byte
+		// 1. 优先尝试从磁盘上的示例文件读取
+		if data, err := os.ReadFile("config.example.yaml"); err == nil {
+			log.Printf("使用磁盘上的 config.example.yaml 作为模版")
+			configData = data
 		} else {
-			log.Fatal("配置文件不存在: ", *configPath)
+			// 2. 备选方案：使用内置的默认配置字符串
+			log.Printf("使用内置默认配置初始化")
+			configData = []byte(strings.TrimSpace(defaultYAML))
+		}
+
+		// 确保目标路径的父目录存在
+		if dir := filepath.Dir(*configPath); dir != "." {
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				log.Fatalf("创建配置目录失败: %v", err)
+			}
+		}
+
+		if err := os.WriteFile(*configPath, configData, 0644); err != nil {
+			log.Fatalf("写入配置文件失败: %v", err)
 		}
 	}
 

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation } from 'react-router-dom'
 import { Send, Plus, Trash2, Loader2, Copy, Check, ChevronDown } from 'lucide-react'
-import { cn, getStatusColor, formatSize } from '@/lib/utils'
+import { cn, getStatusColor, formatSize, generateId } from '@/lib/utils'
 import { fetchUpstreams, sendReplay } from '@/lib/api'
 import type { Upstream, ReplayResponse } from '@/lib/api'
 import { JsonViewer } from '@/components/JsonViewer'
@@ -40,7 +40,7 @@ export function Playground() {
     const [method, setMethod] = useState('POST')
     const [path, setPath] = useState('')
     const [headers, setHeaders] = useState<HeaderEntry[]>([
-        { key: 'Content-Type', value: 'application/json', id: crypto.randomUUID() },
+        { key: 'Content-Type', value: 'application/json', id: generateId() },
     ])
     const [body, setBody] = useState('')
 
@@ -84,7 +84,7 @@ export function Playground() {
                     .map(([key, value]) => ({
                         key,
                         value: Array.isArray(value) ? value.join('; ') : value,
-                        id: crypto.randomUUID()
+                        id: generateId()
                     }))
                 if (entries.length > 0) setHeaders(entries)
             }
@@ -103,7 +103,7 @@ export function Playground() {
     }, [response?.body])
 
     const handleAddHeader = () => {
-        setHeaders([...headers, { key: '', value: '', id: crypto.randomUUID() }])
+        setHeaders([...headers, { key: '', value: '', id: generateId() }])
     }
 
     const handleRemoveHeader = (id: string) => {
