@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { Plus, Trash2, Save, Database, FileText, Upload, AlertCircle, ShieldAlert, HardDrive, Clock, Globe, Copy, ArrowRight } from 'lucide-react'
+import { Plus, Trash2, Save, Database, FileText, Upload, AlertCircle, ShieldAlert, HardDrive, Clock, Globe, Copy, ArrowRight, Image as ImageIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Badge } from "@/components/ui/badge"
 
@@ -405,25 +405,59 @@ export function Settings() {
 
                             <Separator className="bg-border/20" />
 
-                            <div className="flex items-center justify-between p-4 rounded-xl bg-primary/5 border border-primary/10">
-                                <div className="space-y-1">
-                                    <Label className="text-xs font-black uppercase tracking-wider block">{t('settings.store_base64')}</Label>
-                                    <p className="text-[10px] text-muted-foreground/60 leading-relaxed italic">{t('settings.store_base64_hint')}</p>
+                            <div
+                                className={cn(
+                                    "flex items-center justify-between p-5 rounded-2xl border transition-all cursor-pointer group shadow-sm",
+                                    storeBase64
+                                        ? "bg-primary/5 border-primary/20 hover:bg-primary/10"
+                                        : "bg-muted/30 border-border/40 hover:bg-muted/50"
+                                )}
+                                onClick={() => setStoreBase64(!storeBase64)}
+                            >
+                                <div className="flex items-start gap-4">
+                                    <div className={cn(
+                                        "h-10 w-10 rounded-xl flex items-center justify-center shrink-0 border transition-colors",
+                                        storeBase64
+                                            ? "bg-primary/10 border-primary/20 text-primary"
+                                            : "bg-muted border-border/40 text-muted-foreground"
+                                    )}>
+                                        <ImageIcon className="h-5 w-5" />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <div className="flex items-center gap-2">
+                                            <Label className="text-sm font-black uppercase tracking-wide cursor-pointer text-foreground/90 group-hover:text-primary transition-colors">
+                                                {t('settings.store_base64')}
+                                            </Label>
+                                            {storeBase64 && (
+                                                <Badge variant="secondary" className="text-[9px] font-bold bg-primary/10 text-primary h-4 px-1.5 border-none">
+                                                    ACTIVE
+                                                </Badge>
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-muted-foreground/70 leading-relaxed font-medium max-w-[500px]">
+                                            {t('settings.store_base64_hint')}
+                                        </p>
+                                    </div>
                                 </div>
                                 <div
                                     className={cn(
-                                        "relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                                        "relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background border-2 border-transparent shadow-inner",
                                         storeBase64 ? "bg-primary" : "bg-muted"
                                     )}
-                                    onClick={() => setStoreBase64(!storeBase64)}
                                 >
                                     <input type="checkbox" className="sr-only" checked={storeBase64} readOnly />
                                     <span
                                         className={cn(
-                                            "pointer-events-none block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform",
+                                            "pointer-events-none block h-6 w-6 rounded-full bg-background shadow-lg ring-0 transition-transform flex items-center justify-center",
                                             storeBase64 ? "translate-x-5" : "translate-x-0"
                                         )}
-                                    />
+                                    >
+                                        {storeBase64 ? (
+                                            <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                                        ) : (
+                                            <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30" />
+                                        )}
+                                    </span>
                                 </div>
                             </div>
 
