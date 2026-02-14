@@ -24,7 +24,7 @@ interface LogFiltersProps {
     loading?: boolean
 }
 
-const DEFAULT_FILTER: LogFilter = { limit: 50, offset: 0 }
+const DEFAULT_FILTER: LogFilter = { limit: 20, offset: 0 }
 
 export function LogFilters({
     filter,

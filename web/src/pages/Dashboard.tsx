@@ -18,7 +18,7 @@ export function Dashboard() {
     const [loading, setLoading] = useState(true)
     const [selectedLog, setSelectedLog] = useState<RequestLog | null>(null)
     const [selectedLogLoading, setSelectedLogLoading] = useState(false)
-    const [filter, setFilter] = useState<LogFilter>({ limit: 50, offset: 0 })
+    const [filter, setFilter] = useState<LogFilter>({ limit: 20, offset: 0 })
     const selectSeq = useRef(0)
 
     // 加载日志

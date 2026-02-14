@@ -57,6 +57,7 @@ type LoggingConfig struct {
 	MaxRequestBody   int64    `yaml:"max_request_body"`
 	MaxResponseBody  int64    `yaml:"max_response_body"`
 	SensitiveHeaders []string `yaml:"sensitive_headers"`
+	StoreBase64      bool     `yaml:"store_base64"`
 
 	// DetachBodyOverBytes detaches large captured bodies into the blob store.
 	// The log table keeps only a short preview + a content-addressed reference.
@@ -70,6 +71,7 @@ type LoggingConfig struct {
 
 	detachBodyOverBytesSet bool `yaml:"-"`
 	bodyPreviewBytesSet    bool `yaml:"-"`
+	storeBase64Set         bool `yaml:"-"`
 }
 
 func (c *LoggingConfig) UnmarshalYAML(value *yaml.Node) error {
@@ -80,6 +82,7 @@ func (c *LoggingConfig) UnmarshalYAML(value *yaml.Node) error {
 		SensitiveHeaders []string `yaml:"sensitive_headers"`
 		DetachBodyOver   int64    `yaml:"detach_body_over_bytes"`
 		BodyPreviewBytes int64    `yaml:"body_preview_bytes"`
+		StoreBase64      bool     `yaml:"store_base64"`
 	}
 	if err := value.Decode(&raw); err != nil {
 		return err
@@ -90,6 +93,7 @@ func (c *LoggingConfig) UnmarshalYAML(value *yaml.Node) error {
 	c.SensitiveHeaders = raw.SensitiveHeaders
 	c.DetachBodyOverBytes = raw.DetachBodyOver
 	c.BodyPreviewBytes = raw.BodyPreviewBytes
+	c.StoreBase64 = raw.StoreBase64
 
 	c.detachBodyOverBytesSet = false
 	c.bodyPreviewBytesSet = false
@@ -104,6 +108,8 @@ func (c *LoggingConfig) UnmarshalYAML(value *yaml.Node) error {
 				c.detachBodyOverBytesSet = true
 			case "body_preview_bytes":
 				c.bodyPreviewBytesSet = true
+			case "store_base64":
+				c.storeBase64Set = true
 			}
 		}
 	}
@@ -178,6 +184,10 @@ func Load(path string) (*Config, error) {
 	if len(c.Logging.SensitiveHeaders) == 0 {
 		c.Logging.SensitiveHeaders = []string{"Authorization", "x-api-key", "api-key"}
 	}
+	if !c.Logging.storeBase64Set {
+		c.Logging.StoreBase64 = true // Default to true
+	}
+
 	// Default: detach large bodies to blob storage to keep the log table lightweight.
 	// If explicitly configured <= 0, detaching is disabled.
 	if !c.Logging.detachBodyOverBytesSet {

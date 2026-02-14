@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/textproto"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -24,6 +25,8 @@ import (
 	"github.com/prismcat/prismcat/internal/config"
 	"github.com/prismcat/prismcat/internal/storage"
 )
+
+var b64Regex = regexp.MustCompile(`(data:[^\s]+?;base64,)?([A-Za-z0-9+/]{200,}[=]{0,2})`)
 
 // Proxy handles host-based upstream routing and request/response logging.
 type Proxy struct {
@@ -166,14 +169,14 @@ func (p *Proxy) finalizeAndSaveLog(log *storage.RequestLog, startTime time.Time,
 		log.RequestBodySize = reqCap.Total()
 		contentType := firstHeaderValue(log.RequestHeaders, "Content-Type")
 		contentEncoding := firstHeaderValue(log.RequestHeaders, "Content-Encoding")
-		body, truncated := bodyForLog(contentType, contentEncoding, reqCap.Bytes(), loggingCfg.MaxRequestBody)
+		body, truncated := bodyForLog(contentType, contentEncoding, reqCap.Bytes(), loggingCfg.MaxRequestBody, loggingCfg.StoreBase64)
 		log.RequestBody = body
 		log.Truncated = log.Truncated || truncated
 	}
 	if respCap != nil {
 		contentType := firstHeaderValue(log.ResponseHeaders, "Content-Type")
 		contentEncoding := firstHeaderValue(log.ResponseHeaders, "Content-Encoding")
-		body, truncated := bodyForLog(contentType, contentEncoding, respCap.Bytes(), loggingCfg.MaxResponseBody)
+		body, truncated := bodyForLog(contentType, contentEncoding, respCap.Bytes(), loggingCfg.MaxResponseBody, loggingCfg.StoreBase64)
 		log.ResponseBody = body
 		log.Truncated = log.Truncated || truncated
 	}
@@ -503,7 +506,7 @@ func readAllLimited(r io.Reader, max int64) ([]byte, bool, error) {
 	return data[:max], true, nil
 }
 
-func bodyForLog(contentType, contentEncoding string, b []byte, maxOutputBytes int64) (string, bool) {
+func bodyForLog(contentType, contentEncoding string, b []byte, maxOutputBytes int64, storeBase64 bool) (string, bool) {
 	if len(b) == 0 {
 		return "", false
 	}
@@ -540,10 +543,28 @@ func bodyForLog(contentType, contentEncoding string, b []byte, maxOutputBytes in
 	}
 
 	if isProbablyText(contentType) && utf8.Valid(data) {
-		return string(data), truncated
+		s := string(data)
+		if !storeBase64 {
+			s = b64Regex.ReplaceAllStringFunc(s, func(m string) string {
+				if len(m) <= 200 {
+					return m
+				}
+				return m[:200]
+			})
+		}
+		return s, truncated
 	}
 	if utf8.Valid(data) {
-		return string(data), truncated
+		s := string(data)
+		if !storeBase64 {
+			s = b64Regex.ReplaceAllStringFunc(s, func(m string) string {
+				if len(m) <= 200 {
+					return m
+				}
+				return m[:200]
+			})
+		}
+		return s, truncated
 	}
 
 	if decompressed {

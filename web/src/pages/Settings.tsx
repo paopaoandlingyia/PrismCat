@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { Plus, Trash2, Save, Database, FileText, Upload, AlertCircle, ShieldAlert, HardDrive, Clock, Globe, Copy, ArrowRight } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { Badge } from "@/components/ui/badge"
+
 import { fetchUpstreams, addUpstream, removeUpstream, fetchConfig, updateConfig } from '@/lib/api'
 import type { Upstream, AppConfig } from '@/lib/api'
 import { useTranslation } from 'react-i18next'
@@ -47,6 +49,7 @@ export function Settings() {
     const [sensitiveHeaders, setSensitiveHeaders] = useState('')
     const [detachBodyOver, setDetachBodyOver] = useState(256)
     const [bodyPreview, setBodyPreview] = useState(4096)
+    const [storeBase64, setStoreBase64] = useState(true)
 
     // 表单状态 - 存储配置
     const [retentionDays, setRetentionDays] = useState(30)
@@ -82,6 +85,7 @@ export function Settings() {
             setSensitiveHeaders(configData.logging.sensitive_headers.join('\n'))
             setDetachBodyOver(Math.round(configData.logging.detach_body_over_bytes / 1024))
             setBodyPreview(Math.round(configData.logging.body_preview_bytes / 1024))
+            setStoreBase64(configData.logging.store_base64)
             setRetentionDays(configData.storage.retention_days)
         } catch (err) {
             console.error('Failed to load settings:', err)
@@ -133,6 +137,7 @@ export function Settings() {
                     sensitive_headers: sensitiveHeaders.split('\n').map(s => s.trim()).filter(Boolean),
                     detach_body_over_bytes: detachBodyOver * 1024,
                     body_preview_bytes: bodyPreview * 1024,
+                    store_base64: storeBase64,
                 },
             })
             toast.success(t('settings.config_saved'))
@@ -399,6 +404,29 @@ export function Settings() {
                             </div>
 
                             <Separator className="bg-border/20" />
+
+                            <div className="flex items-center justify-between p-4 rounded-xl bg-primary/5 border border-primary/10">
+                                <div className="space-y-1">
+                                    <Label className="text-xs font-black uppercase tracking-wider block">{t('settings.store_base64')}</Label>
+                                    <p className="text-[10px] text-muted-foreground/60 leading-relaxed italic">{t('settings.store_base64_hint')}</p>
+                                </div>
+                                <div
+                                    className={cn(
+                                        "relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                                        storeBase64 ? "bg-primary" : "bg-muted"
+                                    )}
+                                    onClick={() => setStoreBase64(!storeBase64)}
+                                >
+                                    <input type="checkbox" className="sr-only" checked={storeBase64} readOnly />
+                                    <span
+                                        className={cn(
+                                            "pointer-events-none block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform",
+                                            storeBase64 ? "translate-x-5" : "translate-x-0"
+                                        )}
+                                    />
+                                </div>
+                            </div>
+
 
                             <div className="space-y-4">
                                 <div className="flex items-center gap-2">

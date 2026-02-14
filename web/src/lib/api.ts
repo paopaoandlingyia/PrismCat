@@ -127,6 +127,7 @@ export interface AppConfig {
         sensitive_headers: string[]
         detach_body_over_bytes: number
         body_preview_bytes: number
+        store_base64: boolean
     }
     storage: {
         database: string
@@ -141,6 +142,7 @@ export interface ConfigUpdate {
         sensitive_headers?: string[]
         detach_body_over_bytes?: number
         body_preview_bytes?: number
+        store_base64?: boolean
     }
     storage?: {
         retention_days?: number

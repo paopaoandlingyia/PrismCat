@@ -263,6 +263,7 @@ func (h *Handler) handleConfig(w http.ResponseWriter, r *http.Request) {
 				"sensitive_headers":      logging.SensitiveHeaders,
 				"detach_body_over_bytes": logging.DetachBodyOverBytes,
 				"body_preview_bytes":     logging.BodyPreviewBytes,
+				"store_base64":           logging.StoreBase64,
 			},
 			"storage": map[string]interface{}{
 				"database":       storageCfg.Database,
@@ -283,6 +284,7 @@ func (h *Handler) handleConfig(w http.ResponseWriter, r *http.Request) {
 				SensitiveHeaders *[]string `json:"sensitive_headers"`
 				DetachBodyOver   *int64    `json:"detach_body_over_bytes"`
 				BodyPreviewBytes *int64    `json:"body_preview_bytes"`
+				StoreBase64      *bool     `json:"store_base64"`
 			} `json:"logging"`
 			Storage *struct {
 				RetentionDays *int `json:"retention_days"`
@@ -311,6 +313,9 @@ func (h *Handler) handleConfig(w http.ResponseWriter, r *http.Request) {
 				}
 				if req.Logging.BodyPreviewBytes != nil {
 					c.Logging.BodyPreviewBytes = *req.Logging.BodyPreviewBytes
+				}
+				if req.Logging.StoreBase64 != nil {
+					c.Logging.StoreBase64 = *req.Logging.StoreBase64
 				}
 			}
 

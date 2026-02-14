@@ -138,7 +138,9 @@
         "retention_days_hint": "Set to 0 for permanent retention",
         "days": "days",
         "database_path": "Database Path",
-        "database_path_hint": "This setting requires editing the config file and restarting"
+        "database_path_hint": "This setting requires editing the config file and restarting",
+        "store_base64": "Store Base64 Data",
+        "store_base64_hint": "When enabled, Base64 encoded data (e.g. images) in bodies will be stored. Disable to significantly reduce storage overhead."
     },
     "playground": {
         "title": "Playground",

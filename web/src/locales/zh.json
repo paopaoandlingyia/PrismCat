@@ -140,7 +140,9 @@
         "retention_days_hint": "设为 0 表示永久保留",
         "days": "天",
         "database_path": "数据库路径",
-        "database_path_hint": "此配置需要修改配置文件并重启服务"
+        "database_path_hint": "此配置需要修改配置文件并重启服务",
+        "store_base64": "存储 Base64 数据",
+        "store_base64_hint": "开启后将检测并存储请求/响应体中的 Base64 编码数据 (如图片)。禁用可多维度减少存储开销。"
     },
     "playground": {
         "title": "Playground",
