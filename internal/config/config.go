@@ -68,52 +68,6 @@ type LoggingConfig struct {
 	// in request_logs.request_body/response_body for quick viewing.
 	// 0: disable preview (store empty preview).
 	BodyPreviewBytes int64 `yaml:"body_preview_bytes"`
-
-	detachBodyOverBytesSet bool `yaml:"-"`
-	bodyPreviewBytesSet    bool `yaml:"-"`
-	storeBase64Set         bool `yaml:"-"`
-}
-
-func (c *LoggingConfig) UnmarshalYAML(value *yaml.Node) error {
-	// Avoid recursion by decoding into a separate type.
-	var raw struct {
-		MaxRequestBody   int64    `yaml:"max_request_body"`
-		MaxResponseBody  int64    `yaml:"max_response_body"`
-		SensitiveHeaders []string `yaml:"sensitive_headers"`
-		DetachBodyOver   int64    `yaml:"detach_body_over_bytes"`
-		BodyPreviewBytes int64    `yaml:"body_preview_bytes"`
-		StoreBase64      bool     `yaml:"store_base64"`
-	}
-	if err := value.Decode(&raw); err != nil {
-		return err
-	}
-
-	c.MaxRequestBody = raw.MaxRequestBody
-	c.MaxResponseBody = raw.MaxResponseBody
-	c.SensitiveHeaders = raw.SensitiveHeaders
-	c.DetachBodyOverBytes = raw.DetachBodyOver
-	c.BodyPreviewBytes = raw.BodyPreviewBytes
-	c.StoreBase64 = raw.StoreBase64
-
-	c.detachBodyOverBytesSet = false
-	c.bodyPreviewBytesSet = false
-	if value.Kind == yaml.MappingNode {
-		for i := 0; i+1 < len(value.Content); i += 2 {
-			key := value.Content[i]
-			if key == nil {
-				continue
-			}
-			switch key.Value {
-			case "detach_body_over_bytes":
-				c.detachBodyOverBytesSet = true
-			case "body_preview_bytes":
-				c.bodyPreviewBytesSet = true
-			case "store_base64":
-				c.storeBase64Set = true
-			}
-		}
-	}
-	return nil
 }
 
 // StorageConfig 存储配置
@@ -143,76 +97,38 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("读取配置文件失败: %w", err)
 	}
 
-	var c Config
+	c := Config{
+		Server: ServerConfig{
+			Port:                   8080,
+			UIHosts:                []string{"localhost", "127.0.0.1"},
+			ProxyDomains:           []string{"localhost"},
+			ShutdownTimeoutSeconds: 10,
+			CORSAllowOrigins:       []string{"*"},
+			CORSAllowMethods:       []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+			CORSAllowHeaders:       []string{"Content-Type", "Authorization"},
+		},
+		Logging: LoggingConfig{
+			MaxRequestBody:      1 << 20, // 1MB
+			MaxResponseBody:     10 << 20, // 10MB
+			SensitiveHeaders:    []string{"Authorization", "x-api-key", "api-key"},
+			StoreBase64:         true,
+			DetachBodyOverBytes: 256 * 1024,
+			BodyPreviewBytes:    4 * 1024,
+		},
+		Storage: StorageConfig{
+			Database:    "./data/prismcat.db",
+			BlobStore:   "fs",
+			BlobDir:     "./data/blobs",
+			AsyncBuffer: 4096,
+		},
+		Upstreams: make(map[string]UpstreamConfig),
+	}
+
 	if err := yaml.Unmarshal(data, &c); err != nil {
 		return nil, fmt.Errorf("解析配置文件失败: %w", err)
 	}
 
 	c.configPath = path
-	if c.Upstreams == nil {
-		c.Upstreams = make(map[string]UpstreamConfig)
-	}
-
-	// 设置默认值
-	if c.Server.Port == 0 {
-		c.Server.Port = 8080
-	}
-	if len(c.Server.UIHosts) == 0 {
-		c.Server.UIHosts = []string{"localhost", "127.0.0.1"}
-	}
-	if len(c.Server.ProxyDomains) == 0 {
-		c.Server.ProxyDomains = []string{"localhost"}
-	}
-	if c.Server.ShutdownTimeoutSeconds <= 0 {
-		c.Server.ShutdownTimeoutSeconds = 10
-	}
-	if len(c.Server.CORSAllowOrigins) == 0 {
-		c.Server.CORSAllowOrigins = []string{"*"}
-	}
-	if len(c.Server.CORSAllowMethods) == 0 {
-		c.Server.CORSAllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
-	}
-	if len(c.Server.CORSAllowHeaders) == 0 {
-		c.Server.CORSAllowHeaders = []string{"Content-Type", "Authorization"}
-	}
-	if c.Logging.MaxRequestBody == 0 {
-		c.Logging.MaxRequestBody = 1 << 20 // 1MB
-	}
-	if c.Logging.MaxResponseBody == 0 {
-		c.Logging.MaxResponseBody = 10 << 20 // 10MB
-	}
-	if len(c.Logging.SensitiveHeaders) == 0 {
-		c.Logging.SensitiveHeaders = []string{"Authorization", "x-api-key", "api-key"}
-	}
-	if !c.Logging.storeBase64Set {
-		c.Logging.StoreBase64 = true // Default to true
-	}
-
-	// Default: detach large bodies to blob storage to keep the log table lightweight.
-	// If explicitly configured <= 0, detaching is disabled.
-	if !c.Logging.detachBodyOverBytesSet {
-		c.Logging.DetachBodyOverBytes = 256 * 1024 // 256KB
-	} else if c.Logging.DetachBodyOverBytes <= 0 {
-		c.Logging.DetachBodyOverBytes = 0
-	}
-	// Default: keep a small preview inline. 0 disables preview.
-	if !c.Logging.bodyPreviewBytesSet {
-		c.Logging.BodyPreviewBytes = 4 * 1024 // 4KB
-	} else if c.Logging.BodyPreviewBytes < 0 {
-		c.Logging.BodyPreviewBytes = 0
-	}
-	if c.Storage.Database == "" {
-		c.Storage.Database = "./data/prismcat.db"
-	}
-	if c.Storage.BlobStore == "" {
-		c.Storage.BlobStore = "fs"
-	}
-	if c.Storage.BlobDir == "" {
-		c.Storage.BlobDir = "./data/blobs"
-	}
-	if c.Storage.AsyncBuffer <= 0 {
-		c.Storage.AsyncBuffer = 4096
-	}
 
 	// 覆盖环境变量 (云端/容器化部署优先)
 	if envAddr := os.Getenv("PRISMCAT_ADDR"); envAddr != "" {
