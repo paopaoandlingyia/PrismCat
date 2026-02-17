@@ -112,6 +112,13 @@ function AppLayout() {
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>
+
+      {/* 页脚版本号 */}
+      <footer className="w-full px-6 py-4 flex justify-center items-center">
+        <p className="text-muted-foreground/20 text-[10px] font-bold tracking-[0.2em] uppercase select-none">
+          PrismCat v1.0.0
+        </p>
+      </footer>
     </div>
   )
 }

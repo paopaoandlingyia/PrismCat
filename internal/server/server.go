@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"mime"
 	"net/http"
 	"os"
 	"os/signal"
@@ -24,6 +25,13 @@ import (
 
 //go:embed all:ui
 var uiFS embed.FS
+
+func init() {
+	// 显式注册 MIME 类型，防止在 Windows 等环境中因注册表缺失导致静态资源识别错误（如 SVG logo 无法显示）
+	_ = mime.AddExtensionType(".svg", "image/svg+xml")
+	_ = mime.AddExtensionType(".js", "text/javascript")
+	_ = mime.AddExtensionType(".css", "text/css")
+}
 
 // spaHandler 处理本地文件系统的 SPA 路由
 type spaHandler struct {
@@ -335,13 +343,18 @@ func (s *Server) placeholderUI(w http.ResponseWriter, r *http.Request) {
             padding: 2rem;
         }
         .logo {
-            font-size: 4rem;
-            margin-bottom: 1rem;
+            margin-bottom: 2rem;
+            display: flex;
+            justify-content: center;
+        }
+        .logo svg {
+            width: 80px;
+            height: 80px;
         }
         h1 {
             font-size: 2.5rem;
             margin-bottom: 0.5rem;
-            background: linear-gradient(90deg, #e94560, #f9a828);
+            background: linear-gradient(90deg, #3B82F6, #8B5CF6);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
@@ -350,21 +363,27 @@ func (s *Server) placeholderUI(w http.ResponseWriter, r *http.Request) {
             margin-bottom: 2rem;
         }
         .status {
-            background: rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
             border-radius: 12px;
             padding: 1.5rem;
             margin-bottom: 2rem;
+            width: 100%;
+            max-width: 400px;
+            margin-left: auto;
+            margin-right: auto;
         }
         .status-item {
             display: flex;
             justify-content: space-between;
             padding: 0.5rem 0;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
         }
         .status-item:last-child { border: none; }
         .badge {
-            background: #4ade80;
-            color: #1a1a2e;
+            background: rgba(74, 222, 128, 0.2);
+            color: #4ade80;
+            border: 1px solid rgba(74, 222, 128, 0.3);
             padding: 0.25rem 0.75rem;
             border-radius: 999px;
             font-size: 0.875rem;
@@ -375,6 +394,8 @@ func (s *Server) placeholderUI(w http.ResponseWriter, r *http.Request) {
             color: #8b8b9a;
             max-width: 500px;
             line-height: 1.6;
+            margin-left: auto;
+            margin-right: auto;
         }
         .info code {
             background: rgba(255,255,255,0.1);
@@ -386,7 +407,20 @@ func (s *Server) placeholderUI(w http.ResponseWriter, r *http.Request) {
 </head>
 <body>
     <div class="container">
-        <div class="logo">🐱</div>
+        <div class="logo">
+            <svg viewBox="14 14 72 78" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <linearGradient id="prismGradientPlace" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#3B82F6" />
+                        <stop offset="100%" stop-color="#8B5CF6" />
+                    </linearGradient>
+                </defs>
+                <path d="M32 18 L44 32 H56 L68 18 L82 40 V68 L50 88 L18 68 V40 L32 18 Z" fill="url(#prismGradientPlace)" fill-opacity="0.2" />
+                <path d="M32 18 L44 32 H56 L68 18 L82 40 V68 L50 88 L18 68 V40 L32 18 Z" fill="url(#prismGradientPlace)" fill-opacity="0.1" stroke="url(#prismGradientPlace)" stroke-width="3" stroke-linejoin="round" />
+                <path d="M50 32 V88 M18 40 L50 60 L82 40" stroke="#FFFFFF" stroke-width="2" stroke-opacity="0.4" stroke-linecap="round" stroke-linejoin="round" />
+                <circle cx="50" cy="60" r="1.5" fill="white" fill-opacity="0.8" />
+            </svg>
+        </div>
         <h1>PrismCat</h1>
         <p class="subtitle">LLM API 透传代理 & 日志记录</p>
         
@@ -406,8 +440,7 @@ func (s *Server) placeholderUI(w http.ResponseWriter, r *http.Request) {
         </div>
         
         <p class="info">
-            前端 UI 尚未构建。请在 <code>web/</code> 目录下执行 <code>npm run build</code> 构建前端，
-            然后重启服务即可看到完整界面。
+            前端 UI 尚未同步或构建。请运行 <code>快速编译并运行.bat</code> 尝试重新构建并同步。
         </p>
     </div>
 </body>

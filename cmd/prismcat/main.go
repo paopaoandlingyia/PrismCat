@@ -3,15 +3,20 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
+	"github.com/getlantern/systray"
 	"github.com/prismcat/prismcat/internal/config"
 	"github.com/prismcat/prismcat/internal/server"
 	"github.com/prismcat/prismcat/internal/storage"
+	"github.com/skratchdot/open-golang/open"
 )
 
 const defaultYAML = `
@@ -41,9 +46,47 @@ storage:
   blob_dir: "data/blobs"
 `
 
+var (
+	kernel32         = syscall.NewLazyDLL("kernel32.dll")
+	user32           = syscall.NewLazyDLL("user32.dll")
+	getConsoleWindow = kernel32.NewProc("GetConsoleWindow")
+	showWindow       = user32.NewProc("ShowWindow")
+	allocConsole     = kernel32.NewProc("AllocConsole")
+)
+
+const (
+	SW_HIDE = 0
+	SW_SHOW = 5
+)
+
+func hideConsole() {
+	hwnd, _, _ := getConsoleWindow.Call()
+	if hwnd != 0 {
+		showWindow.Call(hwnd, SW_HIDE)
+	}
+}
+
 func main() {
-	configPath := flag.String("config", "config.yaml", "配置文件路径")
+	defaultPath := filepath.Join("data", "config.yaml")
+	configPath := flag.String("config", defaultPath, "配置文件路径")
+	showConsole := flag.Bool("console", false, "是否显示控制台窗口")
 	flag.Parse()
+
+	// 统一路径处理：如果要使用的是默认路径，但老路径 config.yaml 存在，则尝试迁移或提示
+	if *configPath == defaultPath {
+		if _, err := os.Stat("config.yaml"); err == nil {
+			if _, err := os.Stat(defaultPath); os.IsNotExist(err) {
+				log.Printf("检测到旧版配置文件 config.yaml，正在迁移到 data 目录...")
+				if err := os.MkdirAll("data", 0755); err == nil {
+					if err := os.Rename("config.yaml", defaultPath); err == nil {
+						log.Printf("迁移成功: config.yaml -> %s", defaultPath)
+					} else {
+						log.Printf("迁移失败: %v，将继续使用默认配置初始化", err)
+					}
+				}
+			}
+		}
+	}
 
 	// 检查配置文件是否存在
 	if _, err := os.Stat(*configPath); os.IsNotExist(err) {
@@ -77,6 +120,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("加载配置失败: %v", err)
 	}
+	log.Printf("PrismCat %s 启动中...", config.Version)
 	log.Printf("配置已加载: DetachBodyOverBytes=%d, BodyPreviewBytes=%d",
 		cfg.Logging.DetachBodyOverBytes, cfg.Logging.BodyPreviewBytes)
 
@@ -99,19 +143,13 @@ func main() {
 		log.Fatalf("不支持的 blob_store: %s", cfg.Storage.BlobStore)
 	}
 
-	// 1. SQLite
-	// 2. Detaching：在异步 worker 中将大 Body 写入 blob store（避免阻塞代理热路径）
-	// 3. Async：异步写入 SQLite（并保持顺序）
 	detachingRepo := storage.NewDetachingRepository(sqliteRepo, blobStore, cfg)
-	// 2. 包装一层 Async，用于处理最终的磁盘 IO 写入
 	asyncRepo := storage.NewAsyncRepository(detachingRepo, cfg.Storage.AsyncBuffer)
 	defer asyncRepo.Close()
 
 	// Best-effort log retention cleanup.
 	stopRetention := make(chan struct{})
 	go func() {
-		// Check frequently so config changes take effect without restart,
-		// but only run the DELETE job at most every 6 hours.
 		ticker := time.NewTicker(1 * time.Minute)
 		defer ticker.Stop()
 
@@ -128,7 +166,6 @@ func main() {
 					log.Printf("deleted %d logs older than %d days", deleted, retentionDays)
 				}
 
-				// Best-effort blob GC for filesystem blob store.
 				if fsStore, ok := blobStore.(*storage.FileBlobStore); ok {
 					if lastBlobGC.IsZero() || time.Since(lastBlobGC) >= 24*time.Hour {
 						if refs, err := sqliteRepo.ListBlobRefs(); err != nil {
@@ -141,10 +178,8 @@ func main() {
 						lastBlobGC = time.Now()
 					}
 				}
-
 				lastCleanup = time.Now()
 			}
-
 			select {
 			case <-ticker.C:
 			case <-stopRetention:
@@ -156,7 +191,68 @@ func main() {
 
 	// 启动服务器
 	srv := server.New(cfg, asyncRepo, blobStore)
-	if err := srv.Start(); err != nil {
-		log.Fatalf("服务器错误: %v", err)
+
+	// Windows 控制台处理
+	if runtime.GOOS == "windows" {
+		if *showConsole {
+			hwnd, _, _ := getConsoleWindow.Call()
+			if hwnd == 0 {
+				// 如果当前没有控制台（通常是 GUI 模式双击启动），尝试分配一个
+				allocConsole.Call()
+			} else {
+				// 如果已有控制台，确保显示出来
+				showWindow.Call(hwnd, SW_SHOW)
+			}
+		} else {
+			// 如果不要求显示，则尝试隐藏现有的
+			hideConsole()
+		}
 	}
+
+	// 运行系统托盘
+	systray.Run(func() {
+		systray.SetIcon(iconData)
+		systray.SetTitle("PrismCat")
+		systray.SetTooltip("PrismCat LLM Proxy " + config.Version)
+
+		titleOpen, titleQuit := getTrayLabels()
+		mOpen := systray.AddMenuItem(titleOpen, "")
+		systray.AddSeparator()
+		mQuit := systray.AddMenuItem(titleQuit, "")
+
+		// 托盘菜单事件循环
+		go func() {
+			for {
+				select {
+				case <-mOpen.ClickedCh:
+					open.Run(fmt.Sprintf("http://localhost:%d", cfg.Server.Port))
+				case <-mQuit.ClickedCh:
+					systray.Quit()
+				}
+			}
+		}()
+
+		// 在后台启动服务器
+		go func() {
+			if err := srv.Start(); err != nil {
+				log.Printf("服务器错误: %v", err)
+				systray.Quit()
+			}
+		}()
+
+	}, func() {
+		log.Printf("PrismCat %s 正在退出...", config.Version)
+	})
+}
+
+func getTrayLabels() (openTitle, quitTitle string) {
+	if runtime.GOOS == "windows" {
+		userDefaultUILang := kernel32.NewProc("GetUserDefaultUILanguage")
+		ret, _, _ := userDefaultUILang.Call()
+		primaryLangId := uint16(ret) & 0x3ff
+		if primaryLangId == 0x04 { // LANG_CHINESE
+			return "打开仪表盘", "退出"
+		}
+	}
+	return "Open Dashboard", "Exit"
 }

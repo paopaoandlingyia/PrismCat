@@ -241,8 +241,9 @@ func (h *Handler) handleUpstreams(w http.ResponseWriter, r *http.Request) {
 // handleHealth 健康检查
 func (h *Handler) handleHealth(w http.ResponseWriter, r *http.Request) {
 	h.jsonResponse(w, map[string]string{
-		"status": "ok",
-		"time":   time.Now().Format(time.RFC3339),
+		"status":  "ok",
+		"version": config.Version,
+		"time":    time.Now().Format(time.RFC3339),
 	})
 }
 
