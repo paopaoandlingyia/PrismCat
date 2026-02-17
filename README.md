@@ -4,9 +4,6 @@
 
 **PrismCat** is a lightweight, local-first **LLM API Transparent Proxy & Traffic Observability Tool** designed for developers.
 
-![Dashboard Preview](https://raw.githubusercontent.com/paopaoandlingyia/PrismCat/main/docs/images/log_list.png)
-*(Note: Please ensure the image paths are correct after you upload them to your repo)*
-
 Stop guessing what's happening behind your LLM SDKs. PrismCat lets you observe every byte sent to upstream providers, supports full streaming (SSE) logging, and provides a Postman-like **Replay** feature—all with zero code changes.
 
 ---
