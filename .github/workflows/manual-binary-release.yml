@@ -1,0 +1,71 @@
+name: Manual Binary Release (按需编译)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: '要补充文件的 Release 标签 (例如 v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # 必须有写入权限才能更新 Release
+    
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+            suffix: .exe
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: 编译前端 UI
+        run: |
+          cd web
+          npm install
+          npm run build
+          # 将编译结果同步到 Go 嵌入目录
+          rm -rf ../internal/server/ui/*
+          cp -r dist/* ../internal/server/ui/
+
+      - name: 设置 Go 环境
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23' # 对应你 go.mod 里的版本
+
+      - name: 交叉编译二进制文件
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0 # 关键：关闭 CGO 使二进制文件在 Linux/macOS 上具备极致的便携性
+        run: |
+          go build -ldflags="-s -w" -o prismcat-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }} ./cmd/prismcat
+
+      - name: 上传到现有的 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag_name }}
+          files: prismcat-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
