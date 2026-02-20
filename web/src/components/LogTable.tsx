@@ -123,6 +123,18 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                                         {log.path}
                                         {log.query && <span className="text-muted-foreground/50">?{log.query}</span>}
                                     </span>
+                                    {log.tag && (
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <span className="shrink-0 inline-flex items-center h-[18px] px-1.5 rounded-[3px] text-[9px] font-black uppercase tracking-tight bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                                    {log.tag}
+                                                </span>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="right">
+                                                <p className="text-[10px] font-bold uppercase">{t('log_table.tag')}: {log.tag}</p>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    )}
                                     {log.streaming && (
                                         <Tooltip>
                                             <TooltipTrigger asChild>

@@ -20,6 +20,7 @@ export interface RequestLog {
     latency_ms: number
     error?: string
     truncated: boolean
+    tag?: string
 }
 
 export interface LogListResponse {
@@ -51,6 +52,7 @@ export interface LogFilter {
     method?: string
     path?: string
     status_code?: number
+    tag?: string
     start_time?: string
     end_time?: string
     offset?: number

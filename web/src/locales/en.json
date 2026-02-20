@@ -44,7 +44,10 @@
         "time_now_btn": "Now",
         "time_clear": "Clear",
         "reset": "Reload/Reset",
-        "search": "Search"
+        "search": "Search",
+        "status_code": "Status Code",
+        "tag": "Tag",
+        "tag_placeholder": "Filter by tag..."
     },
     "stats": {
         "total_requests": "Total Requests",
@@ -60,7 +63,8 @@
         "status": "Status",
         "latency": "Latency",
         "no_logs": "No logs found",
-        "send_requests_hint": "Logs will appear here after you send some requests"
+        "send_requests_hint": "Logs will appear here after you send some requests",
+        "tag": "Tag"
     },
     "log_detail": {
         "title": "Request Details",

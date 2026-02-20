@@ -74,6 +74,7 @@ func (h *Handler) handleLogs(w http.ResponseWriter, r *http.Request) {
 		Upstream: query.Get("upstream"),
 		Method:   query.Get("method"),
 		Path:     query.Get("path"),
+		Tag:      query.Get("tag"),
 	}
 
 	if statusCode := query.Get("status_code"); statusCode != "" {

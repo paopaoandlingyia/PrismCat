@@ -32,6 +32,7 @@ type RequestLog struct {
 	Latency   int64  `json:"latency_ms"`      // 响应延迟(毫秒)
 	Error     string `json:"error,omitempty"` // 错误信息
 	Truncated bool   `json:"truncated"`       // 响应体是否被截断
+	Tag       string `json:"tag,omitempty"`   // 来自 X-PrismCat-Tag 请求头
 }
 
 // LogFilter 日志查询过滤器
@@ -40,6 +41,7 @@ type LogFilter struct {
 	Method     string     // 按请求方法过滤
 	StatusCode int        // 按状态码过滤
 	Path       string     // 按路径模糊搜索
+	Tag        string     // 按标签过滤
 	StartTime  *time.Time // 开始时间
 	EndTime    *time.Time // 结束时间
 	HasError   *bool      // 是否有错误

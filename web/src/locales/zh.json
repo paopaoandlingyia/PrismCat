@@ -46,7 +46,10 @@
         "time_now_btn": "此刻",
         "time_clear": "清除",
         "reset": "刷新/重置",
-        "search": "查询"
+        "search": "查询",
+        "status_code": "状态码",
+        "tag": "标签",
+        "tag_placeholder": "按标签筛选..."
     },
     "stats": {
         "total_requests": "总请求数",
@@ -62,7 +65,8 @@
         "status": "状态",
         "latency": "延迟",
         "no_logs": "暂无日志",
-        "send_requests_hint": "发送一些请求后这里会显示日志"
+        "send_requests_hint": "发送一些请求后这里会显示日志",
+        "tag": "标签"
     },
     "log_detail": {
         "title": "请求详情",

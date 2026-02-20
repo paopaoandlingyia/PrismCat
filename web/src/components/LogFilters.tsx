@@ -68,9 +68,11 @@ export function LogFilters({
     const isPathChanged = (draft.path || '') !== (filter.path || '')
     const isUpstreamChanged = (draft.upstream || '') !== (filter.upstream || '')
     const isMethodChanged = (draft.method || '') !== (filter.method || '')
+    const isStatusCodeChanged = (draft.status_code || 0) !== (filter.status_code || 0)
+    const isTagChanged = (draft.tag || '') !== (filter.tag || '')
     const isTimeChanged = (draft.start_time || '') !== (filter.start_time || '') ||
         (draft.end_time || '') !== (filter.end_time || '')
-    const hasChanges = isPathChanged || isUpstreamChanged || isMethodChanged || isTimeChanged
+    const hasChanges = isPathChanged || isUpstreamChanged || isMethodChanged || isStatusCodeChanged || isTagChanged || isTimeChanged
 
     return (
         <div className="flex flex-col gap-4 px-4 pr-6 py-2">
@@ -142,6 +144,46 @@ export function LogFilters({
                         ))}
                     </SelectContent>
                 </Select>
+
+                {/* 状态码筛选 */}
+                <div className="relative w-[100px]">
+                    <Input
+                        type="text"
+                        placeholder={t('filters.status_code')}
+                        value={draft.status_code || ''}
+                        onChange={(e) => {
+                            const val = e.target.value.replace(/\D/g, '').slice(0, 3)
+                            setDraft({ ...draft, status_code: val ? Number(val) : undefined })
+                        }}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                handleSearch()
+                            }
+                        }}
+                        className={cn(
+                            "h-10 border-border/50 bg-background/50 transition-all",
+                            isStatusCodeChanged && "border-primary/50 ring-1 ring-primary/20"
+                        )}
+                    />
+                </div>
+
+                {/* Tag 筛选 */}
+                <div className="relative min-w-[140px] max-w-[200px]">
+                    <Input
+                        placeholder={t('filters.tag_placeholder')}
+                        value={draft.tag || ''}
+                        onChange={(e) => setDraft({ ...draft, tag: e.target.value })}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                handleSearch()
+                            }
+                        }}
+                        className={cn(
+                            "h-10 border-border/50 bg-background/50 transition-all",
+                            isTagChanged && "border-primary/50 ring-1 ring-primary/20"
+                        )}
+                    />
+                </div>
             </div>
 
             {/* 第二行：时间范围 + 操作按钮 */}

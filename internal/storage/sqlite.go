@@ -101,6 +101,13 @@ func (r *SQLiteRepository) migrate() error {
 	if err := r.ensureLogColumn("response_body_ref", "response_body_ref TEXT"); err != nil {
 		return err
 	}
+	if err := r.ensureLogColumn("tag", "tag TEXT DEFAULT ''"); err != nil {
+		return err
+	}
+	// Index for tag filtering.
+	if _, err := r.db.Exec("CREATE INDEX IF NOT EXISTS idx_logs_tag ON request_logs(tag)"); err != nil {
+		return fmt.Errorf("create tag index: %w", err)
+	}
 	return nil
 }
 
@@ -162,8 +169,8 @@ func (r *SQLiteRepository) SaveLog(log *RequestLog) error {
 		id, created_at, upstream, target_url, method, path, query,
 		request_headers, request_body, request_body_ref, request_body_size,
 		status_code, response_headers, response_body, response_body_ref, response_body_size,
-		streaming, latency_ms, error, truncated
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		streaming, latency_ms, error, truncated, tag
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(id) DO UPDATE SET
 		created_at = excluded.created_at,
 		upstream = excluded.upstream,
@@ -183,14 +190,15 @@ func (r *SQLiteRepository) SaveLog(log *RequestLog) error {
 		streaming = excluded.streaming,
 		latency_ms = excluded.latency_ms,
 		error = excluded.error,
-		truncated = excluded.truncated
+		truncated = excluded.truncated,
+		tag = excluded.tag
 	`
 
 	_, err := r.db.Exec(query,
 		log.ID, log.CreatedAt, log.Upstream, log.TargetURL, log.Method, log.Path, log.Query,
 		string(reqHeaders), log.RequestBody, log.RequestBodyRef, log.RequestBodySize,
 		log.StatusCode, string(respHeaders), log.ResponseBody, log.ResponseBodyRef, log.ResponseBodySize,
-		log.Streaming, log.Latency, log.Error, log.Truncated,
+		log.Streaming, log.Latency, log.Error, log.Truncated, log.Tag,
 	)
 	return err
 }
@@ -200,7 +208,7 @@ func (r *SQLiteRepository) GetLog(id string) (*RequestLog, error) {
 	SELECT id, created_at, upstream, target_url, method, path, query,
 		request_headers, request_body, request_body_ref, request_body_size,
 		status_code, response_headers, response_body, response_body_ref, response_body_size,
-		streaming, latency_ms, error, truncated
+		streaming, latency_ms, error, truncated, tag
 	FROM request_logs WHERE id = ?
 	`
 	row := r.db.QueryRow(query, id)
@@ -246,6 +254,10 @@ func (r *SQLiteRepository) ListLogs(filter LogFilter) ([]*RequestLog, int64, err
 		conditions = append(conditions, "streaming = ?")
 		args = append(args, *filter.Streaming)
 	}
+	if filter.Tag != "" {
+		conditions = append(conditions, "tag = ?")
+		args = append(args, filter.Tag)
+	}
 
 	where := ""
 	if len(conditions) > 0 {
@@ -270,7 +282,7 @@ func (r *SQLiteRepository) ListLogs(filter LogFilter) ([]*RequestLog, int64, err
 	query := fmt.Sprintf(`
 	SELECT id, created_at, upstream, target_url, method, path, query,
 		request_body_size, status_code, response_body_size,
-		streaming, latency_ms, error, truncated
+		streaming, latency_ms, error, truncated, tag
 	FROM request_logs %s
 	ORDER BY created_at DESC
 	LIMIT ? OFFSET ?
@@ -422,7 +434,7 @@ func (r *SQLiteRepository) scanLogSummary(scanner interface{ Scan(...interface{}
 	err := scanner.Scan(
 		&log.ID, &log.CreatedAt, &log.Upstream, &log.TargetURL, &log.Method, &log.Path, &log.Query,
 		&log.RequestBodySize, &log.StatusCode, &log.ResponseBodySize,
-		&streaming, &log.Latency, &log.Error, &truncated,
+		&streaming, &log.Latency, &log.Error, &truncated, &log.Tag,
 	)
 	if err != nil {
 		return nil, err
@@ -443,7 +455,7 @@ func (r *SQLiteRepository) scanLog(scanner interface{ Scan(...interface{}) error
 		&log.ID, &log.CreatedAt, &log.Upstream, &log.TargetURL, &log.Method, &log.Path, &log.Query,
 		&reqHeaders, &log.RequestBody, &log.RequestBodyRef, &log.RequestBodySize,
 		&log.StatusCode, &respHeaders, &log.ResponseBody, &log.ResponseBodyRef, &log.ResponseBodySize,
-		&streaming, &log.Latency, &log.Error, &truncated,
+		&streaming, &log.Latency, &log.Error, &truncated, &log.Tag,
 	)
 	if err != nil {
 		return nil, err

@@ -100,6 +100,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Path:      r.URL.Path,
 		Query:     r.URL.RawQuery,
 		TargetURL: upstreamURL.String(),
+		Tag:       r.Header.Get("X-PrismCat-Tag"),
 
 		RequestHeaders: p.sanitizeHeaders(r.Header, loggingCfg.SensitiveHeaders),
 	}
