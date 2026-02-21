@@ -66,6 +66,33 @@ client = OpenAI(
 
 ---
 
+## 🌐 Production Deployment (Nginx)
+
+For public-facing deployments, we recommend using a wildcard domain (e.g., `*.prismcat.example.com`) with an Nginx reverse proxy:
+
+```nginx
+server {
+    listen 80;
+    server_name prismcat.example.com *.prismcat.example.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host; # Required: pass original Host for PrismCat routing
+        
+        # SSE / Streaming optimization
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        
+        client_max_body_size 50M;
+    }
+}
+```
+
+> **Note:** `proxy_buffering off` and `proxy_http_version 1.1` are critical for responsive streaming and fast UI loading. Without them, Nginx may buffer entire responses before forwarding, causing noticeable latency in the dashboard.
+
+---
+
 ## 🛡️ License
 
 [MIT License](LICENSE)
