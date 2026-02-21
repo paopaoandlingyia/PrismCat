@@ -15,6 +15,7 @@ Stop guessing what's happening behind your LLM SDKs. PrismCat lets you observe e
     - Complete request/response logging with pretty-printing for JSON and Text.
     - **SSE/Streaming Support**: Real-time logging of streaming responses without adding latency.
     - **Smart Base64 Folding**: Automatically collapses huge image Base64 strings in the UI to keep your logs clean.
+- 🏷️ **Log Tagging**: Simply add `X-PrismCat-Tag: your-tag` to your client request headers to categorize logs. Perfect for differentiating sessions or users in a shared environment.
 - 🎮 **Developer Toolbox**: Built-in **Playground** for replaying requests, real-time stats dashboard, and full i18n support.
 - 🔐 **Privacy & Security**:
     - Local-first storage using **SQLite**. No third-party servers involved.

@@ -9,10 +9,23 @@ import { cn } from '@/lib/utils'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { Toaster } from '@/components/ui/sonner'
+import { useState, useEffect } from 'react'
+import { fetchConfig } from '@/lib/api'
 
 function AppLayout() {
   const { t, i18n } = useTranslation()
   const location = useLocation()
+  const [version, setVersion] = useState<string>('v1.1.0') // 初始显式 v1.1.0，直到接口返回
+
+  useEffect(() => {
+    fetchConfig()
+      .then(cfg => {
+        if (cfg.version) {
+          setVersion(cfg.version.startsWith('v') ? cfg.version : `v${cfg.version}`)
+        }
+      })
+      .catch(err => console.error('Failed to fetch version:', err))
+  }, [])
 
   const navItems = [
     { to: '/', labelKey: 'nav.dashboard', icon: LayoutDashboard },
@@ -116,7 +129,7 @@ function AppLayout() {
       {/* 页脚版本号 */}
       <footer className="w-full px-6 py-4 flex justify-center items-center">
         <p className="text-muted-foreground/20 text-[10px] font-bold tracking-[0.2em] uppercase select-none">
-          PrismCat v1.0.0
+          PrismCat {version}
         </p>
       </footer>
     </div>

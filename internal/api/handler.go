@@ -256,6 +256,7 @@ func (h *Handler) handleConfig(w http.ResponseWriter, r *http.Request) {
 		storageCfg := h.cfg.StorageSnapshot()
 		serverCfg := h.cfg.ServerSnapshot()
 		h.jsonResponse(w, map[string]interface{}{
+			"version": config.Version,
 			"server": map[string]interface{}{
 				"proxy_domains": serverCfg.ProxyDomains,
 			},

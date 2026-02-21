@@ -120,6 +120,7 @@ export async function removeUpstream(name: string): Promise<void> {
 
 // 应用配置类型
 export interface AppConfig {
+    version: string
     server: {
         proxy_domains: string[]
     }
