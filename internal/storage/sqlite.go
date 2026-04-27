@@ -74,6 +74,8 @@ func (r *SQLiteRepository) migrate() error {
 		query TEXT,
 		request_headers TEXT,
 		request_body TEXT,
+		request_body_original TEXT,
+		request_body_final TEXT,
 		request_body_ref TEXT,
 		request_body_size INTEGER DEFAULT 0,
 		status_code INTEGER DEFAULT 0,
@@ -84,7 +86,10 @@ func (r *SQLiteRepository) migrate() error {
 		streaming INTEGER DEFAULT 0,
 		latency_ms INTEGER DEFAULT 0,
 		error TEXT,
-		truncated INTEGER DEFAULT 0
+		truncated INTEGER DEFAULT 0,
+		request_override_applied INTEGER DEFAULT 0,
+		request_override_rules TEXT,
+		request_override_error TEXT
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_logs_created_at ON request_logs(created_at DESC);
@@ -107,6 +112,21 @@ func (r *SQLiteRepository) migrate() error {
 		return err
 	}
 	if err := r.ensureLogColumn("tag", "tag TEXT DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := r.ensureLogColumn("request_body_original", "request_body_original TEXT DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := r.ensureLogColumn("request_body_final", "request_body_final TEXT DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := r.ensureLogColumn("request_override_applied", "request_override_applied INTEGER DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := r.ensureLogColumn("request_override_rules", "request_override_rules TEXT DEFAULT '[]'"); err != nil {
+		return err
+	}
+	if err := r.ensureLogColumn("request_override_error", "request_override_error TEXT DEFAULT ''"); err != nil {
 		return err
 	}
 	// Index for unix timestamp based sort/filter.
@@ -293,14 +313,16 @@ func (r *SQLiteRepository) SaveLog(log *RequestLog) error {
 
 	reqHeaders, _ := json.Marshal(log.RequestHeaders)
 	respHeaders, _ := json.Marshal(log.ResponseHeaders)
+	overrideRules, _ := json.Marshal(log.RequestOverrideRules)
 
 	query := `
 	INSERT INTO request_logs (
 		id, created_at, created_at_unix_ms, upstream, target_url, method, path, query,
-		request_headers, request_body, request_body_ref, request_body_size,
+		request_headers, request_body, request_body_original, request_body_final, request_body_ref, request_body_size,
 		status_code, response_headers, response_body, response_body_ref, response_body_size,
-		streaming, latency_ms, error, truncated, tag
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		streaming, latency_ms, error, truncated, tag,
+		request_override_applied, request_override_rules, request_override_error
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(id) DO UPDATE SET
 		created_at = excluded.created_at,
 		created_at_unix_ms = excluded.created_at_unix_ms,
@@ -311,6 +333,8 @@ func (r *SQLiteRepository) SaveLog(log *RequestLog) error {
 		query = excluded.query,
 		request_headers = excluded.request_headers,
 		request_body = excluded.request_body,
+		request_body_original = excluded.request_body_original,
+		request_body_final = excluded.request_body_final,
 		request_body_ref = excluded.request_body_ref,
 		request_body_size = excluded.request_body_size,
 		status_code = excluded.status_code,
@@ -322,14 +346,18 @@ func (r *SQLiteRepository) SaveLog(log *RequestLog) error {
 		latency_ms = excluded.latency_ms,
 		error = excluded.error,
 		truncated = excluded.truncated,
-		tag = excluded.tag
+		tag = excluded.tag,
+		request_override_applied = excluded.request_override_applied,
+		request_override_rules = excluded.request_override_rules,
+		request_override_error = excluded.request_override_error
 	`
 
 	_, err := r.db.Exec(query,
 		log.ID, log.CreatedAt, log.CreatedAt.UnixMilli(), log.Upstream, log.TargetURL, log.Method, log.Path, log.Query,
-		string(reqHeaders), log.RequestBody, log.RequestBodyRef, log.RequestBodySize,
+		string(reqHeaders), log.RequestBody, log.RequestBodyOriginal, log.RequestBodyFinal, log.RequestBodyRef, log.RequestBodySize,
 		log.StatusCode, string(respHeaders), log.ResponseBody, log.ResponseBodyRef, log.ResponseBodySize,
 		log.Streaming, log.Latency, log.Error, log.Truncated, log.Tag,
+		log.RequestOverrideApplied, string(overrideRules), log.RequestOverrideError,
 	)
 	return err
 }
@@ -337,9 +365,10 @@ func (r *SQLiteRepository) SaveLog(log *RequestLog) error {
 func (r *SQLiteRepository) GetLog(id string) (*RequestLog, error) {
 	query := `
 	SELECT id, created_at, upstream, target_url, method, path, query,
-		request_headers, request_body, request_body_ref, request_body_size,
+		request_headers, request_body, request_body_original, request_body_final, request_body_ref, request_body_size,
 		status_code, response_headers, response_body, response_body_ref, response_body_size,
-		streaming, latency_ms, error, truncated, tag
+		streaming, latency_ms, error, truncated, tag,
+		request_override_applied, request_override_rules, request_override_error
 	FROM request_logs WHERE id = ?
 	`
 	row := r.db.QueryRow(query, id)
@@ -413,7 +442,7 @@ func (r *SQLiteRepository) ListLogs(filter LogFilter) ([]*RequestLog, int64, err
 	query := fmt.Sprintf(`
 	SELECT id, created_at, upstream, target_url, method, path, query,
 		request_body_size, status_code, response_body_size,
-		streaming, latency_ms, error, truncated, tag
+		streaming, latency_ms, error, truncated, tag, request_override_applied
 	FROM request_logs %s
 	ORDER BY created_at_unix_ms DESC, created_at DESC
 	LIMIT ? OFFSET ?
@@ -560,12 +589,12 @@ func (r *SQLiteRepository) ListBlobRefs() ([]string, error) {
 
 func (r *SQLiteRepository) scanLogSummary(scanner interface{ Scan(...interface{}) error }) (*RequestLog, error) {
 	var log RequestLog
-	var streaming, truncated int
+	var streaming, truncated, overrideApplied int
 
 	err := scanner.Scan(
 		&log.ID, &log.CreatedAt, &log.Upstream, &log.TargetURL, &log.Method, &log.Path, &log.Query,
 		&log.RequestBodySize, &log.StatusCode, &log.ResponseBodySize,
-		&streaming, &log.Latency, &log.Error, &truncated, &log.Tag,
+		&streaming, &log.Latency, &log.Error, &truncated, &log.Tag, &overrideApplied,
 	)
 	if err != nil {
 		return nil, err
@@ -573,6 +602,7 @@ func (r *SQLiteRepository) scanLogSummary(scanner interface{ Scan(...interface{}
 
 	log.Streaming = streaming == 1
 	log.Truncated = truncated == 1
+	log.RequestOverrideApplied = overrideApplied == 1
 	log.CreatedAt = log.CreatedAt.UTC()
 
 	return &log, nil
@@ -580,14 +610,15 @@ func (r *SQLiteRepository) scanLogSummary(scanner interface{ Scan(...interface{}
 
 func (r *SQLiteRepository) scanLog(scanner interface{ Scan(...interface{}) error }) (*RequestLog, error) {
 	var log RequestLog
-	var reqHeaders, respHeaders string
-	var streaming, truncated int
+	var reqHeaders, respHeaders, overrideRules string
+	var streaming, truncated, overrideApplied int
 
 	err := scanner.Scan(
 		&log.ID, &log.CreatedAt, &log.Upstream, &log.TargetURL, &log.Method, &log.Path, &log.Query,
-		&reqHeaders, &log.RequestBody, &log.RequestBodyRef, &log.RequestBodySize,
+		&reqHeaders, &log.RequestBody, &log.RequestBodyOriginal, &log.RequestBodyFinal, &log.RequestBodyRef, &log.RequestBodySize,
 		&log.StatusCode, &respHeaders, &log.ResponseBody, &log.ResponseBodyRef, &log.ResponseBodySize,
 		&streaming, &log.Latency, &log.Error, &truncated, &log.Tag,
+		&overrideApplied, &overrideRules, &log.RequestOverrideError,
 	)
 	if err != nil {
 		return nil, err
@@ -595,6 +626,7 @@ func (r *SQLiteRepository) scanLog(scanner interface{ Scan(...interface{}) error
 
 	log.Streaming = streaming == 1
 	log.Truncated = truncated == 1
+	log.RequestOverrideApplied = overrideApplied == 1
 	log.CreatedAt = log.CreatedAt.UTC()
 
 	if reqHeaders != "" && reqHeaders != "null" {
@@ -602,6 +634,9 @@ func (r *SQLiteRepository) scanLog(scanner interface{ Scan(...interface{}) error
 	}
 	if respHeaders != "" && respHeaders != "null" {
 		log.ResponseHeaders = unmarshalHeaders(respHeaders)
+	}
+	if overrideRules != "" && overrideRules != "null" {
+		_ = json.Unmarshal([]byte(overrideRules), &log.RequestOverrideRules)
 	}
 
 	return &log, nil

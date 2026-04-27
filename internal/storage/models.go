@@ -12,13 +12,15 @@ type RequestLog struct {
 	TargetURL string `json:"target_url"` // 实际请求的上游 URL
 
 	// 请求信息
-	Method          string              `json:"method"`
-	Path            string              `json:"path"`
-	Query           string              `json:"query,omitempty"`
-	RequestHeaders  map[string][]string `json:"request_headers,omitempty"`
-	RequestBody     string              `json:"request_body,omitempty"`
-	RequestBodyRef  string              `json:"request_body_ref,omitempty"`
-	RequestBodySize int64               `json:"request_body_size"`
+	Method              string              `json:"method"`
+	Path                string              `json:"path"`
+	Query               string              `json:"query,omitempty"`
+	RequestHeaders      map[string][]string `json:"request_headers,omitempty"`
+	RequestBody         string              `json:"request_body,omitempty"`
+	RequestBodyOriginal string              `json:"request_body_original,omitempty"`
+	RequestBodyFinal    string              `json:"request_body_final,omitempty"`
+	RequestBodyRef      string              `json:"request_body_ref,omitempty"`
+	RequestBodySize     int64               `json:"request_body_size"`
 
 	// 响应信息
 	StatusCode       int                 `json:"status_code"`
@@ -28,14 +30,19 @@ type RequestLog struct {
 	ResponseBodySize int64               `json:"response_body_size"`
 
 	// 元数据
-	Streaming bool   `json:"streaming"`       // 是否为流式响应
-	Latency   int64  `json:"latency_ms"`      // 响应延迟(毫秒)
-	Error     string `json:"error,omitempty"` // 错误信息
-	Truncated bool   `json:"truncated"`       // 响应体是否被截断
-	Tag       string `json:"tag,omitempty"`   // 来自 X-PrismCat-Tag 请求头
+	Streaming              bool     `json:"streaming"`       // 是否为流式响应
+	Latency                int64    `json:"latency_ms"`      // 响应延迟(毫秒)
+	Error                  string   `json:"error,omitempty"` // 错误信息
+	Truncated              bool     `json:"truncated"`       // 响应体是否被截断
+	Tag                    string   `json:"tag,omitempty"`   // 来自 X-PrismCat-Tag 请求头
+	RequestOverrideApplied bool     `json:"request_override_applied,omitempty"`
+	RequestOverrideRules   []string `json:"request_override_rules,omitempty"`
+	RequestOverrideError   string   `json:"request_override_error,omitempty"`
 
 	// Transient capture state used only before async persistence.
 	RequestBodyRaw               []byte `json:"-"`
+	RequestBodyOriginalRaw       []byte `json:"-"`
+	RequestBodyFinalRaw          []byte `json:"-"`
 	RequestBodyCaptureTruncated  bool   `json:"-"`
 	ResponseBodyRaw              []byte `json:"-"`
 	ResponseBodyCaptureTruncated bool   `json:"-"`

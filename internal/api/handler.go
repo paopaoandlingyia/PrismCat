@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -274,8 +275,17 @@ func (h *Handler) handleUpstreams(w http.ResponseWriter, r *http.Request) {
 				"name":    name,
 				"target":  upCfg.Target,
 				"timeout": upCfg.Timeout,
+				"order":   upCfg.Order,
 			})
 		}
+		sort.Slice(upstreams, func(i, j int) bool {
+			leftOrder, _ := upstreams[i]["order"].(int)
+			rightOrder, _ := upstreams[j]["order"].(int)
+			if leftOrder != rightOrder {
+				return leftOrder < rightOrder
+			}
+			return fmt.Sprint(upstreams[i]["name"]) < fmt.Sprint(upstreams[j]["name"])
+		})
 		h.jsonResponse(w, upstreams)
 		return
 	}
@@ -286,6 +296,7 @@ func (h *Handler) handleUpstreams(w http.ResponseWriter, r *http.Request) {
 			Name    string `json:"name"`
 			Target  string `json:"target"`
 			Timeout int    `json:"timeout"`
+			Order   int    `json:"order"`
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -300,6 +311,7 @@ func (h *Handler) handleUpstreams(w http.ResponseWriter, r *http.Request) {
 		err := h.cfg.AddUpstream(req.Name, config.UpstreamConfig{
 			Target:  req.Target,
 			Timeout: req.Timeout,
+			Order:   req.Order,
 		})
 		if err != nil {
 			h.jsonError(w, err.Error(), http.StatusInternalServerError)
@@ -351,6 +363,7 @@ func (h *Handler) handleConfig(w http.ResponseWriter, r *http.Request) {
 		logging := h.cfg.LoggingSnapshot()
 		storageCfg := h.cfg.StorageSnapshot()
 		serverCfg := h.cfg.ServerSnapshot()
+		overrides := h.cfg.RequestOverridesSnapshot()
 		h.jsonResponse(w, map[string]interface{}{
 			"version": config.Version,
 			"server": map[string]interface{}{
@@ -373,6 +386,7 @@ func (h *Handler) handleConfig(w http.ResponseWriter, r *http.Request) {
 				"blob_store":     storageCfg.BlobStore,
 				"blob_dir":       storageCfg.BlobDir,
 			},
+			"request_overrides": overrides,
 		})
 		return
 	}
@@ -396,6 +410,7 @@ func (h *Handler) handleConfig(w http.ResponseWriter, r *http.Request) {
 			Storage *struct {
 				RetentionDays *int `json:"retention_days"`
 			} `json:"storage"`
+			RequestOverrides *config.RequestOverridesConfig `json:"request_overrides"`
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -442,6 +457,10 @@ func (h *Handler) handleConfig(w http.ResponseWriter, r *http.Request) {
 				if req.Storage.RetentionDays != nil {
 					c.Storage.RetentionDays = *req.Storage.RetentionDays
 				}
+			}
+
+			if req.RequestOverrides != nil {
+				c.Overrides = config.NormalizeRequestOverrides(*req.RequestOverrides)
 			}
 		})
 

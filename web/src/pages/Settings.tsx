@@ -14,6 +14,8 @@ import {
     Upload,
     Copy,
     CircleHelp,
+    AlertTriangle,
+    Pencil,
 } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
@@ -22,6 +24,12 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog'
 import {
     Tooltip,
     TooltipContent,
@@ -46,6 +54,37 @@ type ToggleSettingProps = {
     description: string
     checked: boolean
     onCheckedChange: (checked: boolean) => void
+}
+
+const requestOverrideExample = JSON.stringify([
+    {
+        name: 'add metadata for anthropic',
+        enabled: true,
+        match: {
+            methods: ['POST'],
+            path_prefixes: ['/v1/messages'],
+            json: [
+                { path: '/model', starts_with: 'claude' },
+            ],
+        },
+        patch: [
+            { op: 'add', path: '/metadata/user_id', value: 'demo-user' },
+        ],
+    },
+], null, 2)
+
+type OverrideBinding = {
+    enabled: boolean
+    rule_names: string[]
+}
+
+type EditingUpstream = {
+    name: string
+    target: string
+    timeout: number
+    order: number
+    overrideEnabled: boolean
+    ruleNames: string[]
 }
 
 
@@ -126,11 +165,13 @@ export function Settings() {
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [showAddForm, setShowAddForm] = useState(false)
-    const [activeTab, setActiveTab] = useState<'routing' | 'logging'>('routing')
+    const [activeTab, setActiveTab] = useState<'routing' | 'logging' | 'overrides'>('routing')
 
     const [newName, setNewName] = useState('')
     const [newTarget, setNewTarget] = useState('')
     const [newTimeout, setNewTimeout] = useState(30)
+    const [newOrder, setNewOrder] = useState(100)
+    const [editingUpstream, setEditingUpstream] = useState<EditingUpstream | null>(null)
 
     const [enablePathRouting, setEnablePathRouting] = useState(false)
     const [pathRoutingPrefix, setPathRoutingPrefix] = useState('/_proxy')
@@ -144,9 +185,35 @@ export function Settings() {
     const [earlyRequestBodySnapshot, setEarlyRequestBodySnapshot] = useState(false)
 
     const [retentionDays, setRetentionDays] = useState(30)
+    const [requestOverridesEnabled, setRequestOverridesEnabled] = useState(false)
+    const [overrideMaxBodyKB, setOverrideMaxBodyKB] = useState(1024)
+    const [overrideRulesText, setOverrideRulesText] = useState('')
+    const [overrideBindings, setOverrideBindings] = useState<Record<string, OverrideBinding>>({})
 
     const domainSuffix = config?.server?.proxy_domains?.[0] || 'localhost'
     const previewUpstreamName = upstreams[0]?.name || 'openai'
+    const sortedUpstreams = useMemo(() => {
+        return [...upstreams].sort((a, b) => {
+            const orderDiff = (a.order || 0) - (b.order || 0)
+            if (orderDiff !== 0) return orderDiff
+            return a.name.localeCompare(b.name)
+        })
+    }, [upstreams])
+    const parsedOverrideRules = useMemo(() => {
+        try {
+            const parsed = overrideRulesText.trim() ? JSON.parse(overrideRulesText) : []
+            if (!Array.isArray(parsed)) return []
+            return parsed
+                .map((rule) => {
+                    if (!rule || typeof rule !== 'object') return ''
+                    const name = (rule as { name?: unknown }).name
+                    return typeof name === 'string' ? name.trim() : ''
+                })
+                .filter(Boolean)
+        } catch {
+            return []
+        }
+    }, [overrideRulesText])
 
     const proxyBase = useMemo(() => {
         const proto = window.location.protocol
@@ -185,6 +252,8 @@ export function Settings() {
             setUpstreams(upstreamsData || [])
             setConfig(configData)
             setShowAddForm(prev => prev || !upstreamsData?.length)
+            const nextOrder = Math.max(0, ...(upstreamsData || []).map(item => item.order || 0)) + 10
+            setNewOrder(nextOrder)
 
             setMaxRequestBody(Math.round(configData.logging.max_request_body / 1024))
             setMaxResponseBody(Math.round(configData.logging.max_response_body / 1024))
@@ -196,6 +265,11 @@ export function Settings() {
             setRetentionDays(configData.storage.retention_days)
             setEnablePathRouting(configData.server.enable_path_routing)
             setPathRoutingPrefix(configData.server.path_routing_prefix || '/_proxy')
+            setRequestOverridesEnabled(configData.request_overrides?.enabled ?? false)
+            setOverrideMaxBodyKB(Math.round((configData.request_overrides?.max_body_bytes ?? 1048576) / 1024))
+            setOverrideBindings(configData.request_overrides?.upstreams ?? {})
+            const overrideRules = configData.request_overrides?.rules ?? []
+            setOverrideRulesText(overrideRules.length ? JSON.stringify(overrideRules, null, 2) : '')
         } catch (err) {
             console.error('Failed to load settings:', err)
             toast.error(t('common.error'))
@@ -211,10 +285,11 @@ export function Settings() {
     const handleAddUpstream = async (e: FormEvent) => {
         e.preventDefault()
         try {
-            await addUpstream(newName, newTarget, newTimeout)
+            await addUpstream(newName, newTarget, newTimeout, newOrder)
             setNewName('')
             setNewTarget('')
             setNewTimeout(30)
+            setNewOrder(prev => prev + 10)
             setShowAddForm(false)
             loadData()
             toast.success(t('settings.upstream_added'))
@@ -234,9 +309,76 @@ export function Settings() {
         }
     }
 
+    const buildOverridesPayload = (bindings: Record<string, OverrideBinding>, rules: unknown[]) => ({
+        enabled: requestOverridesEnabled,
+        max_body_bytes: overrideMaxBodyKB * 1024,
+        upstreams: bindings,
+        rules,
+    })
+
+    const parseOverrideRules = () => {
+        const trimmedRules = overrideRulesText.trim()
+        if (!trimmedRules) return []
+        const parsed = JSON.parse(trimmedRules)
+        if (!Array.isArray(parsed)) {
+            throw new Error(t('settings.request_overrides_rules_must_be_array'))
+        }
+        return parsed
+    }
+
+    const handleEditUpstream = (upstream: Upstream) => {
+        const binding = overrideBindings[upstream.name]
+        setEditingUpstream({
+            name: upstream.name,
+            target: upstream.target,
+            timeout: upstream.timeout,
+            order: upstream.order || 0,
+            overrideEnabled: binding?.enabled ?? false,
+            ruleNames: binding?.rule_names ?? [],
+        })
+    }
+
+    const toggleEditingRule = (ruleName: string, checked: boolean) => {
+        setEditingUpstream(current => {
+            if (!current) return current
+            const nextRules = checked
+                ? [...current.ruleNames, ruleName].filter((value, index, arr) => arr.indexOf(value) === index)
+                : current.ruleNames.filter(name => name !== ruleName)
+            return { ...current, ruleNames: nextRules }
+        })
+    }
+
+    const handleSaveUpstreamEdit = async () => {
+        if (!editingUpstream) return
+        setSaving(true)
+        try {
+            const overrideRules = parseOverrideRules()
+            const nextBindings = {
+                ...overrideBindings,
+                [editingUpstream.name]: {
+                    enabled: editingUpstream.overrideEnabled,
+                    rule_names: editingUpstream.ruleNames,
+                },
+            }
+            await addUpstream(editingUpstream.name, editingUpstream.target, editingUpstream.timeout, editingUpstream.order)
+            await updateConfig({
+                request_overrides: buildOverridesPayload(nextBindings, overrideRules),
+            })
+            toast.success(t('settings.config_saved'))
+            setEditingUpstream(null)
+            loadData()
+        } catch (err: any) {
+            toast.error(err.message || t('common.error'))
+        } finally {
+            setSaving(false)
+        }
+    }
+
     const handleSaveAll = async () => {
         setSaving(true)
         try {
+            const overrideRules = parseOverrideRules()
+
             await updateConfig({
                 server: {
                     enable_path_routing: enablePathRouting,
@@ -254,6 +396,7 @@ export function Settings() {
                 storage: {
                     retention_days: retentionDays,
                 },
+                request_overrides: buildOverridesPayload(overrideBindings, overrideRules),
             })
             toast.success(t('settings.config_saved'))
             loadData()
@@ -277,6 +420,100 @@ export function Settings() {
 
     return (
         <div className="w-full">
+            <Dialog open={!!editingUpstream} onOpenChange={(open) => !open && setEditingUpstream(null)}>
+                <DialogContent className="max-w-2xl rounded-2xl border border-border/60 bg-card p-0 shadow-2xl">
+                    <DialogHeader className="border-b border-border/60 px-6 py-5">
+                        <DialogTitle className="text-base font-bold">
+                            {editingUpstream ? t('upstream_manager.edit_title', { name: editingUpstream.name }) : t('common.edit')}
+                        </DialogTitle>
+                    </DialogHeader>
+                    {editingUpstream && (
+                        <div className="space-y-6 px-6 py-5">
+                            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                                <FieldBlock label={t('upstream_manager.name')}>
+                                    <Input
+                                        value={editingUpstream.name}
+                                        readOnly
+                                        className="h-10 rounded-xl border-border/30 bg-muted/50 font-mono text-sm"
+                                    />
+                                </FieldBlock>
+                                <FieldBlock label={t('upstream_manager.order')}>
+                                    <Input
+                                        type="number"
+                                        min={0}
+                                        value={editingUpstream.order}
+                                        onChange={e => setEditingUpstream(current => current ? { ...current, order: Number(e.target.value) } : current)}
+                                        className="h-10 rounded-xl border-border/30 bg-background/50 text-sm"
+                                    />
+                                </FieldBlock>
+                                <div className="sm:col-span-2">
+                                    <FieldBlock label={t('upstream_manager.target')}>
+                                        <Input
+                                            value={editingUpstream.target}
+                                            onChange={e => setEditingUpstream(current => current ? { ...current, target: e.target.value } : current)}
+                                            className="h-10 rounded-xl border-border/30 bg-background/50 font-mono text-sm"
+                                        />
+                                    </FieldBlock>
+                                </div>
+                                <FieldBlock label={t('upstream_manager.timeout')}>
+                                    <Input
+                                        type="number"
+                                        min="1"
+                                        value={editingUpstream.timeout}
+                                        onChange={e => setEditingUpstream(current => current ? { ...current, timeout: Number(e.target.value) } : current)}
+                                        className="h-10 rounded-xl border-border/30 bg-background/50 text-sm"
+                                    />
+                                </FieldBlock>
+                            </div>
+
+                            <div className="rounded-xl border border-border/50 bg-muted/20 p-4">
+                                <ToggleSetting
+                                    label={t('upstream_manager.override_enabled')}
+                                    description={t('upstream_manager.override_enabled_hint')}
+                                    checked={editingUpstream.overrideEnabled}
+                                    onCheckedChange={(checked) => setEditingUpstream(current => current ? { ...current, overrideEnabled: checked } : current)}
+                                />
+                                <div className="mt-4 space-y-2">
+                                    <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                        {t('upstream_manager.bound_rules')}
+                                    </div>
+                                    {parsedOverrideRules.length === 0 ? (
+                                        <div className="rounded-lg border border-dashed border-border/50 bg-background/50 px-3 py-4 text-xs text-muted-foreground">
+                                            {t('upstream_manager.no_rules')}
+                                        </div>
+                                    ) : (
+                                        <div className="grid gap-2 sm:grid-cols-2">
+                                            {parsedOverrideRules.map(ruleName => (
+                                                <label
+                                                    key={ruleName}
+                                                    className="flex items-center gap-2 rounded-lg border border-border/40 bg-background/50 px-3 py-2 text-sm"
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={editingUpstream.ruleNames.includes(ruleName)}
+                                                        onChange={e => toggleEditingRule(ruleName, e.target.checked)}
+                                                    />
+                                                    <span className="min-w-0 truncate font-mono text-xs">{ruleName}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end gap-2 border-t border-border/50 pt-4">
+                                <Button type="button" variant="ghost" onClick={() => setEditingUpstream(null)}>
+                                    {t('common.cancel')}
+                                </Button>
+                                <Button type="button" onClick={handleSaveUpstreamEdit} disabled={saving}>
+                                    <Save className="mr-2 h-4 w-4" />
+                                    {t('common.save')}
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
 
             <div className="flex w-full justify-center">
                 <div className="relative z-10 w-full space-y-10 pb-20 px-4 sm:px-10 pt-6 animate-fade-in">
@@ -306,6 +543,17 @@ export function Settings() {
                                 )}
                             >
                                 {t('settings.tabs.logging')}
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('overrides')}
+                                className={cn(
+                                    "px-5 py-2.5 rounded-xl text-base font-medium transition-all duration-200",
+                                    activeTab === 'overrides'
+                                        ? "bg-primary/10 text-primary shadow-sm"
+                                        : "text-foreground/70 hover:bg-muted/50 hover:text-foreground"
+                                )}
+                            >
+                                {t('settings.tabs.overrides')}
                             </button>
                         </div>
                     </div>
@@ -434,6 +682,19 @@ export function Settings() {
                                                         </FieldBlock>
                                                     </div>
 
+                                                    <div className="w-[120px]">
+                                                        <FieldBlock label={t('upstream_manager.order')} htmlFor="order">
+                                                            <Input
+                                                                id="order"
+                                                                type="number"
+                                                                min={0}
+                                                                value={newOrder}
+                                                                onChange={e => setNewOrder(Number(e.target.value))}
+                                                                className="h-11 rounded-xl border-border/30 bg-background/80 text-sm shadow-sm transition-colors focus-visible:bg-background"
+                                                            />
+                                                        </FieldBlock>
+                                                    </div>
+
                                                     <div className="flex h-11 items-center">
                                                         <Button type="submit" variant="default" size="lg" className="h-11 rounded-xl min-w-[120px] font-medium shadow-sm whitespace-nowrap shrink-0">
                                                             <Save className="mr-1.5 h-4 w-4 shrink-0" />
@@ -453,7 +714,7 @@ export function Settings() {
                                             </div>
                                         ) : (
                                             <div className="space-y-0">
-                                                <div className="hidden grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_120px_100px] gap-6 border-b border-border/40 pb-3 px-2 lg:grid">
+                                                <div className="hidden grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_120px_96px] gap-6 border-b border-border/40 pb-3 px-2 lg:grid">
                                                     <span className="text-xs font-semibold uppercase tracking-wider text-foreground/65">{t('upstream_manager.name')}</span>
                                                     <span className="text-xs font-semibold uppercase tracking-wider text-foreground/65">{t('upstream_manager.target')}</span>
                                                     <span className="text-xs font-semibold uppercase tracking-wider text-foreground/65">{t('upstream_manager.timeout')}</span>
@@ -461,10 +722,10 @@ export function Settings() {
                                                 </div>
 
                                                 <div className="divide-y divide-border/20">
-                                                    {upstreams.map(upstream => (
+                                                    {sortedUpstreams.map(upstream => (
                                                         <div
                                                             key={upstream.name}
-                                                            className="group grid gap-5 py-5 px-2 transition-colors hover:bg-muted/20 rounded-xl lg:-mx-2 lg:px-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_120px_100px] lg:items-start lg:gap-6"
+                                                            className="group grid gap-5 py-5 px-2 transition-colors hover:bg-muted/20 rounded-xl lg:-mx-2 lg:px-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_120px_96px] lg:items-start lg:gap-6"
                                                         >
                                                             <div className="min-w-0 space-y-3">
                                                                 <div className="flex flex-wrap items-center gap-2">
@@ -474,6 +735,14 @@ export function Settings() {
                                                                     <Badge variant="outline" className="rounded-full border-border/40 bg-background/50 px-2 py-0.5 text-[11px] font-medium text-foreground/80">
                                                                         .{domainSuffix}
                                                                     </Badge>
+                                                                    {overrideBindings[upstream.name]?.enabled && (
+                                                                        <Badge variant="outline" className="rounded-full border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                                                                            {t('log_detail.request_override')}
+                                                                            {overrideBindings[upstream.name]?.rule_names?.length
+                                                                                ? ` · ${overrideBindings[upstream.name].rule_names.length}`
+                                                                                : ''}
+                                                                        </Badge>
+                                                                    )}
                                                                 </div>
 
                                                                 <div className="space-y-2">
@@ -524,13 +793,23 @@ export function Settings() {
                                                                 </div>
                                                             </div>
 
-                                                            <div className="lg:justify-self-start opacity-100 lg:opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                                                            <div className="flex flex-col items-start gap-2 opacity-100 lg:opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={() => handleEditUpstream(upstream)}
+                                                                    className="h-8 justify-start rounded-lg px-2.5 text-foreground/65 hover:bg-primary/10 hover:text-primary"
+                                                                >
+                                                                    <Pencil className="h-4 w-4 mr-1.5" />
+                                                                    {t('common.edit')}
+                                                                </Button>
                                                                 <Button
                                                                     type="button"
                                                                     variant="ghost"
                                                                     size="sm"
                                                                     onClick={() => handleRemoveUpstream(upstream.name)}
-                                                                    className="h-8 rounded-lg px-2.5 text-foreground/65 hover:bg-destructive/10 hover:text-destructive"
+                                                                    className="h-8 justify-start rounded-lg px-2.5 text-foreground/65 hover:bg-destructive/10 hover:text-destructive"
                                                                 >
                                                                     <Trash2 className="h-4 w-4 mr-1.5" />
                                                                     {t('common.delete')}
@@ -675,6 +954,90 @@ export function Settings() {
                                             variant="default"
                                             size="lg"
                                             className="h-11 rounded-xl font-medium shadow-sm transition-all whitespace-nowrap shrink-0"
+                                        >
+                                            <Save className="mr-2 h-4 w-4 shrink-0" />
+                                            {t('common.save')}
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'overrides' && (
+                            <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-300 motion-reduce:animate-none motion-reduce:duration-0">
+                                <div className="max-w-4xl space-y-8">
+                                    <div className="flex items-start gap-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-800 dark:text-yellow-300">
+                                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                                        <div className="space-y-1">
+                                            <p className="font-semibold">{t('settings.request_overrides_warning_title')}</p>
+                                            <p className="text-xs leading-6 opacity-90">{t('settings.request_overrides_warning')}</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 gap-x-12 gap-y-8 sm:grid-cols-2">
+                                        <div className="flex items-center pt-7">
+                                            <ToggleSetting
+                                                label={t('settings.request_overrides_enable')}
+                                                description={t('settings.request_overrides_enable_hint')}
+                                                checked={requestOverridesEnabled}
+                                                onCheckedChange={setRequestOverridesEnabled}
+                                            />
+                                        </div>
+
+                                        <FieldBlock
+                                            label={t('settings.request_overrides_max_body')}
+                                            hint={t('settings.request_overrides_max_body_hint')}
+                                            htmlFor="override-max-body"
+                                            unit="KB"
+                                        >
+                                            <Input
+                                                id="override-max-body"
+                                                type="number"
+                                                min="1"
+                                                value={overrideMaxBodyKB}
+                                                onChange={e => setOverrideMaxBodyKB(Number(e.target.value))}
+                                                className="h-11 rounded-xl border-border/30 bg-background/50 text-sm shadow-sm transition-colors focus-visible:bg-background"
+                                            />
+                                        </FieldBlock>
+                                    </div>
+
+                                    <FieldBlock
+                                        label={t('settings.request_overrides_rules')}
+                                        hint={t('settings.request_overrides_rules_hint')}
+                                    >
+                                        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/40 bg-muted/30 px-3 py-2">
+                                            <p className="text-xs leading-5 text-muted-foreground">
+                                                {t('settings.request_overrides_scope_hint')}
+                                            </p>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => setOverrideRulesText(requestOverrideExample)}
+                                                className="h-8 shrink-0 text-xs font-semibold"
+                                            >
+                                                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                                                {t('settings.request_overrides_insert_example')}
+                                            </Button>
+                                        </div>
+                                        <Textarea
+                                            value={overrideRulesText}
+                                            onChange={e => setOverrideRulesText(e.target.value)}
+                                            rows={18}
+                                            spellCheck={false}
+                                            className="min-h-[420px] w-full rounded-xl border-border/30 bg-background/50 font-mono text-xs leading-relaxed shadow-sm transition-colors focus-visible:bg-background resize-y"
+                                            placeholder={requestOverrideExample}
+                                        />
+                                    </FieldBlock>
+
+                                    <div className="flex justify-center pt-2">
+                                        <Button
+                                            type="button"
+                                            onClick={handleSaveAll}
+                                            disabled={saving}
+                                            variant="default"
+                                            size="lg"
+                                            className="h-11 font-medium shadow-sm transition-all whitespace-nowrap shrink-0"
                                         >
                                             <Save className="mr-2 h-4 w-4 shrink-0" />
                                             {t('common.save')}

@@ -1,5 +1,5 @@
 import { cn, formatDate, formatLatency, getMethodColor, getStatusColor } from '@/lib/utils'
-import { ChevronRight, Clock3, Server, Tag as TagIcon, Zap } from 'lucide-react'
+import { AlertTriangle, ChevronRight, Clock3, Server, Tag as TagIcon, Zap } from 'lucide-react'
 import type { RequestLog } from '@/lib/api'
 import { useTranslation } from 'react-i18next'
 import {
@@ -94,6 +94,7 @@ function MobileLogCard({
     detailLabel,
     tagLabel,
     streamingLabel,
+    modifiedLabel,
 }: {
     log: RequestLog
     selected: boolean
@@ -102,6 +103,7 @@ function MobileLogCard({
     detailLabel: string
     tagLabel: string
     streamingLabel: string
+    modifiedLabel: string
 }) {
     return (
         <button
@@ -141,6 +143,12 @@ function MobileLogCard({
                             <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-violet-600 dark:text-violet-400">
                                 <Zap className="h-3 w-3" />
                                 {streamingLabel}
+                            </span>
+                        )}
+                        {log.request_override_applied && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-600 dark:text-amber-400">
+                                <AlertTriangle className="h-3 w-3" />
+                                {modifiedLabel}
                             </span>
                         )}
                         {log.tag && (
@@ -213,6 +221,7 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                         detailLabel={t('common.details')}
                         tagLabel={`${t('log_table.tag')}: ${log.tag}`}
                         streamingLabel={t('log_detail.streaming', '流式')}
+                        modifiedLabel={t('log_detail.modified', 'MODIFIED')}
                     />
                 ))}
             </div>
@@ -291,6 +300,18 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                                                 </TooltipTrigger>
                                                 <TooltipContent side="right">
                                                     <p className="text-[10px] font-bold uppercase">{t('log_detail.streaming', '流式响应')}</p>
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        )}
+                                        {log.request_override_applied && (
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <span className="shrink-0 inline-flex items-center h-[18px] px-1.5 rounded-[3px] text-[9px] font-black uppercase tracking-tight bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                                                        {t('log_detail.modified', 'MODIFIED')}
+                                                    </span>
+                                                </TooltipTrigger>
+                                                <TooltipContent side="right">
+                                                    <p className="text-[10px] font-bold uppercase">{t('log_detail.request_override', 'Request Override')}</p>
                                                 </TooltipContent>
                                             </Tooltip>
                                         )}

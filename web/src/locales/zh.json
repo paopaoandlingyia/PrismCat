@@ -11,6 +11,7 @@
         "success": "成功",
         "copy": "复制",
         "copied": "已复制",
+        "edit": "编辑",
         "search": "搜索",
         "items": "项",
         "confirm": "确认",
@@ -91,19 +92,21 @@
         "use_preview": "使用预览",
         "view_raw": "原始",
         "view_pretty": "格式化",
+        "view_diff": "差异",
         "stream_merged": "合并查看",
         "stream_raw": "原始数据",
         "stream_merge_info": "已合并 {{count}} 个流式分片",
         "stream_merge_format": "格式: {{format}}",
         "stream_merge_protocol": "协议: {{protocol}}",
         "stream_merge_unavailable": "当前无法生成合并视图，请切换到 Raw 查看原始内容。",
-        "layout_mode": "布局",
-        "layout_standard": "标准",
-        "layout_wide": "宽版",
-        "layout_full": "全屏",
+        "enter_fullscreen": "全屏",
+        "exit_fullscreen": "退出全屏",
         "expand_all": "展开全部",
         "collapse_all": "折叠全部",
-        "truncated_tag": "已截断"
+        "truncated_tag": "已截断",
+        "modified": "已修改",
+        "request_override": "参数覆盖",
+        "open_diff": "打开 Diff"
     },
     "json_viewer": {
         "items": "{{count}} 项",
@@ -116,13 +119,38 @@
         "collapse": "收起",
         "image_preview": "图片预览"
     },
+    "json_diff": {
+        "summary": "{{count}} 处变更",
+        "added": "新增",
+        "removed": "删除",
+        "changed": "修改",
+        "before": "修改前",
+        "after": "修改后",
+        "missing": "不存在",
+        "no_changes": "没有 JSON 变更",
+        "json_required": "Diff 需要两侧都是有效 JSON。这里改为展示原始内容。"
+    },
+    "log_diff": {
+        "request_diff": "请求 Diff",
+        "back_to_logs": "返回日志",
+        "copy_final": "复制最终请求",
+        "no_diff_title": "没有请求差异",
+        "no_diff_message": "这条日志没有记录被修改的请求体。",
+        "missing_id": "缺少日志 ID"
+    },
     "upstream_manager": {
         "title": "管理上游转发",
         "add_new": "添加新上游",
         "name": "名称 (子域名)",
         "target": "目标地址 (URL)",
         "timeout": "超时时间 (秒)",
+        "order": "顺序",
         "actions": "操作",
+        "edit_title": "编辑上游：{{name}}",
+        "override_enabled": "为此上游启用参数覆盖",
+        "override_enabled_hint": "总开关打开后，只有这里启用并绑定规则的上游才会应用参数覆盖。",
+        "bound_rules": "绑定规则",
+        "no_rules": "暂无可绑定规则，请先在参数覆盖页添加规则。",
         "confirm_delete": "确定要删除子域名 \"{{name}}\" 的转发配置吗？",
         "save_success": "配置已保存",
         "delete_success": "配置已删除",
@@ -137,7 +165,8 @@
         "tabs": {
             "upstreams": "上游路由",
             "logging": "日志设置",
-            "storage": "存储设置"
+            "storage": "存储设置",
+            "overrides": "参数覆盖"
         },
         "page_description": "这里集中管理代理入口、上游路由、日志采集和存储策略。页面按实际使用场景重新分区，避免层层嵌套和超长横向表单。",
         "access_title": "接入方式",
@@ -181,7 +210,18 @@
         "early_request_body_snapshot": "额外保存请求体快照",
         "early_request_body_snapshot_hint": "开启后：当请求体已完整发送到上游但上游尚未响应时，也会额外保存一次请求体快照；适合需要更早持久化请求体的场景。代价：每个请求会额外多一次数据库写入（高并发下可能降低吞吐/更易丢日志）。",
         "store_base64": "存储 Base64 数据",
-        "store_base64_hint": "开启后将检测并存储请求/响应体中的 Base64 编码数据 (如图片)。禁用可多维度减少存储开销。"
+        "store_base64_hint": "开启后将检测并存储请求/响应体中的 Base64 编码数据 (如图片)。禁用可多维度减少存储开销。",
+        "request_overrides_warning_title": "开启后 PrismCat 会修改最终请求",
+        "request_overrides_warning": "参数覆盖只作用于已在上游编辑中启用并绑定规则的 JSON 请求体。命中后请求会先完整缓冲、应用 JSON Patch，再发往上游；日志详情会记录原始请求、最终请求和差异。",
+        "request_overrides_enable": "启用参数覆盖",
+        "request_overrides_enable_hint": "总开关。关闭时所有覆盖规则都会被忽略，PrismCat 保持透明转发。",
+        "request_overrides_max_body": "覆盖最大请求体",
+        "request_overrides_max_body_hint": "超过此大小的请求不会应用参数覆盖，并会返回错误，避免无意缓冲大请求。",
+        "request_overrides_rules": "覆盖规则 JSON",
+        "request_overrides_rules_hint": "填写规则数组。每条规则包含 name、enabled、match 和 patch；patch 使用 JSON Patch: add/remove/replace/move/copy/test。",
+        "request_overrides_scope_hint": "这里维护可复用规则库；具体哪些上游使用哪些规则，请在上游路由列表中点击编辑进行绑定。",
+        "request_overrides_insert_example": "插入示例",
+        "request_overrides_rules_must_be_array": "参数覆盖规则必须是 JSON 数组"
     },
     "playground": {
         "title": "Playground",

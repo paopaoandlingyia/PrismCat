@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,6 +20,7 @@ type Config struct {
 	Upstreams map[string]UpstreamConfig `yaml:"upstreams"`
 	Logging   LoggingConfig             `yaml:"logging"`
 	Storage   StorageConfig             `yaml:"storage"`
+	Overrides RequestOverridesConfig    `yaml:"request_overrides"`
 
 	configPath string // 配置文件路径
 	mu         sync.RWMutex
@@ -60,6 +62,48 @@ type ServerConfig struct {
 type UpstreamConfig struct {
 	Target  string `yaml:"target"`
 	Timeout int    `yaml:"timeout"` // 秒
+	Order   int    `yaml:"order,omitempty"`
+}
+
+type RequestOverridesConfig struct {
+	Enabled      bool                                      `yaml:"enabled" json:"enabled"`
+	MaxBodyBytes int64                                     `yaml:"max_body_bytes" json:"max_body_bytes"`
+	Upstreams    map[string]RequestOverrideUpstreamBinding `yaml:"upstreams" json:"upstreams"`
+	Rules        []RequestOverrideRule                     `yaml:"rules" json:"rules"`
+}
+
+type RequestOverrideUpstreamBinding struct {
+	Enabled   bool     `yaml:"enabled" json:"enabled"`
+	RuleNames []string `yaml:"rule_names" json:"rule_names"`
+}
+
+type RequestOverrideRule struct {
+	Name    string                 `yaml:"name" json:"name"`
+	Enabled bool                   `yaml:"enabled" json:"enabled"`
+	Match   RequestOverrideMatch   `yaml:"match" json:"match"`
+	Patch   []RequestOverridePatch `yaml:"patch" json:"patch"`
+}
+
+type RequestOverrideMatch struct {
+	Methods      []string                       `yaml:"methods" json:"methods"`
+	PathPrefixes []string                       `yaml:"path_prefixes" json:"path_prefixes"`
+	Paths        []string                       `yaml:"paths" json:"paths"`
+	JSON         []RequestOverrideJSONCondition `yaml:"json" json:"json"`
+}
+
+type RequestOverrideJSONCondition struct {
+	Path       string        `yaml:"path" json:"path"`
+	Exists     *bool         `yaml:"exists,omitempty" json:"exists,omitempty"`
+	Equals     interface{}   `yaml:"equals,omitempty" json:"equals,omitempty"`
+	StartsWith string        `yaml:"starts_with,omitempty" json:"starts_with,omitempty"`
+	In         []interface{} `yaml:"in,omitempty" json:"in,omitempty"`
+}
+
+type RequestOverridePatch struct {
+	Op    string      `yaml:"op" json:"op"`
+	Path  string      `yaml:"path" json:"path"`
+	From  string      `yaml:"from,omitempty" json:"from,omitempty"`
+	Value interface{} `yaml:"value,omitempty" json:"value,omitempty"`
 }
 
 // LoggingConfig 日志配置
@@ -141,6 +185,9 @@ func Load(path string) (*Config, error) {
 			BlobDir:     "./data/blobs",
 			AsyncBuffer: 4096,
 		},
+		Overrides: RequestOverridesConfig{
+			MaxBodyBytes: 1 << 20,
+		},
 		Upstreams: make(map[string]UpstreamConfig),
 	}
 
@@ -192,6 +239,11 @@ func Load(path string) (*Config, error) {
 	if envPassword := os.Getenv("PRISMCAT_UI_PASSWORD"); envPassword != "" {
 		c.Server.UIPassword = envPassword
 	}
+	if envOverridesEnabled := os.Getenv("PRISMCAT_REQUEST_OVERRIDES_ENABLED"); envOverridesEnabled != "" {
+		if enabled, err := strconv.ParseBool(envOverridesEnabled); err == nil {
+			c.Overrides.Enabled = enabled
+		}
+	}
 
 	c.Server = normalizeServerConfig(c.Server)
 
@@ -200,6 +252,7 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 	c.Upstreams = normalizedUpstreams
+	c.Overrides = NormalizeRequestOverrides(c.Overrides)
 
 	// 确保目录存在
 	dbDir := filepath.Dir(c.Storage.Database)
@@ -297,6 +350,96 @@ func normalizeUpstreams(in map[string]UpstreamConfig) (map[string]UpstreamConfig
 	return out, nil
 }
 
+func NormalizeRequestOverrides(in RequestOverridesConfig) RequestOverridesConfig {
+	if in.MaxBodyBytes <= 0 {
+		in.MaxBodyBytes = 1 << 20
+	}
+	if in.Upstreams == nil {
+		in.Upstreams = make(map[string]RequestOverrideUpstreamBinding)
+	} else {
+		normalized := make(map[string]RequestOverrideUpstreamBinding, len(in.Upstreams))
+		for name, binding := range in.Upstreams {
+			n := normalizeLower(name)
+			if n == "" {
+				continue
+			}
+			binding.RuleNames = normalizeNameList(binding.RuleNames)
+			normalized[n] = binding
+		}
+		in.Upstreams = normalized
+	}
+	for i := range in.Rules {
+		in.Rules[i].Name = strings.TrimSpace(in.Rules[i].Name)
+		in.Rules[i].Match.Methods = normalizeUpperList(in.Rules[i].Match.Methods)
+		in.Rules[i].Match.PathPrefixes = normalizePathList(in.Rules[i].Match.PathPrefixes)
+		in.Rules[i].Match.Paths = normalizePathList(in.Rules[i].Match.Paths)
+	}
+	return in
+}
+
+func normalizeNameList(in []string) []string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(in))
+	seen := make(map[string]struct{}, len(in))
+	for _, v := range in {
+		n := strings.TrimSpace(v)
+		if n == "" {
+			continue
+		}
+		if _, ok := seen[n]; ok {
+			continue
+		}
+		seen[n] = struct{}{}
+		out = append(out, n)
+	}
+	return out
+}
+
+func normalizeUpperList(in []string) []string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(in))
+	seen := make(map[string]struct{}, len(in))
+	for _, v := range in {
+		n := strings.ToUpper(strings.TrimSpace(v))
+		if n == "" {
+			continue
+		}
+		if _, ok := seen[n]; ok {
+			continue
+		}
+		seen[n] = struct{}{}
+		out = append(out, n)
+	}
+	return out
+}
+
+func normalizePathList(in []string) []string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(in))
+	seen := make(map[string]struct{}, len(in))
+	for _, v := range in {
+		n := strings.TrimSpace(v)
+		if n == "" {
+			continue
+		}
+		if !strings.HasPrefix(n, "/") {
+			n = "/" + n
+		}
+		if _, ok := seen[n]; ok {
+			continue
+		}
+		seen[n] = struct{}{}
+		out = append(out, n)
+	}
+	return out
+}
+
 // Update applies an in-memory update under an exclusive lock.
 // Callers should call Save separately if persistence is required.
 func (c *Config) Update(fn func(*Config)) {
@@ -323,6 +466,20 @@ func (c *Config) StorageSnapshot() StorageConfig {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.Storage
+}
+
+func (c *Config) RequestOverridesSnapshot() RequestOverridesConfig {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	var out RequestOverridesConfig
+	data, err := json.Marshal(c.Overrides)
+	if err == nil {
+		if err := json.Unmarshal(data, &out); err == nil {
+			return NormalizeRequestOverrides(out)
+		}
+	}
+	return NormalizeRequestOverrides(c.Overrides)
 }
 
 // ServerSnapshot returns a copy of the current server config safe for use
@@ -395,6 +552,9 @@ func (c *Config) RemoveUpstream(name string) error {
 		return fmt.Errorf("upstream name is empty")
 	}
 	delete(c.Upstreams, name)
+	if c.Overrides.Upstreams != nil {
+		delete(c.Overrides.Upstreams, name)
+	}
 	return nil
 }
 

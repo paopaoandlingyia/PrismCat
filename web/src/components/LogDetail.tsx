@@ -1,11 +1,12 @@
 import { cn, formatDate, formatLatency, formatSize, getStatusColor, getMethodColor } from '@/lib/utils'
-import { Copy, Check, Zap, AlertTriangle, ChevronDown, ChevronUp, ChevronsDownUp, ChevronsUpDown, FileCode, ListTree, Globe, Layers, RotateCcw } from 'lucide-react'
+import { Copy, Check, Zap, AlertTriangle, ChevronDown, ChevronUp, ChevronsDownUp, ChevronsUpDown, FileCode, ListTree, Globe, Layers, RotateCcw, Maximize2, Minimize2, ExternalLink } from 'lucide-react'
 import { fetchBlob } from '@/lib/api'
 import type { LiveLogEvent, RequestLog } from '@/lib/api'
 import { startTransition, useEffect, useMemo, useState, type ComponentType, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { JsonViewer, type JsonExpandMode } from './JsonViewer'
+import { JsonDiffViewer } from './JsonDiffViewer'
 import { BlobPanel } from './BlobPanel'
 import { mergeStreamBody } from '@/lib/streamMerge'
 import {
@@ -25,8 +26,9 @@ interface LogDetailProps {
 }
 
 type BodyViewMode = 'pretty' | 'raw'
+type RequestViewMode = BodyViewMode | 'diff'
 type ResponseViewMode = BodyViewMode | 'merged'
-type PanelWidthMode = 'standard' | 'wide' | 'full'
+type PanelWidthMode = 'wide' | 'full'
 
 const logDetailWidthStorageKey = 'prismcat.logDetail.width'
 
@@ -39,14 +41,14 @@ const defaultExpandedSections = {
 }
 
 function getInitialPanelWidthMode(): PanelWidthMode {
-    if (typeof window === 'undefined') return 'standard'
+    if (typeof window === 'undefined') return 'wide'
 
     const stored = window.localStorage.getItem(logDetailWidthStorageKey)
-    if (stored === 'wide' || stored === 'full' || stored === 'standard') {
+    if (stored === 'full') {
         return stored
     }
 
-    return 'standard'
+    return 'wide'
 }
 
 export function LogDetail({ log, loading, onClose }: LogDetailProps) {
@@ -62,7 +64,7 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
     })
     const [blobError, setBlobError] = useState<string | null>(null)
     const [expandedSections, setExpandedSections] = useState(defaultExpandedSections)
-    const [requestViewMode, setRequestViewMode] = useState<BodyViewMode>('pretty')
+    const [requestViewMode, setRequestViewMode] = useState<RequestViewMode>('pretty')
     const [responseViewMode, setResponseViewMode] = useState<ResponseViewMode>('pretty')
     const [requestExpandMode, setRequestExpandMode] = useState<JsonExpandMode>('default')
     const [responseExpandMode, setResponseExpandMode] = useState<JsonExpandMode>('default')
@@ -149,12 +151,21 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
 
     const effectiveRequestBody = fullRequestBody ?? displayLog?.request_body ?? ''
     const effectiveResponseBody = fullResponseBody ?? displayLog?.response_body ?? ''
+    const originalRequestBody = displayLog?.request_body_original ?? ''
+    const finalRequestBody = displayLog?.request_body_final ?? (originalRequestBody ? effectiveRequestBody : '')
+    const hasRequestBodyDiff = Boolean(originalRequestBody && finalRequestBody && originalRequestBody !== finalRequestBody)
     const requestContentType = firstHeaderValue(displayLog?.request_headers, 'Content-Type')
     const responseContentType = firstHeaderValue(displayLog?.response_headers, 'Content-Type')
     const requestBodyIsBinary = isBinaryPlaceholder(effectiveRequestBody)
     const responseBodyIsBinary = isBinaryPlaceholder(effectiveResponseBody)
     const shouldInspectRequestBody = expandedSections.requestBody && requestViewMode === 'pretty' && Boolean(effectiveRequestBody)
     const shouldInspectResponseBody = expandedSections.responseBody && Boolean(effectiveResponseBody)
+
+    useEffect(() => {
+        if (!hasRequestBodyDiff && requestViewMode === 'diff') {
+            setRequestViewMode('pretty')
+        }
+    }, [hasRequestBodyDiff, requestViewMode])
 
     const parsedRequestBody = useMemo(() => {
         if (!shouldInspectRequestBody) return null
@@ -208,15 +219,8 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
 
     if (!displayLog) return null
 
-    const panelWidthOptions: Array<{ value: PanelWidthMode; label: string }> = [
-        { value: 'standard', label: t('log_detail.layout_standard', 'Standard') },
-        { value: 'wide', label: t('log_detail.layout_wide', 'Wide') },
-        { value: 'full', label: t('log_detail.layout_full', 'Full') },
-    ]
-
     const sheetWidthClassName = cn(
         "w-full p-0 flex flex-col bg-background shadow-2xl",
-        panelWidthMode === 'standard' && "border-l border-border/60 sm:rounded-l-2xl sm:max-w-4xl",
         panelWidthMode === 'wide' && "border-l border-border/60 sm:rounded-l-2xl sm:max-w-6xl",
         panelWidthMode === 'full' && "border-0 sm:rounded-none sm:max-w-none"
     )
@@ -386,6 +390,11 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
                                 {t('common.error', 'ERROR')}
                             </Badge>
                         )}
+                        {displayLog.request_override_applied && (
+                            <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold text-[10px]">
+                                {t('log_detail.modified', 'MODIFIED')}
+                            </Badge>
+                        )}
                         {loading && (
                             <div className="ml-auto flex items-center gap-2 text-[11px] font-bold text-primary animate-pulse">
                                 <div className="h-1 w-1 rounded-full bg-current" />
@@ -394,13 +403,29 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
                         )}
                         {!loading && (
                             <div className="ml-auto mr-10 flex flex-wrap items-center justify-end gap-2">
-                                <div className="hidden items-center sm:flex">
-                                    <ViewToggle
-                                        value={panelWidthMode}
-                                        options={panelWidthOptions}
-                                        onChange={(value) => setPanelWidthMode(value as PanelWidthMode)}
-                                    />
-                                </div>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => setPanelWidthMode(current => current === 'full' ? 'wide' : 'full')}
+                                            className="h-8 w-8 rounded-lg text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                                            aria-label={panelWidthMode === 'full'
+                                                ? t('log_detail.exit_fullscreen', 'Exit fullscreen')
+                                                : t('log_detail.enter_fullscreen', 'Fullscreen')}
+                                        >
+                                            {panelWidthMode === 'full'
+                                                ? <Minimize2 className="h-4 w-4" />
+                                                : <Maximize2 className="h-4 w-4" />}
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top" sideOffset={4}>
+                                        {panelWidthMode === 'full'
+                                            ? t('log_detail.exit_fullscreen', 'Exit fullscreen')
+                                            : t('log_detail.enter_fullscreen', 'Fullscreen')}
+                                    </TooltipContent>
+                                </Tooltip>
                                 <Button
                                     variant="outline"
                                     size="sm"
@@ -487,6 +512,27 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
                         </div>
                     )}
 
+                    {(displayLog.request_override_applied || displayLog.request_override_error) && (
+                        <div className="overflow-hidden rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
+                            <div className="mb-3 flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-xs uppercase tracking-wider">
+                                <AlertTriangle className="h-4 w-4" />
+                                {t('log_detail.request_override', 'Request Override')}
+                            </div>
+                            {displayLog.request_override_rules?.length ? (
+                                <div className="mb-3 flex flex-wrap gap-2">
+                                    {displayLog.request_override_rules.map((rule) => (
+                                        <Badge key={rule} variant="outline" className="border-amber-500/30 bg-background/60 text-[11px] font-semibold text-foreground">
+                                            {rule}
+                                        </Badge>
+                                    ))}
+                                </div>
+                            ) : null}
+                            {displayLog.request_override_error && (
+                                <pre className="text-xs text-amber-700 dark:text-amber-300 font-mono whitespace-pre-wrap leading-relaxed">{displayLog.request_override_error}</pre>
+                            )}
+                        </div>
+                    )}
+
                     {/* 请求头 & 请求体 */}
                     <div className={cn(sectionCardClassName, "space-y-4")}>
                         <div className="text-[11px] font-bold tracking-widest text-muted-foreground">
@@ -555,12 +601,34 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
                                                     options={[
                                                         { value: 'pretty', label: t('log_detail.view_pretty', 'Pretty') },
                                                         { value: 'raw', label: t('log_detail.view_raw', 'Raw') },
+                                                        ...(hasRequestBodyDiff
+                                                            ? [{ value: 'diff', label: t('log_detail.view_diff', 'Diff') }]
+                                                            : []),
                                                     ]}
-                                                    onChange={(value) => setRequestViewMode(value as BodyViewMode)}
+                                                    onChange={(value) => setRequestViewMode(value as RequestViewMode)}
                                                 />
                                                 <div className="flex items-center gap-0.5">
                                                     {requestViewMode === 'pretty' && (
                                                         <ExpandToggle mode={requestExpandMode} onChange={setRequestExpandMode} />
+                                                    )}
+                                                    {hasRequestBodyDiff && (
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    onClick={() => window.open(`/logs/${displayLog.id}/diff/request`, '_blank', 'noopener,noreferrer')}
+                                                                    className="h-7 w-7 rounded-md text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                                                                    aria-label={t('log_detail.open_diff', 'Open Diff')}
+                                                                >
+                                                                    <ExternalLink className="h-3.5 w-3.5" />
+                                                                </Button>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent side="top" sideOffset={4}>
+                                                                {t('log_detail.open_diff', 'Open Diff')}
+                                                            </TooltipContent>
+                                                        </Tooltip>
                                                     )}
                                                     <CopyButton text={effectiveRequestBody} field="requestBody" />
                                                 </div>
@@ -568,6 +636,8 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
                                             <div className="custom-scrollbar flex-1 overflow-x-auto overflow-y-auto p-4">
                                                 {requestViewMode === 'raw' ? (
                                                     <RawBodyViewer text={effectiveRequestBody} />
+                                                ) : requestViewMode === 'diff' && hasRequestBodyDiff ? (
+                                                    <JsonDiffViewer beforeText={originalRequestBody} afterText={finalRequestBody} />
                                                 ) : (
                                                     <JsonViewer data={parsedRequestBody ?? effectiveRequestBody} expandMode={requestExpandMode} />
                                                 )}

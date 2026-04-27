@@ -34,6 +34,28 @@ func PrepareLogForPersistence(logEntry *RequestLog, cfg *config.Config, blobs ..
 			logEntry.RequestBodyRef = putBodyBlob(blobStore, "request", logEntry.RequestBodyRaw)
 		}
 	}
+	if len(logEntry.RequestBodyOriginalRaw) > 0 {
+		formatted := formatCapturedBody(
+			logEntry.RequestBodyOriginalRaw,
+			firstHeaderValue(logEntry.RequestHeaders, "Content-Type"),
+			firstHeaderValue(logEntry.RequestHeaders, "Content-Encoding"),
+			loggingCfg.MaxRequestBody,
+			!loggingCfg.StoreBase64,
+		)
+		logEntry.RequestBodyOriginal = formatted.Text
+		requestFormattedTruncated = requestFormattedTruncated || formatted.Truncated
+	}
+	if len(logEntry.RequestBodyFinalRaw) > 0 {
+		formatted := formatCapturedBody(
+			logEntry.RequestBodyFinalRaw,
+			firstHeaderValue(logEntry.RequestHeaders, "Content-Type"),
+			firstHeaderValue(logEntry.RequestHeaders, "Content-Encoding"),
+			loggingCfg.MaxRequestBody,
+			!loggingCfg.StoreBase64,
+		)
+		logEntry.RequestBodyFinal = formatted.Text
+		requestFormattedTruncated = requestFormattedTruncated || formatted.Truncated
+	}
 
 	var responseFormattedTruncated bool
 	if len(logEntry.ResponseBodyRaw) > 0 {
@@ -58,6 +80,8 @@ func PrepareLogForPersistence(logEntry *RequestLog, cfg *config.Config, blobs ..
 		responseFormattedTruncated
 
 	logEntry.RequestBodyRaw = nil
+	logEntry.RequestBodyOriginalRaw = nil
+	logEntry.RequestBodyFinalRaw = nil
 	logEntry.ResponseBodyRaw = nil
 	logEntry.RequestBodyCaptureTruncated = false
 	logEntry.ResponseBodyCaptureTruncated = false

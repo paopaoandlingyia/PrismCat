@@ -93,3 +93,31 @@ storage:
   # Larger values allow handling higher burst throughput but use more memory.
   # Default: 4096
   # async_buffer: 4096
+
+# 请求参数覆盖（默认关闭）
+# 开启后 PrismCat 会在命中规则时修改最终发往上游的 JSON 请求体。
+# 这会让对应请求从透明流式转发变为先缓冲、再转发；请只对明确需要的路由启用。
+request_overrides:
+  enabled: false
+  max_body_bytes: 1048576
+  upstreams: {}
+  rules: []
+  # 示例：
+  # upstreams:
+  #   anthropic:
+  #     enabled: true
+  #     rule_names:
+  #       - add metadata for claude
+  # rules:
+  #   - name: add metadata for claude
+  #     enabled: true
+  #     match:
+  #       methods: ["POST"]
+  #       path_prefixes: ["/v1/messages"]
+  #       json:
+  #         - path: "/model"
+  #           starts_with: "claude"
+  #     patch:
+  #       - op: add
+  #         path: "/metadata/user_id"
+  #         value: "demo-user"

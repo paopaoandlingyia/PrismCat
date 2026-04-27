@@ -9,6 +9,8 @@ export interface RequestLog {
     query?: string
     request_headers?: Record<string, string[]>
     request_body?: string
+    request_body_original?: string
+    request_body_final?: string
     request_body_ref?: string
     request_body_size: number
     status_code: number
@@ -21,6 +23,9 @@ export interface RequestLog {
     error?: string
     truncated: boolean
     tag?: string
+    request_override_applied?: boolean
+    request_override_rules?: string[]
+    request_override_error?: string
 }
 
 export type LiveLogEvent =
@@ -59,6 +64,7 @@ export interface Upstream {
     name: string
     target: string
     timeout: number
+    order: number
 }
 
 // 查询过滤参数
@@ -109,13 +115,13 @@ export async function fetchUpstreams(): Promise<Upstream[]> {
     return response.json()
 }
 
-export async function addUpstream(name: string, target: string, timeout: number = 30): Promise<void> {
+export async function addUpstream(name: string, target: string, timeout: number = 30, order: number = 0): Promise<void> {
     const response = await fetch(`${API_BASE}/upstreams`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name, target, timeout }),
+        body: JSON.stringify({ name, target, timeout, order }),
     })
     if (!response.ok) {
         const error = await response.json().catch(() => ({ error: '请求失败' }))
@@ -154,6 +160,15 @@ export interface AppConfig {
         database: string
         retention_days: number
     }
+    request_overrides: {
+        enabled: boolean
+        max_body_bytes: number
+        upstreams: Record<string, {
+            enabled: boolean
+            rule_names: string[]
+        }>
+        rules: unknown[]
+    }
 }
 
 export interface ConfigUpdate {
@@ -172,6 +187,15 @@ export interface ConfigUpdate {
     }
     storage?: {
         retention_days?: number
+    }
+    request_overrides?: {
+        enabled?: boolean
+        max_body_bytes?: number
+        upstreams?: Record<string, {
+            enabled: boolean
+            rule_names: string[]
+        }>
+        rules?: unknown[]
     }
 }
 

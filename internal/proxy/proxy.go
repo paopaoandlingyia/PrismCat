@@ -1,7 +1,9 @@
 package proxy
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -19,6 +21,7 @@ import (
 	"github.com/paopaoandlingyia/PrismCat/internal/config"
 	"github.com/paopaoandlingyia/PrismCat/internal/httpbody"
 	"github.com/paopaoandlingyia/PrismCat/internal/live"
+	"github.com/paopaoandlingyia/PrismCat/internal/requestoverride"
 	"github.com/paopaoandlingyia/PrismCat/internal/storage"
 )
 
@@ -116,9 +119,64 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Capture request body for logging while streaming it to the upstream (no truncation of forwarding).
 	reqCapture := newLimitedCapture(loggingCfg.MaxRequestBody)
 	var body io.Reader
-	if r.Body != nil && r.Body != http.NoBody {
-		tee := io.TeeReader(r.Body, reqCapture)
-		rc := &teeReadCloser{r: tee, c: r.Body}
+	var contentLength = r.ContentLength
+	requestBodySource := r.Body
+
+	overrideCfg := p.cfg.RequestOverridesSnapshot()
+	overrideInfo := requestoverride.RequestInfo{
+		Upstream:        upstreamName,
+		Method:          r.Method,
+		Path:            requestURL.Path,
+		ContentType:     r.Header.Get("Content-Type"),
+		ContentEncoding: r.Header.Get("Content-Encoding"),
+	}
+	if r.Body != nil && r.Body != http.NoBody && requestoverride.HasCandidate(overrideCfg, overrideInfo) {
+		rawBody, readErr := readRequestBodyLimited(r.Body, overrideCfg.MaxBodyBytes)
+		if readErr != nil {
+			logMu.Lock()
+			logEntry.Error = fmt.Sprintf("request override failed: %v", readErr)
+			logEntry.RequestOverrideError = readErr.Error()
+			p.finalizeAndSaveLog(logEntry, startTime, reqCapture, nil)
+			p.completeLive(logEntry)
+			logMu.Unlock()
+			http.Error(w, "request override failed: "+readErr.Error(), http.StatusBadRequest)
+			return
+		}
+		result, applyErr := requestoverride.Apply(overrideCfg, overrideInfo, rawBody)
+		if applyErr != nil {
+			if errors.Is(applyErr, requestoverride.ErrUnsupportedContent) || errors.Is(applyErr, requestoverride.ErrUnsupportedEncoding) {
+				logEntry.RequestOverrideError = applyErr.Error()
+				logEntry.RequestBodyOriginalRaw = append([]byte(nil), rawBody...)
+				requestBodySource = io.NopCloser(bytes.NewReader(rawBody))
+				contentLength = int64(len(rawBody))
+			} else {
+				logMu.Lock()
+				logEntry.Error = fmt.Sprintf("request override failed: %v", applyErr)
+				logEntry.RequestOverrideError = applyErr.Error()
+				logEntry.RequestBodyOriginalRaw = append([]byte(nil), rawBody...)
+				p.finalizeAndSaveLog(logEntry, startTime, reqCapture, nil)
+				p.completeLive(logEntry)
+				logMu.Unlock()
+				http.Error(w, "request override failed: "+applyErr.Error(), http.StatusBadRequest)
+				return
+			}
+		}
+		if len(result.AppliedRuleNames) > 0 {
+			logEntry.RequestOverrideApplied = true
+			logEntry.RequestOverrideRules = append([]string(nil), result.AppliedRuleNames...)
+			logEntry.RequestBodyOriginalRaw = append([]byte(nil), rawBody...)
+			logEntry.RequestBodyFinalRaw = append([]byte(nil), result.Body...)
+			requestBodySource = io.NopCloser(bytes.NewReader(result.Body))
+			contentLength = int64(len(result.Body))
+		} else {
+			requestBodySource = io.NopCloser(bytes.NewReader(rawBody))
+			contentLength = int64(len(rawBody))
+		}
+	}
+
+	if requestBodySource != nil && requestBodySource != http.NoBody {
+		tee := io.TeeReader(requestBodySource, reqCapture)
+		rc := &teeReadCloser{r: tee, c: requestBodySource}
 		if loggingCfg.EarlyRequestBodySnapshot {
 			bodyDone := make(chan struct{})
 			body = &eofNotifyReadCloser{rc: rc, done: bodyDone}
@@ -158,7 +216,8 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Host is special: set the field (Header["Host"] is ignored by net/http client).
 	upstreamReq.Host = targetURL.Host
 	// Preserve original length semantics if present.
-	upstreamReq.ContentLength = r.ContentLength
+	upstreamReq.ContentLength = contentLength
+	upstreamReq.Header.Del("Content-Length")
 
 	resp, err := p.client.Do(upstreamReq)
 	if err != nil {
@@ -341,14 +400,30 @@ func (p *Proxy) completeLive(logEntry *storage.RequestLog) {
 		finalLog.ResponseBodyRaw,
 		loggingCfg.MaxResponseBody,
 	)
+	requestBodyOriginal, originalTruncated := p.formatLiveBody(
+		firstHeaderValue(finalLog.RequestHeaders, "Content-Type"),
+		firstHeaderValue(finalLog.RequestHeaders, "Content-Encoding"),
+		finalLog.RequestBodyOriginalRaw,
+		loggingCfg.MaxRequestBody,
+	)
+	requestBodyFinal, finalTruncated := p.formatLiveBody(
+		firstHeaderValue(finalLog.RequestHeaders, "Content-Type"),
+		firstHeaderValue(finalLog.RequestHeaders, "Content-Encoding"),
+		finalLog.RequestBodyFinalRaw,
+		loggingCfg.MaxRequestBody,
+	)
 
 	finalLog.RequestBody = requestBody
 	finalLog.ResponseBody = responseBody
+	finalLog.RequestBodyOriginal = requestBodyOriginal
+	finalLog.RequestBodyFinal = requestBodyFinal
 	finalLog.Truncated = finalLog.Truncated ||
 		finalLog.RequestBodyCaptureTruncated ||
 		finalLog.ResponseBodyCaptureTruncated ||
 		requestTruncated ||
-		responseTruncated
+		responseTruncated ||
+		originalTruncated ||
+		finalTruncated
 
 	p.live.Complete(finalLog)
 }
@@ -629,8 +704,17 @@ func cloneLog(in *storage.RequestLog) *storage.RequestLog {
 	if len(in.RequestBodyRaw) > 0 {
 		out.RequestBodyRaw = append([]byte(nil), in.RequestBodyRaw...)
 	}
+	if len(in.RequestBodyOriginalRaw) > 0 {
+		out.RequestBodyOriginalRaw = append([]byte(nil), in.RequestBodyOriginalRaw...)
+	}
+	if len(in.RequestBodyFinalRaw) > 0 {
+		out.RequestBodyFinalRaw = append([]byte(nil), in.RequestBodyFinalRaw...)
+	}
 	if len(in.ResponseBodyRaw) > 0 {
 		out.ResponseBodyRaw = append([]byte(nil), in.ResponseBodyRaw...)
+	}
+	if len(in.RequestOverrideRules) > 0 {
+		out.RequestOverrideRules = append([]string(nil), in.RequestOverrideRules...)
 	}
 	return &out
 }
@@ -691,6 +775,20 @@ func isLiveTextResponse(contentType string) bool {
 		return true
 	}
 	return strings.HasSuffix(mediaType, "+json") || strings.HasSuffix(mediaType, "+xml")
+}
+
+func readRequestBodyLimited(body io.ReadCloser, maxBytes int64) ([]byte, error) {
+	if maxBytes <= 0 {
+		maxBytes = 1 << 20
+	}
+	data, err := io.ReadAll(io.LimitReader(body, maxBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > maxBytes {
+		return nil, requestoverride.ErrBodyTooLarge
+	}
+	return data, nil
 }
 
 func copyWithOptionalFlush(dst http.ResponseWriter, src io.Reader, capture io.Writer, flush bool, onChunk func([]byte)) (int64, error) {

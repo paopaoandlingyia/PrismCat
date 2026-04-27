@@ -11,6 +11,7 @@
         "success": "Success",
         "copy": "Copy",
         "copied": "Copied",
+        "edit": "Edit",
         "search": "Search",
         "items": "items",
         "confirm": "Confirm",
@@ -89,19 +90,21 @@
         "use_preview": "Use Preview",
         "view_raw": "Raw",
         "view_pretty": "Pretty",
+        "view_diff": "Diff",
         "stream_merged": "Merged View",
         "stream_raw": "Raw Data",
         "stream_merge_info": "Merged {{count}} stream chunks",
         "stream_merge_format": "Format: {{format}}",
         "stream_merge_protocol": "Protocol: {{protocol}}",
         "stream_merge_unavailable": "Unable to derive a merged view right now. Switch to Raw to inspect the original content.",
-        "layout_mode": "Layout",
-        "layout_standard": "Standard",
-        "layout_wide": "Wide",
-        "layout_full": "Full",
+        "enter_fullscreen": "Fullscreen",
+        "exit_fullscreen": "Exit fullscreen",
         "expand_all": "Expand all",
         "collapse_all": "Collapse all",
-        "truncated_tag": "TRUNCATED"
+        "truncated_tag": "TRUNCATED",
+        "modified": "MODIFIED",
+        "request_override": "Request Override",
+        "open_diff": "Open Diff"
     },
     "json_viewer": {
         "items": "{{count}} items",
@@ -114,13 +117,38 @@
         "collapse": "Collapse",
         "image_preview": "Image Preview"
     },
+    "json_diff": {
+        "summary": "{{count}} changes",
+        "added": "Added",
+        "removed": "Removed",
+        "changed": "Changed",
+        "before": "Before",
+        "after": "After",
+        "missing": "Missing",
+        "no_changes": "No JSON changes",
+        "json_required": "Diff needs both sides to be valid JSON. Showing raw bodies instead."
+    },
+    "log_diff": {
+        "request_diff": "Request Diff",
+        "back_to_logs": "Back to Logs",
+        "copy_final": "Copy Final Request",
+        "no_diff_title": "No request diff",
+        "no_diff_message": "This log does not contain a modified request body.",
+        "missing_id": "Missing log id"
+    },
     "upstream_manager": {
         "title": "Manage Upstreams",
         "add_new": "Add New Upstream",
         "name": "Name (Subdomain)",
         "target": "Target URL",
         "timeout": "Timeout (s)",
+        "order": "Order",
         "actions": "Actions",
+        "edit_title": "Edit Upstream: {{name}}",
+        "override_enabled": "Enable overrides for this upstream",
+        "override_enabled_hint": "When the global switch is on, only upstreams enabled here with bound rules apply request overrides.",
+        "bound_rules": "Bound Rules",
+        "no_rules": "No rules available. Add rules in the Overrides tab first.",
         "confirm_delete": "Are you sure you want to delete the forwarding config for subdomain \"{{name}}\"?",
         "save_success": "Config saved",
         "delete_success": "Config deleted",
@@ -135,7 +163,8 @@
         "tabs": {
             "upstreams": "Upstreams",
             "logging": "Logging",
-            "storage": "Storage"
+            "storage": "Storage",
+            "overrides": "Overrides"
         },
         "page_description": "Manage proxy entrypoints, upstream routes, logging capture, and storage policy in one place. The page is regrouped by workflow so it no longer reads like a giant flattened form.",
         "access_title": "Access Mode",
@@ -179,7 +208,18 @@
         "early_request_body_snapshot": "Extra Request Body Snapshot",
         "early_request_body_snapshot_hint": "When enabled, PrismCat saves one extra request-body snapshot as soon as the body has been fully sent to the upstream (even if the upstream has not responded yet). This is mainly useful when you want the request body persisted earlier, but it adds an extra DB write per request.",
         "store_base64": "Store Base64 Data",
-        "store_base64_hint": "When enabled, Base64 encoded data (e.g. images) in bodies will be stored. Disable to significantly reduce storage overhead."
+        "store_base64_hint": "When enabled, Base64 encoded data (e.g. images) in bodies will be stored. Disable to significantly reduce storage overhead.",
+        "request_overrides_warning_title": "PrismCat will modify final requests when enabled",
+        "request_overrides_warning": "Request overrides only apply to JSON request bodies whose upstream has overrides enabled and bound rules. Matching requests are fully buffered, patched with JSON Patch, then sent upstream. Log details record the original body, final body, and diff.",
+        "request_overrides_enable": "Enable Request Overrides",
+        "request_overrides_enable_hint": "Global switch. When off, all override rules are ignored and PrismCat remains transparent.",
+        "request_overrides_max_body": "Override Max Body",
+        "request_overrides_max_body_hint": "Requests above this size will not be overridden and will return an error, avoiding accidental buffering of large bodies.",
+        "request_overrides_rules": "Override Rules JSON",
+        "request_overrides_rules_hint": "Enter a rules array. Each rule has name, enabled, match, and patch; patch uses JSON Patch: add/remove/replace/move/copy/test.",
+        "request_overrides_scope_hint": "This tab manages the reusable rule library. Bind rules to specific upstreams from the Upstreams list by clicking Edit.",
+        "request_overrides_insert_example": "Insert Example",
+        "request_overrides_rules_must_be_array": "Request override rules must be a JSON array"
     },
     "playground": {
         "title": "Playground",

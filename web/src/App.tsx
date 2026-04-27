@@ -20,6 +20,11 @@ const SettingsPage = lazy(async () => {
   return { default: module.Settings }
 })
 
+const LogDiffPage = lazy(async () => {
+  const module = await import('@/pages/LogDiff')
+  return { default: module.LogDiff }
+})
+
 function AppLayout() {
   const { t, i18n } = useTranslation()
   const location = useLocation()
@@ -145,6 +150,7 @@ function AppLayout() {
         <Suspense fallback={routeFallback}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/logs/:id/diff/request" element={<LogDiffPage />} />
             <Route path="/playground" element={<PlaygroundPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>

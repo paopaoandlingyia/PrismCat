@@ -76,6 +76,47 @@ func TestNormalizePathRoutingPrefix(t *testing.T) {
 	}
 }
 
+func TestNormalizeRequestOverridesNormalizesBindingsAndRules(t *testing.T) {
+	cfg := NormalizeRequestOverrides(RequestOverridesConfig{
+		Enabled: true,
+		Upstreams: map[string]RequestOverrideUpstreamBinding{
+			" Anthropic ": {
+				Enabled:   true,
+				RuleNames: []string{" add metadata ", "add metadata", ""},
+			},
+		},
+		Rules: []RequestOverrideRule{
+			{
+				Name: " add metadata ",
+				Match: RequestOverrideMatch{
+					Methods:      []string{"post"},
+					PathPrefixes: []string{"v1/messages"},
+				},
+			},
+		},
+	})
+
+	if cfg.MaxBodyBytes != 1<<20 {
+		t.Fatalf("MaxBodyBytes = %d, want default", cfg.MaxBodyBytes)
+	}
+	binding := cfg.Upstreams["anthropic"]
+	if !binding.Enabled {
+		t.Fatal("anthropic binding is not enabled")
+	}
+	if len(binding.RuleNames) != 1 || binding.RuleNames[0] != "add metadata" {
+		t.Fatalf("rule names = %#v", binding.RuleNames)
+	}
+	if len(cfg.Rules[0].Match.Methods) != 1 || cfg.Rules[0].Match.Methods[0] != "POST" {
+		t.Fatalf("methods = %#v", cfg.Rules[0].Match.Methods)
+	}
+	if len(cfg.Rules[0].Match.PathPrefixes) != 1 || cfg.Rules[0].Match.PathPrefixes[0] != "/v1/messages" {
+		t.Fatalf("path prefixes = %#v", cfg.Rules[0].Match.PathPrefixes)
+	}
+	if cfg.Rules[0].Name != "add metadata" {
+		t.Fatalf("rule name = %q", cfg.Rules[0].Name)
+	}
+}
+
 func TestExtractPathUpstream(t *testing.T) {
 	tests := []struct {
 		name     string

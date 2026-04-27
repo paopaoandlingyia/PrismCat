@@ -148,7 +148,12 @@ func cloneRequestLog(in *RequestLog) *RequestLog {
 	out := *in
 	out.RequestHeaders = cloneHeaders(in.RequestHeaders)
 	out.ResponseHeaders = cloneHeaders(in.ResponseHeaders)
+	if len(in.RequestOverrideRules) > 0 {
+		out.RequestOverrideRules = append([]string(nil), in.RequestOverrideRules...)
+	}
 	out.RequestBodyRaw = cloneBytes(in.RequestBodyRaw)
+	out.RequestBodyOriginalRaw = cloneBytes(in.RequestBodyOriginalRaw)
+	out.RequestBodyFinalRaw = cloneBytes(in.RequestBodyFinalRaw)
 	out.ResponseBodyRaw = cloneBytes(in.ResponseBodyRaw)
 	return &out
 }
