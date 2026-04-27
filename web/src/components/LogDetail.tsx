@@ -31,6 +31,7 @@ type ResponseViewMode = BodyViewMode | 'merged'
 type PanelWidthMode = 'wide' | 'full'
 
 const logDetailWidthStorageKey = 'prismcat.logDetail.width'
+const logDetailExpandedStorageKey = 'prismcat.logDetail.expanded'
 
 const defaultExpandedSections = {
     url: true,
@@ -51,6 +52,24 @@ function getInitialPanelWidthMode(): PanelWidthMode {
     return 'wide'
 }
 
+function getInitialExpandedSections(): typeof defaultExpandedSections {
+    if (typeof window === 'undefined') return defaultExpandedSections
+    try {
+        const raw = window.localStorage.getItem(logDetailExpandedStorageKey)
+        if (!raw) return defaultExpandedSections
+        const parsed = JSON.parse(raw) as Partial<typeof defaultExpandedSections>
+        return {
+            url: typeof parsed?.url === 'boolean' ? parsed.url : defaultExpandedSections.url,
+            requestHeaders: typeof parsed?.requestHeaders === 'boolean' ? parsed.requestHeaders : defaultExpandedSections.requestHeaders,
+            requestBody: typeof parsed?.requestBody === 'boolean' ? parsed.requestBody : defaultExpandedSections.requestBody,
+            responseHeaders: typeof parsed?.responseHeaders === 'boolean' ? parsed.responseHeaders : defaultExpandedSections.responseHeaders,
+            responseBody: typeof parsed?.responseBody === 'boolean' ? parsed.responseBody : defaultExpandedSections.responseBody,
+        }
+    } catch {
+        return defaultExpandedSections
+    }
+}
+
 export function LogDetail({ log, loading, onClose }: LogDetailProps) {
     const { t, i18n } = useTranslation()
     const navigate = useNavigate()
@@ -63,7 +82,7 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
         response: false,
     })
     const [blobError, setBlobError] = useState<string | null>(null)
-    const [expandedSections, setExpandedSections] = useState(defaultExpandedSections)
+    const [expandedSections, setExpandedSections] = useState(getInitialExpandedSections)
     const [requestViewMode, setRequestViewMode] = useState<RequestViewMode>('pretty')
     const [responseViewMode, setResponseViewMode] = useState<ResponseViewMode>('pretty')
     const [requestExpandMode, setRequestExpandMode] = useState<JsonExpandMode>('default')
@@ -77,7 +96,6 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
         setFullResponseBody(null)
         setBlobError(null)
         setBlobLoading({ request: false, response: false })
-        setExpandedSections(defaultExpandedSections)
         setRequestViewMode('pretty')
         setResponseViewMode(log?.streaming ? 'raw' : 'pretty')
         setRequestExpandMode('default')
@@ -88,6 +106,11 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
         if (typeof window === 'undefined') return
         window.localStorage.setItem(logDetailWidthStorageKey, panelWidthMode)
     }, [panelWidthMode])
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return
+        window.localStorage.setItem(logDetailExpandedStorageKey, JSON.stringify(expandedSections))
+    }, [expandedSections])
 
     useEffect(() => {
         if (!log || !shouldSubscribeLive(log)) {
@@ -533,34 +556,11 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
                         </div>
                     )}
 
-                    {/* 请求头 & 请求体 */}
+                    {/* 请求体 & 请求头 */}
                     <div className={cn(sectionCardClassName, "space-y-4")}>
                         <div className="text-[11px] font-bold tracking-widest text-muted-foreground">
                             {t('log_detail.request')}
                         </div>
-                        <div className="space-y-2">
-                            <SectionHeader
-                                title={t('log_detail.request') + ' ' + t('log_detail.headers')}
-                                section="requestHeaders"
-                                icon={ListTree}
-                                extra={<span className="text-xs font-bold text-muted-foreground">{Object.keys(displayLog.request_headers ?? {}).length} KEYS</span>}
-                            />
-                            {expandedSections.requestHeaders && displayLog.request_headers && (
-                                <div className={cn(contentCardClassName, "space-y-2 font-mono text-[11px] leading-relaxed")}>
-                                    {Object.entries(displayLog.request_headers).map(([key, vv]) => (
-                                        <div key={key} className="flex flex-col sm:flex-row sm:gap-2 group/line">
-                                            <span className="text-primary shrink-0 font-bold">{key}:</span>
-                                            <div className="flex flex-col">
-                                                {vv.map((v, i) => (
-                                                    <span key={i} className="text-foreground break-all select-text">{v}{i < vv.length - 1 ? ';' : ''}</span>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
                         <div className="space-y-2">
                             <SectionHeader
                                 title={t('log_detail.request') + ' ' + t('log_detail.body')}
@@ -651,25 +651,19 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
                                 </div>
                             )}
                         </div>
-                    </div>
 
-                    {/* 响应头 & 响应体 */}
-                    <div className={cn(sectionCardClassName, "space-y-4")}>
-                        <div className="text-[11px] font-bold tracking-widest text-muted-foreground">
-                            {t('log_detail.response')}
-                        </div>
                         <div className="space-y-2">
                             <SectionHeader
-                                title={t('log_detail.response') + ' ' + t('log_detail.headers')}
-                                section="responseHeaders"
+                                title={t('log_detail.request') + ' ' + t('log_detail.headers')}
+                                section="requestHeaders"
                                 icon={ListTree}
-                                extra={<span className="text-xs font-bold text-muted-foreground">{Object.keys(displayLog.response_headers ?? {}).length} KEYS</span>}
+                                extra={<span className="text-xs font-bold text-muted-foreground">{Object.keys(displayLog.request_headers ?? {}).length} KEYS</span>}
                             />
-                            {expandedSections.responseHeaders && displayLog.response_headers && (
+                            {expandedSections.requestHeaders && displayLog.request_headers && (
                                 <div className={cn(contentCardClassName, "space-y-2 font-mono text-[11px] leading-relaxed")}>
-                                    {Object.entries(displayLog.response_headers).map(([key, vv]) => (
+                                    {Object.entries(displayLog.request_headers).map(([key, vv]) => (
                                         <div key={key} className="flex flex-col sm:flex-row sm:gap-2 group/line">
-                                            <span className="text-green-600 dark:text-green-400 shrink-0 font-bold">{key}:</span>
+                                            <span className="text-primary shrink-0 font-bold">{key}:</span>
                                             <div className="flex flex-col">
                                                 {vv.map((v, i) => (
                                                     <span key={i} className="text-foreground break-all select-text">{v}{i < vv.length - 1 ? ';' : ''}</span>
@@ -680,7 +674,13 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
                                 </div>
                             )}
                         </div>
+                    </div>
 
+                    {/* 响应体 & 响应头 */}
+                    <div className={cn(sectionCardClassName, "space-y-4")}>
+                        <div className="text-[11px] font-bold tracking-widest text-muted-foreground">
+                            {t('log_detail.response')}
+                        </div>
                         <div className="space-y-2">
                             <SectionHeader
                                 title={t('log_detail.response') + ' ' + t('log_detail.body')}
@@ -777,6 +777,29 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
                                             {loading ? t('common.loading') : t('log_detail.no_body', '--- EMPTY BODY ---')}
                                         </div>
                                     )}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="space-y-2">
+                            <SectionHeader
+                                title={t('log_detail.response') + ' ' + t('log_detail.headers')}
+                                section="responseHeaders"
+                                icon={ListTree}
+                                extra={<span className="text-xs font-bold text-muted-foreground">{Object.keys(displayLog.response_headers ?? {}).length} KEYS</span>}
+                            />
+                            {expandedSections.responseHeaders && displayLog.response_headers && (
+                                <div className={cn(contentCardClassName, "space-y-2 font-mono text-[11px] leading-relaxed")}>
+                                    {Object.entries(displayLog.response_headers).map(([key, vv]) => (
+                                        <div key={key} className="flex flex-col sm:flex-row sm:gap-2 group/line">
+                                            <span className="text-green-600 dark:text-green-400 shrink-0 font-bold">{key}:</span>
+                                            <div className="flex flex-col">
+                                                {vv.map((v, i) => (
+                                                    <span key={i} className="text-foreground break-all select-text">{v}{i < vv.length - 1 ? ';' : ''}</span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             )}
                         </div>
