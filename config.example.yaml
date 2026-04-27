@@ -62,10 +62,11 @@ logging:
   # 最大响应体记录大小（字节）
   max_response_body: 10485760 # 10MB
 
-  # 是否在“请求体已完整发送到上游，但上游还未返回响应头”时就提前保存一次快照。
-  # 开启后：非流式/慢上游也能更早在 UI 里看到 Request Body；
+  # 是否在“请求体已完整发送到上游，但上游还未返回响应头”时就提前保存一次数据库快照。
+  # 注意：日志详情实时查看不依赖此项；关闭时，打开中的 UI 仍可通过 live 通道看到进行中请求的 Request Body。
+  # 开启后：进程重启/页面刷新/断开 live 后，仍可从数据库读取这份中间态 Request Body；
   # 代价：每个请求会额外多一次数据库写入（高并发下可能降低吞吐/更易丢日志）。
-  early_request_body_snapshot: true
+  early_request_body_snapshot: false
 
   # 大 body 自动分离到 blob 存储（内容寻址 + 去重）
   # request_logs 表只保留预览片段 + hash/ref，详情可按需加载完整内容

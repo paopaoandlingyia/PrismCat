@@ -238,7 +238,7 @@ logging:
     - api-key
     - x-api-key
   detach_body_over_bytes: 262144  # 超过 256KB 的数据分离存储
-  early_request_body_snapshot: true
+  early_request_body_snapshot: false
 
 storage:
   retention_days: 30              # 日志保留天数，0 = 永久

@@ -238,7 +238,7 @@ logging:
     - api-key
     - x-api-key
   detach_body_over_bytes: 262144  # Store bodies > 256KB as separate files
-  early_request_body_snapshot: true
+  early_request_body_snapshot: false
 
 storage:
   retention_days: 30              # Log retention in days; 0 = keep forever

@@ -31,7 +31,7 @@ logging:
     - Authorization
     - api-key
     - x-api-key
-  early_request_body_snapshot: true
+  early_request_body_snapshot: false
   detach_body_over_bytes: 262144  # 256KB
   body_preview_bytes: 4096        # 4KB
 

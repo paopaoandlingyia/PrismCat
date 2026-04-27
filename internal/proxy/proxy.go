@@ -177,12 +177,13 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if requestBodySource != nil && requestBodySource != http.NoBody {
 		tee := io.TeeReader(requestBodySource, reqCapture)
 		rc := &teeReadCloser{r: tee, c: requestBodySource}
-		if loggingCfg.EarlyRequestBodySnapshot {
+		if p.live != nil || loggingCfg.EarlyRequestBodySnapshot {
 			bodyDone := make(chan struct{})
 			body = &eofNotifyReadCloser{rc: rc, done: bodyDone}
 
-			// Save an extra snapshot once the request body has been fully sent upstream.
-			// This runs while client.Do is blocked waiting for response headers.
+			// Publish the request body to the live detail view once it has been sent
+			// upstream. Persisting this in-flight snapshot remains optional because it
+			// adds an extra DB write per request.
 			go func() {
 				select {
 				case <-bodyDone:
@@ -192,7 +193,9 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 				logMu.Lock()
 				p.applyRequestCapture(logEntry, reqCapture)
-				p.saveLogSnapshot(logEntry)
+				if loggingCfg.EarlyRequestBodySnapshot {
+					p.saveLogSnapshot(logEntry)
+				}
 				p.publishRequestReady(logEntry)
 				logMu.Unlock()
 			}()

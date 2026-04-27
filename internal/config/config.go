@@ -113,12 +113,14 @@ type LoggingConfig struct {
 	SensitiveHeaders []string `yaml:"sensitive_headers"`
 	StoreBase64      bool     `yaml:"store_base64"`
 
-	// EarlyRequestBodySnapshot controls whether PrismCat saves an additional log
-	// snapshot right after the request body has been fully sent to the upstream
-	// (i.e. before the upstream responds).
+	// EarlyRequestBodySnapshot controls whether PrismCat persists an additional
+	// log snapshot right after the request body has been fully sent to the
+	// upstream (i.e. before the upstream responds).
 	//
-	// This is mainly useful when you want the request body persisted before the
-	// upstream responds, but it adds an extra DB write per request.
+	// Live log detail updates do not depend on this setting; this is only useful
+	// when you want the in-flight request body to survive process restarts or UI
+	// reloads before the final response is saved. It adds an extra DB write per
+	// request.
 	EarlyRequestBodySnapshot bool `yaml:"early_request_body_snapshot"`
 
 	// DetachBodyOverBytes detaches large captured bodies into the blob store.
