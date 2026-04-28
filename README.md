@@ -93,6 +93,11 @@ Your App                     PrismCat                      OpenAI
 ### 🎮 One-Click Replay (Playground)
 See a failed request? Hit **Replay**, tweak the prompt or parameters right in your browser, and resend instantly. No need to re-run your Python/Node script.
 
+### 🛠️ Request Override (Opt-In)
+Mutate outbound JSON request bodies with [JSON Patch](https://jsonpatch.com/) rules — cap `max_tokens` globally, swap models, strip fields a framework auto-injected, all without touching your code. Each rule is matched by method / path / JSON content; the log detail page shows a side-by-side diff of the original vs. final request.
+
+> **🔒 Strictly opt-in.** PrismCat is a transparent proxy by default and **never** touches your requests unless you (1) flip the master switch, (2) define rules, and (3) bind them to specific upstreams. Skip any of those steps and every byte is forwarded untouched.
+
 ### 🔐 Privacy & Security
 - **Fully local** — data stays in local SQLite + filesystem, no third-party servers
 - Automatic masking of sensitive headers (`Authorization`, `api-key`)
@@ -118,6 +123,7 @@ PrismCat is designed to run as a **silent, 24/7 LLM black box**. You don't need 
 | "I run local models with Ollama, want to inspect the traffic" | Add an upstream pointing to `http://localhost:11434` — it's a universal HTTP proxy |
 | "Multiple people share one API key — whose request failed?" | Use `X-PrismCat-Tag` to tag by user, find the culprit in seconds |
 | "My Agent went rogue and I have no idea what it did" | PrismCat silently logs every API call — review the full behavior chain anytime |
+| "I want to cap `max_tokens` globally / strip a field LangChain auto-injects" | Write a [JSON Patch](https://jsonpatch.com/) rule in **Request Override** (opt-in; transparent by default) |
 
 ---
 

@@ -219,6 +219,7 @@
         "request_overrides_rules_hint": "Enter a rules array. Each rule has name, enabled, match, and patch; patch uses JSON Patch: add/remove/replace/move/copy/test.",
         "request_overrides_scope_hint": "This tab manages the reusable rule library. Bind rules to specific upstreams from the Upstreams list by clicking Edit.",
         "request_overrides_insert_example": "Insert Example",
+        "request_overrides_learn_more": "Learn JSON Patch",
         "request_overrides_rules_must_be_array": "Request override rules must be a JSON array"
     },
     "playground": {

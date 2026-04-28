@@ -221,6 +221,7 @@
         "request_overrides_rules_hint": "填写规则数组。每条规则包含 name、enabled、match 和 patch；patch 使用 JSON Patch: add/remove/replace/move/copy/test。",
         "request_overrides_scope_hint": "这里维护可复用规则库；具体哪些上游使用哪些规则，请在上游路由列表中点击编辑进行绑定。",
         "request_overrides_insert_example": "插入示例",
+        "request_overrides_learn_more": "学习 JSON Patch",
         "request_overrides_rules_must_be_array": "参数覆盖规则必须是 JSON 数组"
     },
     "playground": {

@@ -16,6 +16,7 @@ import {
     CircleHelp,
     AlertTriangle,
     Pencil,
+    ExternalLink,
 } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
@@ -58,17 +59,49 @@ type ToggleSettingProps = {
 
 const requestOverrideExample = JSON.stringify([
     {
-        name: 'add metadata for anthropic',
+        name: 'Cost guard: cap max_tokens to 2048',
         enabled: true,
         match: {
             methods: ['POST'],
-            path_prefixes: ['/v1/messages'],
+            path_prefixes: ['/v1/chat/completions', '/v1/messages'],
+        },
+        patch: [
+            { op: 'replace', path: '/max_tokens', value: 2048 },
+        ],
+    },
+    {
+        name: 'Dev-only: downgrade gpt-4o to gpt-4o-mini',
+        enabled: false,
+        match: {
+            methods: ['POST'],
             json: [
-                { path: '/model', starts_with: 'claude' },
+                { path: '/model', equals: 'gpt-4o' },
             ],
         },
         patch: [
-            { op: 'add', path: '/metadata/user_id', value: 'demo-user' },
+            { op: 'replace', path: '/model', value: 'gpt-4o-mini' },
+        ],
+    },
+    {
+        name: 'Inject a global safety system prompt',
+        enabled: false,
+        match: {
+            methods: ['POST'],
+            path_prefixes: ['/v1/messages'],
+        },
+        patch: [
+            { op: 'add', path: '/system', value: "Refuse anything outside the user's explicit request." },
+        ],
+    },
+    {
+        name: 'Strip the `user` field LangChain auto-injects',
+        enabled: false,
+        match: {
+            methods: ['POST'],
+            path_prefixes: ['/v1/chat/completions'],
+        },
+        patch: [
+            { op: 'remove', path: '/user' },
         ],
     },
 ], null, 2)
@@ -1009,16 +1042,34 @@ export function Settings() {
                                             <p className="text-xs leading-5 text-muted-foreground">
                                                 {t('settings.request_overrides_scope_hint')}
                                             </p>
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => setOverrideRulesText(requestOverrideExample)}
-                                                className="h-8 shrink-0 text-xs font-semibold"
-                                            >
-                                                <Plus className="mr-1.5 h-3.5 w-3.5" />
-                                                {t('settings.request_overrides_insert_example')}
-                                            </Button>
+                                            <div className="flex shrink-0 items-center gap-2">
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    asChild
+                                                    className="h-8 text-xs font-semibold"
+                                                >
+                                                    <a
+                                                        href="https://jsonpatch.com/"
+                                                        target="_blank"
+                                                        rel="noreferrer noopener"
+                                                    >
+                                                        <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                                                        {t('settings.request_overrides_learn_more')}
+                                                    </a>
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => setOverrideRulesText(requestOverrideExample)}
+                                                    className="h-8 text-xs font-semibold"
+                                                >
+                                                    <Plus className="mr-1.5 h-3.5 w-3.5" />
+                                                    {t('settings.request_overrides_insert_example')}
+                                                </Button>
+                                            </div>
                                         </div>
                                         <Textarea
                                             value={overrideRulesText}
