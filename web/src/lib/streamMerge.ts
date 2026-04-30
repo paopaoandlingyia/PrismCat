@@ -33,6 +33,7 @@ interface OpenAIChoiceAccumulator {
     role: string
     content: string
     reasoning: string
+    reasoningContent: string
     reasoningDetails: unknown[]
     images: unknown[]
     toolCalls: Array<ToolCallAccumulator | undefined>
@@ -337,6 +338,7 @@ function mergeOpenAIChatChunks(chunks: Record<string, unknown>[]): Record<string
                     role: '',
                     content: '',
                     reasoning: '',
+                    reasoningContent: '',
                     reasoningDetails: [],
                     images: [],
                     toolCalls: [],
@@ -355,6 +357,8 @@ function mergeOpenAIChatChunks(chunks: Record<string, unknown>[]): Record<string
                 acc.content += readTextDelta(delta.content)
                 const reasoning = asString(delta.reasoning)
                 if (reasoning) acc.reasoning += reasoning
+                const reasoningContent = asString(delta.reasoning_content)
+                if (reasoningContent) acc.reasoningContent += reasoningContent
                 mergeArrayValues(acc.reasoningDetails, getArray(delta, 'reasoning_details'))
                 mergeArrayValues(acc.images, getArray(delta, 'images'))
                 mergeToolCalls(acc, getArray(delta, 'tool_calls'))
@@ -374,6 +378,9 @@ function mergeOpenAIChatChunks(chunks: Record<string, unknown>[]): Record<string
             }
             if (acc.reasoning) {
                 message.reasoning = acc.reasoning
+            }
+            if (acc.reasoningContent) {
+                message.reasoning_content = acc.reasoningContent
             }
             if (acc.reasoningDetails.length > 0) {
                 message.reasoning_details = acc.reasoningDetails
