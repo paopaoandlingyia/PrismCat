@@ -14,7 +14,7 @@ web/node_modules/
 # Keep a tracked placeholder so `//go:embed all:ui` still compiles on a clean clone.
 # The real UI build output is copied here during build/release.
 internal/server/ui/*
-!internal/server/ui/.keep
+!internal/server/ui/README.md
 
 # === 本地 Remotion 宣传视频实验 ===
 promo-video/

@@ -46,7 +46,8 @@ jobs:
           npm ci
           npm run build
           # 将编译结果同步到 Go 嵌入目录
-          rm -rf ../internal/server/ui/*
+          mkdir -p ../internal/server/ui
+          find ../internal/server/ui -mindepth 1 ! -name README.md -exec rm -rf {} +
           cp -r dist/* ../internal/server/ui/
 
       - name: 设置 Go 环境
