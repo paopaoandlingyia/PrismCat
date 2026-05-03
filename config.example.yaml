@@ -49,11 +49,15 @@ upstreams:
     target: "https://api.openai.com"
     # 可选：超时设置（秒）
     timeout: 120
+    # 可选：出站代理策略。env=读取 HTTP_PROXY/HTTPS_PROXY，direct=强制直连，也可填写代理 URL。
+    outbound_proxy: "env"
 
   gemini:
     # 匹配 gemini.localhost:8080
     target: "https://generativelanguage.googleapis.com"
     timeout: 120
+    # 例如通过 Clash 本地 HTTP 代理访问 Gemini:
+    # outbound_proxy: "http://127.0.0.1:7890"
 
 # 日志配置
 logging:

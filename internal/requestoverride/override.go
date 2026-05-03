@@ -19,6 +19,7 @@ var (
 	ErrUnsupportedContent  = errors.New("request override only supports JSON request bodies")
 )
 
+// RequestInfo describes the request metadata used to select override rules.
 type RequestInfo struct {
 	Upstream        string
 	Method          string
@@ -27,11 +28,14 @@ type RequestInfo struct {
 	ContentEncoding string
 }
 
+// Result contains the possibly rewritten body and the names of applied rules.
 type Result struct {
 	AppliedRuleNames []string
 	Body             []byte
 }
 
+// HasCandidate reports whether the config contains any enabled rule that can
+// apply to the request without inspecting the JSON body.
 func HasCandidate(cfg config.RequestOverridesConfig, info RequestInfo) bool {
 	if !cfg.Enabled {
 		return false
@@ -44,6 +48,7 @@ func HasCandidate(cfg config.RequestOverridesConfig, info RequestInfo) bool {
 	return false
 }
 
+// Apply applies matching request override rules to a JSON request body.
 func Apply(cfg config.RequestOverridesConfig, info RequestInfo, body []byte) (Result, error) {
 	if !cfg.Enabled {
 		return Result{Body: body}, nil
@@ -89,6 +94,7 @@ func Apply(cfg config.RequestOverridesConfig, info RequestInfo, body []byte) (Re
 	return Result{AppliedRuleNames: applied, Body: out}, nil
 }
 
+// ApplyPatch applies a subset of JSON Patch operations to a decoded JSON value.
 func ApplyPatch(doc interface{}, ops []config.RequestOverridePatch) (interface{}, error) {
 	var current interface{}
 	if err := normalizeJSONValue(doc, &current); err != nil {

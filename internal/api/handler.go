@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"sort"
@@ -16,43 +15,27 @@ import (
 	"github.com/paopaoandlingyia/PrismCat/internal/config"
 	"github.com/paopaoandlingyia/PrismCat/internal/httpbody"
 	"github.com/paopaoandlingyia/PrismCat/internal/live"
+	"github.com/paopaoandlingyia/PrismCat/internal/outbound"
 	"github.com/paopaoandlingyia/PrismCat/internal/storage"
 )
 
 // Handler API 处理器
 type Handler struct {
-	cfg    *config.Config
-	repo   storage.Repository
-	blobs  storage.BlobStore
-	live   *live.Registry
-	client *http.Client
+	cfg     *config.Config
+	repo    storage.Repository
+	blobs   storage.BlobStore
+	live    *live.Registry
+	clients *outbound.ClientCache
 }
 
 // New 创建 API 处理器
 func New(cfg *config.Config, repo storage.Repository, blobs storage.BlobStore, liveRegistry *live.Registry) *Handler {
-	transport := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
-		}).DialContext,
-		MaxIdleConns:          50,
-		MaxIdleConnsPerHost:   10,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-	}
 	return &Handler{
-		cfg:   cfg,
-		repo:  repo,
-		blobs: blobs,
-		live:  liveRegistry,
-		client: &http.Client{
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				return http.ErrUseLastResponse
-			},
-			Transport: transport,
-		},
+		cfg:     cfg,
+		repo:    repo,
+		blobs:   blobs,
+		live:    liveRegistry,
+		clients: outbound.NewClientCache(50, 10),
 	}
 }
 
@@ -272,10 +255,11 @@ func (h *Handler) handleUpstreams(w http.ResponseWriter, r *http.Request) {
 		// Snapshot upstreams for safe iteration.
 		for name, upCfg := range h.cfg.ListUpstreams() {
 			upstreams = append(upstreams, map[string]interface{}{
-				"name":    name,
-				"target":  upCfg.Target,
-				"timeout": upCfg.Timeout,
-				"order":   upCfg.Order,
+				"name":           name,
+				"target":         upCfg.Target,
+				"timeout":        upCfg.Timeout,
+				"order":          upCfg.Order,
+				"outbound_proxy": upCfg.OutboundProxy,
 			})
 		}
 		sort.Slice(upstreams, func(i, j int) bool {
@@ -293,10 +277,11 @@ func (h *Handler) handleUpstreams(w http.ResponseWriter, r *http.Request) {
 	// POST: 添加/更新
 	if r.Method == http.MethodPost {
 		var req struct {
-			Name    string `json:"name"`
-			Target  string `json:"target"`
-			Timeout int    `json:"timeout"`
-			Order   int    `json:"order"`
+			Name          string `json:"name"`
+			Target        string `json:"target"`
+			Timeout       int    `json:"timeout"`
+			Order         int    `json:"order"`
+			OutboundProxy string `json:"outbound_proxy"`
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -309,9 +294,10 @@ func (h *Handler) handleUpstreams(w http.ResponseWriter, r *http.Request) {
 		}
 
 		err := h.cfg.AddUpstream(req.Name, config.UpstreamConfig{
-			Target:  req.Target,
-			Timeout: req.Timeout,
-			Order:   req.Order,
+			Target:        req.Target,
+			Timeout:       req.Timeout,
+			Order:         req.Order,
+			OutboundProxy: req.OutboundProxy,
 		})
 		if err != nil {
 			h.jsonError(w, err.Error(), http.StatusInternalServerError)
@@ -568,6 +554,11 @@ func (h *Handler) handleReplay(w http.ResponseWriter, r *http.Request) {
 		h.jsonError(w, "未知的 upstream: "+req.Upstream, http.StatusBadRequest)
 		return
 	}
+	client, err := h.clients.Client(upstream.OutboundProxy)
+	if err != nil {
+		h.jsonError(w, "上游出站代理配置无效: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	targetURL, err := url.Parse(upstream.Target)
 	if err != nil {
@@ -608,7 +599,7 @@ func (h *Handler) handleReplay(w http.ResponseWriter, r *http.Request) {
 	}
 	upstreamReq.Host = targetURL.Host
 
-	resp, err := h.client.Do(upstreamReq)
+	resp, err := client.Do(upstreamReq)
 	if err != nil {
 		h.jsonError(w, "上游请求失败: "+err.Error(), http.StatusBadGateway)
 		return

@@ -8,7 +8,6 @@ import (
 	"io"
 	"log"
 	"mime"
-	"net"
 	"net/http"
 	"net/textproto"
 	"net/url"
@@ -21,44 +20,35 @@ import (
 	"github.com/paopaoandlingyia/PrismCat/internal/config"
 	"github.com/paopaoandlingyia/PrismCat/internal/httpbody"
 	"github.com/paopaoandlingyia/PrismCat/internal/live"
+	"github.com/paopaoandlingyia/PrismCat/internal/outbound"
 	"github.com/paopaoandlingyia/PrismCat/internal/requestoverride"
 	"github.com/paopaoandlingyia/PrismCat/internal/storage"
 )
 
 // Proxy handles host-based upstream routing and request/response logging.
 type Proxy struct {
-	cfg    *config.Config
-	repo   storage.Repository
-	live   *live.Registry
-	client *http.Client
+	cfg     *config.Config
+	repo    storage.Repository
+	live    *live.Registry
+	clients *outbound.ClientCache
+}
+
+const copyBufferSize = 32 * 1024
+
+var copyBufferPool = sync.Pool{
+	New: func() interface{} {
+		buf := make([]byte, copyBufferSize)
+		return &buf
+	},
 }
 
 // New creates a new proxy instance.
 func New(cfg *config.Config, repo storage.Repository, liveRegistry *live.Registry) *Proxy {
-	transport := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
-		}).DialContext,
-		MaxIdleConns:          100,
-		MaxIdleConnsPerHost:   10,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-	}
-
 	return &Proxy{
-		cfg:  cfg,
-		repo: repo,
-		live: liveRegistry,
-		client: &http.Client{
-			// Do not follow redirects automatically.
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				return http.ErrUseLastResponse
-			},
-			Transport: transport,
-		},
+		cfg:     cfg,
+		repo:    repo,
+		live:    liveRegistry,
+		clients: outbound.NewClientCache(100, 50),
 	}
 }
 
@@ -79,6 +69,11 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	upstream, ok := p.cfg.GetUpstream(upstreamName)
 	if !ok {
 		http.Error(w, fmt.Sprintf("unknown upstream: %s", upstreamName), http.StatusBadGateway)
+		return
+	}
+	client, err := p.clients.Client(upstream.OutboundProxy)
+	if err != nil {
+		http.Error(w, "invalid upstream outbound proxy config", http.StatusInternalServerError)
 		return
 	}
 
@@ -222,7 +217,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	upstreamReq.ContentLength = contentLength
 	upstreamReq.Header.Del("Content-Length")
 
-	resp, err := p.client.Do(upstreamReq)
+	resp, err := client.Do(upstreamReq)
 	if err != nil {
 		logMu.Lock()
 		logEntry.Error = fmt.Sprintf("upstream request failed: %v", err)
@@ -800,7 +795,10 @@ func copyWithOptionalFlush(dst http.ResponseWriter, src io.Reader, capture io.Wr
 		w = io.MultiWriter(dst, capture)
 	}
 
-	buf := make([]byte, 32*1024)
+	bufPtr := copyBufferPool.Get().(*[]byte)
+	buf := *bufPtr
+	defer copyBufferPool.Put(bufPtr)
+
 	if !flush && onChunk == nil {
 		return io.CopyBuffer(w, src, buf)
 	}

@@ -26,6 +26,13 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select'
+import {
     Dialog,
     DialogContent,
     DialogHeader,
@@ -116,8 +123,67 @@ type EditingUpstream = {
     target: string
     timeout: number
     order: number
+    outboundProxy: string
     overrideEnabled: boolean
     ruleNames: string[]
+}
+
+type OutboundProxyMode = 'env' | 'direct' | 'custom'
+
+const customProxyPlaceholder = 'http://127.0.0.1:7890'
+
+function outboundProxyMode(value?: string): OutboundProxyMode {
+    const normalized = (value || '').trim().toLowerCase()
+    if (!normalized || normalized === 'env') return 'env'
+    if (normalized === 'direct') return 'direct'
+    return 'custom'
+}
+
+function normalizedOutboundProxy(value: string): string {
+    return value.trim() || 'env'
+}
+
+function OutboundProxyControl({
+    value,
+    onChange,
+    t,
+}: {
+    value: string
+    onChange: (value: string) => void
+    t: (key: string) => string
+}) {
+    const mode = outboundProxyMode(value)
+    return (
+        <div className="space-y-2">
+            <Select
+                value={mode}
+                onValueChange={(nextMode: OutboundProxyMode) => {
+                    if (nextMode === 'custom') {
+                        onChange(mode === 'custom' ? value : customProxyPlaceholder)
+                        return
+                    }
+                    onChange(nextMode)
+                }}
+            >
+                <SelectTrigger className="h-10 w-full rounded-xl border-border/30 bg-background/50 text-sm">
+                    <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="env">{t('upstream_manager.outbound_proxy_env')}</SelectItem>
+                    <SelectItem value="direct">{t('upstream_manager.outbound_proxy_direct')}</SelectItem>
+                    <SelectItem value="custom">{t('upstream_manager.outbound_proxy_custom')}</SelectItem>
+                </SelectContent>
+            </Select>
+            {mode === 'custom' && (
+                <Input
+                    value={value}
+                    onChange={e => onChange(e.target.value)}
+                    placeholder={customProxyPlaceholder}
+                    className="h-10 rounded-xl border-border/30 bg-background/50 font-mono text-sm"
+                />
+            )}
+        </div>
+    )
 }
 
 
@@ -204,6 +270,7 @@ export function Settings() {
     const [newTarget, setNewTarget] = useState('')
     const [newTimeout, setNewTimeout] = useState(30)
     const [newOrder, setNewOrder] = useState(100)
+    const [newOutboundProxy, setNewOutboundProxy] = useState('env')
     const [editingUpstream, setEditingUpstream] = useState<EditingUpstream | null>(null)
 
     const [enablePathRouting, setEnablePathRouting] = useState(false)
@@ -247,6 +314,13 @@ export function Settings() {
             return []
         }
     }, [overrideRulesText])
+
+    const formatOutboundProxy = useCallback((value?: string) => {
+        const mode = outboundProxyMode(value)
+        if (mode === 'env') return t('upstream_manager.outbound_proxy_env')
+        if (mode === 'direct') return t('upstream_manager.outbound_proxy_direct')
+        return value || customProxyPlaceholder
+    }, [t])
 
     const proxyBase = useMemo(() => {
         const proto = window.location.protocol
@@ -318,11 +392,12 @@ export function Settings() {
     const handleAddUpstream = async (e: FormEvent) => {
         e.preventDefault()
         try {
-            await addUpstream(newName, newTarget, newTimeout, newOrder)
+            await addUpstream(newName, newTarget, newTimeout, newOrder, normalizedOutboundProxy(newOutboundProxy))
             setNewName('')
             setNewTarget('')
             setNewTimeout(30)
             setNewOrder(prev => prev + 10)
+            setNewOutboundProxy('env')
             setShowAddForm(false)
             loadData()
             toast.success(t('settings.upstream_added'))
@@ -366,6 +441,7 @@ export function Settings() {
             target: upstream.target,
             timeout: upstream.timeout,
             order: upstream.order || 0,
+            outboundProxy: upstream.outbound_proxy || 'env',
             overrideEnabled: binding?.enabled ?? false,
             ruleNames: binding?.rule_names ?? [],
         })
@@ -393,7 +469,13 @@ export function Settings() {
                     rule_names: editingUpstream.ruleNames,
                 },
             }
-            await addUpstream(editingUpstream.name, editingUpstream.target, editingUpstream.timeout, editingUpstream.order)
+            await addUpstream(
+                editingUpstream.name,
+                editingUpstream.target,
+                editingUpstream.timeout,
+                editingUpstream.order,
+                normalizedOutboundProxy(editingUpstream.outboundProxy),
+            )
             await updateConfig({
                 request_overrides: buildOverridesPayload(nextBindings, overrideRules),
             })
@@ -495,6 +577,16 @@ export function Settings() {
                                         value={editingUpstream.timeout}
                                         onChange={e => setEditingUpstream(current => current ? { ...current, timeout: Number(e.target.value) } : current)}
                                         className="h-10 rounded-xl border-border/30 bg-background/50 text-sm"
+                                    />
+                                </FieldBlock>
+                                <FieldBlock
+                                    label={t('upstream_manager.outbound_proxy')}
+                                    hint={t('upstream_manager.outbound_proxy_hint')}
+                                >
+                                    <OutboundProxyControl
+                                        value={editingUpstream.outboundProxy}
+                                        onChange={value => setEditingUpstream(current => current ? { ...current, outboundProxy: value } : current)}
+                                        t={t}
                                     />
                                 </FieldBlock>
                             </div>
@@ -728,6 +820,19 @@ export function Settings() {
                                                         </FieldBlock>
                                                     </div>
 
+                                                    <div className="w-[260px]">
+                                                        <FieldBlock
+                                                            label={t('upstream_manager.outbound_proxy')}
+                                                            hint={t('upstream_manager.outbound_proxy_hint')}
+                                                        >
+                                                            <OutboundProxyControl
+                                                                value={newOutboundProxy}
+                                                                onChange={setNewOutboundProxy}
+                                                                t={t}
+                                                            />
+                                                        </FieldBlock>
+                                                    </div>
+
                                                     <div className="flex h-11 items-center">
                                                         <Button type="submit" variant="default" size="lg" className="h-11 rounded-xl min-w-[120px] font-medium shadow-sm whitespace-nowrap shrink-0">
                                                             <Save className="mr-1.5 h-4 w-4 shrink-0" />
@@ -747,9 +852,10 @@ export function Settings() {
                                             </div>
                                         ) : (
                                             <div className="space-y-0">
-                                                <div className="hidden grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_120px_96px] gap-6 border-b border-border/40 pb-3 px-2 lg:grid">
+                                                <div className="hidden grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_150px_100px_96px] gap-6 border-b border-border/40 pb-3 px-2 lg:grid">
                                                     <span className="text-xs font-semibold uppercase tracking-wider text-foreground/65">{t('upstream_manager.name')}</span>
                                                     <span className="text-xs font-semibold uppercase tracking-wider text-foreground/65">{t('upstream_manager.target')}</span>
+                                                    <span className="text-xs font-semibold uppercase tracking-wider text-foreground/65">{t('upstream_manager.outbound_proxy')}</span>
                                                     <span className="text-xs font-semibold uppercase tracking-wider text-foreground/65">{t('upstream_manager.timeout')}</span>
                                                     <span className="text-xs font-semibold uppercase tracking-wider text-foreground/65">{t('upstream_manager.actions')}</span>
                                                 </div>
@@ -758,7 +864,7 @@ export function Settings() {
                                                     {sortedUpstreams.map(upstream => (
                                                         <div
                                                             key={upstream.name}
-                                                            className="group grid gap-5 py-5 px-2 transition-colors hover:bg-muted/20 rounded-xl lg:-mx-2 lg:px-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_120px_96px] lg:items-start lg:gap-6"
+                                                            className="group grid gap-5 py-5 px-2 transition-colors hover:bg-muted/20 rounded-xl lg:-mx-2 lg:px-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_150px_100px_96px] lg:items-start lg:gap-6"
                                                         >
                                                             <div className="min-w-0 space-y-3">
                                                                 <div className="flex flex-wrap items-center gap-2">
@@ -814,6 +920,26 @@ export function Settings() {
                                                                         <Copy className="mt-1 h-3.5 w-3.5 shrink-0 opacity-40 group-hover/target:opacity-100 transition-opacity" />
                                                                         <span className="break-all font-mono">{upstream.target}</span>
                                                                     </button>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="min-w-0">
+                                                                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-foreground/50 lg:hidden">
+                                                                    {t('upstream_manager.outbound_proxy')}
+                                                                </p>
+                                                                <div className="text-[13px] font-medium text-foreground/80">
+                                                                    {outboundProxyMode(upstream.outbound_proxy) === 'custom' ? (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleCopy(upstream.outbound_proxy)}
+                                                                            className="flex items-start gap-2 text-left transition-colors hover:text-primary"
+                                                                        >
+                                                                            <Copy className="mt-1 h-3.5 w-3.5 shrink-0 opacity-40" />
+                                                                            <span className="break-all font-mono">{upstream.outbound_proxy}</span>
+                                                                        </button>
+                                                                    ) : (
+                                                                        <span>{formatOutboundProxy(upstream.outbound_proxy)}</span>
+                                                                    )}
                                                                 </div>
                                                             </div>
 

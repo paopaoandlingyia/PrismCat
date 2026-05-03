@@ -9,6 +9,7 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { Toaster } from '@/components/ui/sonner'
 import { Suspense, lazy, useState, useEffect } from 'react'
 import { fetchConfig } from '@/lib/api'
+import { logRequestDiffRoute } from '@/lib/routes'
 
 const PlaygroundPage = lazy(async () => {
   const module = await import('@/pages/Playground')
@@ -150,7 +151,7 @@ function AppLayout() {
         <Suspense fallback={routeFallback}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
-            <Route path="/logs/:id/diff/request" element={<LogDiffPage />} />
+            <Route path={logRequestDiffRoute} element={<LogDiffPage />} />
             <Route path="/playground" element={<PlaygroundPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>

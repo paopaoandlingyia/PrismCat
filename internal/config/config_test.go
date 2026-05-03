@@ -76,6 +76,41 @@ func TestNormalizePathRoutingPrefix(t *testing.T) {
 	}
 }
 
+func TestNormalizeOutboundProxy(t *testing.T) {
+	tests := []struct {
+		name    string
+		in      string
+		want    string
+		wantErr bool
+	}{
+		{name: "empty_defaults_to_env", in: "", want: "env"},
+		{name: "env_case_insensitive", in: " ENV ", want: "env"},
+		{name: "direct_case_insensitive", in: " Direct ", want: "direct"},
+		{name: "http_url", in: "http://127.0.0.1:7890", want: "http://127.0.0.1:7890"},
+		{name: "socks5_url", in: "socks5://127.0.0.1:7891", want: "socks5://127.0.0.1:7891"},
+		{name: "missing_scheme", in: "127.0.0.1:7890", wantErr: true},
+		{name: "unsupported_scheme", in: "ftp://127.0.0.1:7890", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NormalizeOutboundProxy(tt.in)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("NormalizeOutboundProxy(%q) succeeded, want error", tt.in)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("NormalizeOutboundProxy(%q) error = %v", tt.in, err)
+			}
+			if got != tt.want {
+				t.Fatalf("NormalizeOutboundProxy(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestNormalizeRequestOverridesNormalizesBindingsAndRules(t *testing.T) {
 	cfg := NormalizeRequestOverrides(RequestOverridesConfig{
 		Enabled: true,
@@ -114,6 +149,76 @@ func TestNormalizeRequestOverridesNormalizesBindingsAndRules(t *testing.T) {
 	}
 	if cfg.Rules[0].Name != "add metadata" {
 		t.Fatalf("rule name = %q", cfg.Rules[0].Name)
+	}
+}
+
+func TestRequestOverridesSnapshotDeepCopiesNestedValues(t *testing.T) {
+	exists := true
+	cfg := &Config{
+		Overrides: RequestOverridesConfig{
+			MaxBodyBytes: 1024,
+			Upstreams: map[string]RequestOverrideUpstreamBinding{
+				"openai": {
+					Enabled:   true,
+					RuleNames: []string{"rule-a"},
+				},
+			},
+			Rules: []RequestOverrideRule{
+				{
+					Name:    "rule-a",
+					Enabled: true,
+					Match: RequestOverrideMatch{
+						Methods: []string{"POST"},
+						JSON: []RequestOverrideJSONCondition{
+							{
+								Path:   "/metadata",
+								Exists: &exists,
+								Equals: map[string]interface{}{
+									"nested": []interface{}{"original"},
+								},
+								In: []interface{}{
+									map[string]interface{}{"candidate": "original"},
+								},
+							},
+						},
+					},
+					Patch: []RequestOverridePatch{
+						{
+							Op:   "add",
+							Path: "/metadata",
+							Value: map[string]interface{}{
+								"nested": []interface{}{"original"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	snapshot := cfg.RequestOverridesSnapshot()
+	binding := snapshot.Upstreams["openai"]
+	binding.RuleNames[0] = "changed"
+	snapshot.Upstreams["openai"] = binding
+	*snapshot.Rules[0].Match.JSON[0].Exists = false
+	snapshot.Rules[0].Match.JSON[0].Equals.(map[string]interface{})["nested"].([]interface{})[0] = "changed"
+	snapshot.Rules[0].Match.JSON[0].In[0].(map[string]interface{})["candidate"] = "changed"
+	snapshot.Rules[0].Patch[0].Value.(map[string]interface{})["nested"].([]interface{})[0] = "changed"
+
+	if got := cfg.Overrides.Upstreams["openai"].RuleNames[0]; got != "rule-a" {
+		t.Fatalf("original rule name = %q, want rule-a", got)
+	}
+	if got := *cfg.Overrides.Rules[0].Match.JSON[0].Exists; !got {
+		t.Fatal("original exists pointer was mutated")
+	}
+	if got := cfg.Overrides.Rules[0].Match.JSON[0].Equals.(map[string]interface{})["nested"].([]interface{})[0]; got != "original" {
+		t.Fatalf("original equals nested value = %v, want original", got)
+	}
+	if got := cfg.Overrides.Rules[0].Match.JSON[0].In[0].(map[string]interface{})["candidate"]; got != "original" {
+		t.Fatalf("original in nested value = %v, want original", got)
+	}
+	if got := cfg.Overrides.Rules[0].Patch[0].Value.(map[string]interface{})["nested"].([]interface{})[0]; got != "original" {
+		t.Fatalf("original patch value = %v, want original", got)
 	}
 }
 

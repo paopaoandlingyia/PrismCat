@@ -88,7 +88,7 @@ func (r *SQLiteRepository) migrate() error {
 		error TEXT,
 		truncated INTEGER DEFAULT 0,
 		request_override_applied INTEGER DEFAULT 0,
-		request_override_rules TEXT,
+		request_override_rules TEXT DEFAULT '[]',
 		request_override_error TEXT
 	);
 

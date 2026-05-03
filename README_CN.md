@@ -253,9 +253,11 @@ upstreams:
   openai:
     target: "https://api.openai.com"
     timeout: 120
+    outbound_proxy: "env"          # env、direct，或 http://127.0.0.1:7890 这样的代理 URL
   gemini:
     target: "https://generativelanguage.googleapis.com"
     timeout: 120
+    outbound_proxy: "http://127.0.0.1:7890"
 ```
 
 </details>

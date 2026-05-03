@@ -9,6 +9,7 @@ import { JsonViewer, type JsonExpandMode } from './JsonViewer'
 import { JsonDiffViewer } from './JsonDiffViewer'
 import { BlobPanel } from './BlobPanel'
 import { mergeStreamBody } from '@/lib/streamMerge'
+import { logRequestDiffPath } from '@/lib/routes'
 import {
     Sheet,
     SheetContent,
@@ -618,7 +619,7 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
                                                                     type="button"
                                                                     variant="ghost"
                                                                     size="icon"
-                                                                    onClick={() => window.open(`/logs/${displayLog.id}/diff/request`, '_blank', 'noopener,noreferrer')}
+                                                                    onClick={() => window.open(logRequestDiffPath(displayLog.id), '_blank', 'noopener,noreferrer')}
                                                                     className="h-7 w-7 rounded-md text-muted-foreground hover:bg-primary/10 hover:text-primary"
                                                                     aria-label={t('log_detail.open_diff', 'Open Diff')}
                                                                 >

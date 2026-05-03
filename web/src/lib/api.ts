@@ -65,6 +65,7 @@ export interface Upstream {
     target: string
     timeout: number
     order: number
+    outbound_proxy: string
 }
 
 // 查询过滤参数
@@ -115,13 +116,19 @@ export async function fetchUpstreams(): Promise<Upstream[]> {
     return response.json()
 }
 
-export async function addUpstream(name: string, target: string, timeout: number = 30, order: number = 0): Promise<void> {
+export async function addUpstream(
+    name: string,
+    target: string,
+    timeout: number = 30,
+    order: number = 0,
+    outbound_proxy: string = 'env',
+): Promise<void> {
     const response = await fetch(`${API_BASE}/upstreams`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name, target, timeout, order }),
+        body: JSON.stringify({ name, target, timeout, order, outbound_proxy }),
     })
     if (!response.ok) {
         const error = await response.json().catch(() => ({ error: '请求失败' }))

@@ -1,8 +1,8 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -60,9 +60,10 @@ type ServerConfig struct {
 
 // UpstreamConfig 上游配置
 type UpstreamConfig struct {
-	Target  string `yaml:"target"`
-	Timeout int    `yaml:"timeout"` // 秒
-	Order   int    `yaml:"order,omitempty"`
+	Target        string `yaml:"target"`
+	Timeout       int    `yaml:"timeout"` // 秒
+	Order         int    `yaml:"order,omitempty"`
+	OutboundProxy string `yaml:"outbound_proxy,omitempty"`
 }
 
 type RequestOverridesConfig struct {
@@ -347,9 +348,38 @@ func normalizeUpstreams(in map[string]UpstreamConfig) (map[string]UpstreamConfig
 		if _, exists := out[n]; exists {
 			return nil, fmt.Errorf("重复的 upstream 名称（大小写不敏感）: %q", n)
 		}
+		if strings.TrimSpace(v.OutboundProxy) != "" {
+			outboundProxy, err := NormalizeOutboundProxy(v.OutboundProxy)
+			if err != nil {
+				return nil, fmt.Errorf("upstream %q: %w", n, err)
+			}
+			v.OutboundProxy = outboundProxy
+		}
 		out[n] = v
 	}
 	return out, nil
+}
+
+func NormalizeOutboundProxy(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" || strings.EqualFold(value, "env") {
+		return "env", nil
+	}
+	if strings.EqualFold(value, "direct") {
+		return "direct", nil
+	}
+
+	u, err := url.Parse(value)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return "", fmt.Errorf("invalid outbound_proxy %q: use env, direct, or a proxy URL", value)
+	}
+	u.Scheme = strings.ToLower(u.Scheme)
+	switch u.Scheme {
+	case "http", "https", "socks5":
+	default:
+		return "", fmt.Errorf("unsupported outbound_proxy scheme %q", u.Scheme)
+	}
+	return u.String(), nil
 }
 
 func NormalizeRequestOverrides(in RequestOverridesConfig) RequestOverridesConfig {
@@ -474,14 +504,87 @@ func (c *Config) RequestOverridesSnapshot() RequestOverridesConfig {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	var out RequestOverridesConfig
-	data, err := json.Marshal(c.Overrides)
-	if err == nil {
-		if err := json.Unmarshal(data, &out); err == nil {
-			return NormalizeRequestOverrides(out)
+	return NormalizeRequestOverrides(cloneRequestOverridesConfig(c.Overrides))
+}
+
+func cloneRequestOverridesConfig(in RequestOverridesConfig) RequestOverridesConfig {
+	out := in
+	if len(in.Upstreams) > 0 {
+		out.Upstreams = make(map[string]RequestOverrideUpstreamBinding, len(in.Upstreams))
+		for name, binding := range in.Upstreams {
+			next := binding
+			if len(binding.RuleNames) > 0 {
+				next.RuleNames = append([]string(nil), binding.RuleNames...)
+			}
+			out.Upstreams[name] = next
 		}
 	}
-	return NormalizeRequestOverrides(c.Overrides)
+	if len(in.Rules) > 0 {
+		out.Rules = make([]RequestOverrideRule, len(in.Rules))
+		for i, rule := range in.Rules {
+			out.Rules[i] = cloneRequestOverrideRule(rule)
+		}
+	}
+	return out
+}
+
+func cloneRequestOverrideRule(in RequestOverrideRule) RequestOverrideRule {
+	out := in
+	if len(in.Match.Methods) > 0 {
+		out.Match.Methods = append([]string(nil), in.Match.Methods...)
+	}
+	if len(in.Match.PathPrefixes) > 0 {
+		out.Match.PathPrefixes = append([]string(nil), in.Match.PathPrefixes...)
+	}
+	if len(in.Match.Paths) > 0 {
+		out.Match.Paths = append([]string(nil), in.Match.Paths...)
+	}
+	if len(in.Match.JSON) > 0 {
+		out.Match.JSON = make([]RequestOverrideJSONCondition, len(in.Match.JSON))
+		for i, condition := range in.Match.JSON {
+			next := condition
+			if condition.Exists != nil {
+				exists := *condition.Exists
+				next.Exists = &exists
+			}
+			next.Equals = cloneRequestOverrideValue(condition.Equals)
+			if len(condition.In) > 0 {
+				next.In = make([]interface{}, len(condition.In))
+				for j, value := range condition.In {
+					next.In[j] = cloneRequestOverrideValue(value)
+				}
+			}
+			out.Match.JSON[i] = next
+		}
+	}
+	if len(in.Patch) > 0 {
+		out.Patch = make([]RequestOverridePatch, len(in.Patch))
+		for i, patch := range in.Patch {
+			next := patch
+			next.Value = cloneRequestOverrideValue(patch.Value)
+			out.Patch[i] = next
+		}
+	}
+	return out
+}
+
+func cloneRequestOverrideValue(in interface{}) interface{} {
+	switch value := in.(type) {
+	case map[string]interface{}:
+		out := make(map[string]interface{}, len(value))
+		for k, v := range value {
+			out[k] = cloneRequestOverrideValue(v)
+		}
+		return out
+	case []interface{}:
+		out := make([]interface{}, len(value))
+		for i, v := range value {
+			out[i] = cloneRequestOverrideValue(v)
+		}
+		return out
+	default:
+		return in
+	}
 }
 
 // ServerSnapshot returns a copy of the current server config safe for use
@@ -539,6 +642,13 @@ func (c *Config) AddUpstream(name string, config UpstreamConfig) error {
 	name = normalizeLower(name)
 	if name == "" {
 		return fmt.Errorf("upstream name is empty")
+	}
+	if strings.TrimSpace(config.OutboundProxy) != "" {
+		outboundProxy, err := NormalizeOutboundProxy(config.OutboundProxy)
+		if err != nil {
+			return err
+		}
+		config.OutboundProxy = outboundProxy
 	}
 	c.Upstreams[name] = config
 	return nil // 实际上应该由调用者决定是否立即 Save

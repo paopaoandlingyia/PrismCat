@@ -253,9 +253,11 @@ upstreams:
   openai:
     target: "https://api.openai.com"
     timeout: 120
+    outbound_proxy: "env"          # env, direct, or a proxy URL such as http://127.0.0.1:7890
   gemini:
     target: "https://generativelanguage.googleapis.com"
     timeout: 120
+    outbound_proxy: "http://127.0.0.1:7890"
 ```
 
 </details>
