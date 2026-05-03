@@ -106,7 +106,8 @@
         "truncated_tag": "已截断",
         "modified": "已修改",
         "request_override": "参数覆盖",
-        "open_diff": "打开 Diff"
+        "open_diff": "打开 Diff",
+        "copy_as_curl": "复制为 cURL"
     },
     "json_viewer": {
         "items": "{{count}} 项",

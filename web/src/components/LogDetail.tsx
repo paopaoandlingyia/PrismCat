@@ -1,5 +1,5 @@
 import { cn, formatDate, formatLatency, formatSize, getStatusColor, getMethodColor } from '@/lib/utils'
-import { Copy, Check, Zap, AlertTriangle, ChevronDown, ChevronUp, ChevronsDownUp, ChevronsUpDown, FileCode, ListTree, Globe, Layers, RotateCcw, Maximize2, Minimize2, ExternalLink } from 'lucide-react'
+import { Copy, Check, Zap, AlertTriangle, ChevronDown, ChevronUp, ChevronsDownUp, ChevronsUpDown, FileCode, ListTree, Globe, Layers, RotateCcw, Maximize2, Minimize2, ExternalLink, Terminal } from 'lucide-react'
 import { fetchBlob } from '@/lib/api'
 import type { LiveLogEvent, RequestLog } from '@/lib/api'
 import { startTransition, useEffect, useMemo, useState, type ComponentType, type ReactNode } from 'react'
@@ -10,6 +10,7 @@ import { JsonDiffViewer } from './JsonDiffViewer'
 import { BlobPanel } from './BlobPanel'
 import { mergeStreamBody } from '@/lib/streamMerge'
 import { logRequestDiffPath } from '@/lib/routes'
+import { buildCurlCommand } from '@/lib/curlExport'
 import {
     Sheet,
     SheetContent,
@@ -219,6 +220,18 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
         await navigator.clipboard.writeText(text)
         setCopiedField(field)
         setTimeout(() => setCopiedField(null), 2000)
+    }
+
+    const copyCurlCommand = async () => {
+        const currentLog = displayLog
+        if (!currentLog) return
+
+        let body = currentLog.request_body_final || fullRequestBody || currentLog.request_body || ''
+        if (!currentLog.request_body_final && currentLog.request_body_ref && !fullRequestBody) {
+            body = await fetchBlob(currentLog.request_body_ref)
+            startTransition(() => setFullRequestBody(body))
+        }
+        await copyToClipboard(buildCurlCommand(currentLog, body), 'curl')
     }
 
     const toggleSection = (section: keyof typeof expandedSections) => {
@@ -450,6 +463,19 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
                                             : t('log_detail.enter_fullscreen', 'Fullscreen')}
                                     </TooltipContent>
                                 </Tooltip>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 gap-1.5 border-border/60 bg-background/60 px-2.5 text-[11px] font-semibold shadow-sm transition-all hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
+                                    onClick={copyCurlCommand}
+                                >
+                                    {copiedField === 'curl' ? (
+                                        <Check className="h-3 w-3 text-green-500" />
+                                    ) : (
+                                        <Terminal className="h-3 w-3" />
+                                    )}
+                                    {t('log_detail.copy_as_curl', 'Copy as cURL')}
+                                </Button>
                                 <Button
                                     variant="outline"
                                     size="sm"

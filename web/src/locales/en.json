@@ -104,7 +104,8 @@
         "truncated_tag": "TRUNCATED",
         "modified": "MODIFIED",
         "request_override": "Request Override",
-        "open_diff": "Open Diff"
+        "open_diff": "Open Diff",
+        "copy_as_curl": "Copy as cURL"
     },
     "json_viewer": {
         "items": "{{count}} items",
