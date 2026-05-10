@@ -487,6 +487,7 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
                                                 state: {
                                                     replay: {
                                                         upstream: displayLog.upstream,
+                                                        target_url: displayLog.target_url,
                                                         method: displayLog.method,
                                                         path: displayLog.path + (displayLog.query ? '?' + displayLog.query : ''),
                                                         headers: displayLog.request_headers,

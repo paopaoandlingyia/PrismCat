@@ -532,11 +532,12 @@ func (h *Handler) handleReplay(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Upstream string            `json:"upstream"`
-		Method   string            `json:"method"`
-		Path     string            `json:"path"`
-		Headers  map[string]string `json:"headers"`
-		Body     string            `json:"body"`
+		Upstream  string            `json:"upstream"`
+		TargetURL string            `json:"target_url"`
+		Method    string            `json:"method"`
+		Path      string            `json:"path"`
+		Headers   map[string]string `json:"headers"`
+		Body      string            `json:"body"`
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 100<<20) // 100MB
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -544,38 +545,25 @@ func (h *Handler) handleReplay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Upstream == "" || req.Method == "" {
-		h.jsonError(w, "upstream 和 method 必填", http.StatusBadRequest)
+	if req.Method == "" {
+		h.jsonError(w, "method 必填", http.StatusBadRequest)
+		return
+	}
+	if req.Upstream == "" && req.TargetURL == "" {
+		h.jsonError(w, "upstream 或 target_url 必填", http.StatusBadRequest)
 		return
 	}
 
-	upstream, ok := h.cfg.GetUpstream(req.Upstream)
-	if !ok {
-		h.jsonError(w, "未知的 upstream: "+req.Upstream, http.StatusBadRequest)
-		return
-	}
-	client, err := h.clients.Client(upstream.OutboundProxy)
+	fullURL, host, outboundProxy, timeout, err := h.resolveReplayTarget(req.Upstream, req.TargetURL, req.Path)
 	if err != nil {
-		h.jsonError(w, "上游出站代理配置无效: "+err.Error(), http.StatusInternalServerError)
+		h.jsonError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
-	targetURL, err := url.Parse(upstream.Target)
+	client, err := h.clients.Client(outboundProxy)
 	if err != nil {
-		h.jsonError(w, "上游配置无效", http.StatusInternalServerError)
+		h.jsonError(w, "出站代理配置无效: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	// Build full URL: upstream target + request path.
-	fullURL := strings.TrimRight(targetURL.String(), "/")
-	if req.Path != "" {
-		if !strings.HasPrefix(req.Path, "/") {
-			fullURL += "/"
-		}
-		fullURL += req.Path
-	}
-
-	timeout := upstream.Timeout
 	if timeout <= 0 {
 		timeout = 120
 	}
@@ -597,7 +585,7 @@ func (h *Handler) handleReplay(w http.ResponseWriter, r *http.Request) {
 	for k, v := range req.Headers {
 		upstreamReq.Header.Set(k, v)
 	}
-	upstreamReq.Host = targetURL.Host
+	upstreamReq.Host = host
 
 	resp, err := client.Do(upstreamReq)
 	if err != nil {
@@ -642,6 +630,41 @@ func (h *Handler) handleReplay(w http.ResponseWriter, r *http.Request) {
 		"body_decoded":      bodyDecoded,
 		"body_decoded_from": bodyDecodedFrom,
 	})
+}
+
+func (h *Handler) resolveReplayTarget(upstreamName string, target string, path string) (string, string, string, int, error) {
+	if target != "" {
+		u, err := url.Parse(target)
+		if err != nil {
+			return "", "", "", 0, fmt.Errorf("target_url 无效: %w", err)
+		}
+		if u.Scheme != "http" && u.Scheme != "https" {
+			return "", "", "", 0, fmt.Errorf("target_url 只支持 http 或 https")
+		}
+		if u.Host == "" {
+			return "", "", "", 0, fmt.Errorf("target_url 缺少 host")
+		}
+		return u.String(), u.Host, "env", 120, nil
+	}
+
+	upstream, ok := h.cfg.GetUpstream(upstreamName)
+	if !ok {
+		return "", "", "", 0, fmt.Errorf("未知的 upstream: %s", upstreamName)
+	}
+	targetURL, err := url.Parse(upstream.Target)
+	if err != nil {
+		return "", "", "", 0, fmt.Errorf("上游配置无效")
+	}
+
+	fullURL := strings.TrimRight(targetURL.String(), "/")
+	if path != "" {
+		if !strings.HasPrefix(path, "/") {
+			fullURL += "/"
+		}
+		fullURL += path
+	}
+
+	return fullURL, targetURL.Host, upstream.OutboundProxy, upstream.Timeout, nil
 }
 
 // jsonResponse 发送 JSON 响应

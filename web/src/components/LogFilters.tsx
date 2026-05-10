@@ -149,7 +149,7 @@ export function LogFilters({
                         <SelectContent>
                             <SelectItem value="all">{t('filters.all_upstreams')}</SelectItem>
                             {upstreams.map((up) => (
-                                <SelectItem key={up.name} value={up.name} className="uppercase font-bold text-xs tracking-tight">
+                                <SelectItem key={up.name} value={up.name} className="font-semibold text-xs">
                                     {up.name}
                                 </SelectItem>
                             ))}

@@ -135,7 +135,7 @@ function MobileLogCard({
                         >
                             {log.status_code || '---'}
                         </span>
-                        <span className="inline-flex items-center gap-1 rounded-full bg-background/60 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-background/60 px-2.5 py-1 text-[10px] font-semibold text-muted-foreground">
                             <Server className="h-3 w-3" />
                             <span className="truncate max-w-[120px]">{log.upstream}</span>
                         </span>
@@ -269,7 +269,7 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                                     </span>
                                 </TableCell>
                                 <TableCell>
-                                    <span className="text-[10px] font-black uppercase tracking-tighter text-muted-foreground/85 truncate block max-w-[90px]">
+                                    <span className="block max-w-[90px] truncate text-[11px] font-semibold text-muted-foreground/85">
                                         {log.upstream}
                                     </span>
                                 </TableCell>

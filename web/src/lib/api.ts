@@ -234,9 +234,10 @@ export async function fetchBlob(ref: string): Promise<string> {
 
 // Replay (Playground)
 export interface ReplayRequest {
-    upstream: string
+    upstream?: string
+    target_url?: string
     method: string
-    path: string
+    path?: string
     headers: Record<string, string>
     body: string
 }

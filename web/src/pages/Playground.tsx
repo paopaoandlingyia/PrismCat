@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation } from 'react-router-dom'
-import { Send, Plus, Trash2, Loader2, Copy, Check, ChevronDown } from 'lucide-react'
+import { Send, Plus, Trash2, Loader2, Copy, Check, ChevronDown, Braces } from 'lucide-react'
 import { cn, getStatusColor, formatSize, generateId } from '@/lib/utils'
 import { fetchUpstreams, sendReplay } from '@/lib/api'
 import type { Upstream, ReplayResponse } from '@/lib/api'
@@ -30,6 +30,8 @@ interface HeaderEntry {
 
 type RequestTab = 'body' | 'headers'
 type ResponseViewMode = 'pretty' | 'raw'
+type RequestBodyViewMode = 'raw' | 'pretty'
+type TargetMode = 'upstream' | 'url'
 
 export function Playground() {
     const { t } = useTranslation()
@@ -37,7 +39,9 @@ export function Playground() {
 
     // Form state
     const [upstreams, setUpstreams] = useState<Upstream[]>([])
+    const [targetMode, setTargetMode] = useState<TargetMode>('upstream')
     const [upstream, setUpstream] = useState('')
+    const [targetUrl, setTargetUrl] = useState('')
     const [method, setMethod] = useState('POST')
     const [path, setPath] = useState('')
     const [headers, setHeaders] = useState<HeaderEntry[]>([
@@ -56,15 +60,14 @@ export function Playground() {
     const [methodOpen, setMethodOpen] = useState(false)
     const [upstreamOpen, setUpstreamOpen] = useState(false)
     const [activeTab, setActiveTab] = useState<RequestTab>('body')
+    const [requestBodyViewMode, setRequestBodyViewMode] = useState<RequestBodyViewMode>('raw')
     const [responseViewMode, setResponseViewMode] = useState<ResponseViewMode>('pretty')
 
     // Load upstreams
     useEffect(() => {
         fetchUpstreams().then((data) => {
             setUpstreams(data || [])
-            if (data?.length > 0 && !upstream) {
-                setUpstream(data[0].name)
-            }
+            setUpstream((current) => current || data?.[0]?.name || '')
         })
     }, [])
 
@@ -73,7 +76,14 @@ export function Playground() {
         const state = location.state as any
         if (state?.replay) {
             const r = state.replay
-            if (r.upstream) setUpstream(r.upstream)
+            const replayTargetUrl = r.target_url || r.targetUrl || ''
+            if (replayTargetUrl) setTargetUrl(replayTargetUrl)
+            if (r.upstream) {
+                setTargetMode('upstream')
+                setUpstream(r.upstream)
+            } else if (replayTargetUrl) {
+                setTargetMode('url')
+            }
             if (r.method) setMethod(r.method)
             if (r.path) setPath(r.path)
             if (r.body) setBody(r.body)
@@ -93,6 +103,39 @@ export function Playground() {
             window.history.replaceState({}, '')
         }
     }, [location.state])
+
+    const selectedUpstreamExists = useMemo(
+        () => upstreams.some((u) => u.name === upstream),
+        [upstreams, upstream],
+    )
+    const selectedUpstreamMissing = targetMode === 'upstream' && upstream !== '' && upstreams.length > 0 && !selectedUpstreamExists
+
+    useEffect(() => {
+        if (selectedUpstreamMissing && targetUrl) {
+            setTargetMode('url')
+        }
+    }, [selectedUpstreamMissing, targetUrl])
+
+    const parsedRequestBody = useMemo(() => {
+        const text = body.trim()
+        if (!text) return null
+        try {
+            return JSON.parse(text)
+        } catch {
+            return null
+        }
+    }, [body])
+
+    const requestBodyJsonError = useMemo(() => {
+        const text = body.trim()
+        if (!text) return null
+        try {
+            JSON.parse(text)
+            return null
+        } catch (err: any) {
+            return err?.message || 'Invalid JSON'
+        }
+    }, [body])
 
     // Parsed response body
     const parsedResponseBody = useMemo(() => {
@@ -123,8 +166,21 @@ export function Playground() {
         setTimeout(() => setCopiedField(null), 2000)
     }
 
+    const formatRequestBody = () => {
+        const text = body.trim()
+        if (!text) return
+        try {
+            setBody(JSON.stringify(JSON.parse(text), null, 2))
+            setRequestBodyViewMode('raw')
+        } catch {
+            setRequestBodyViewMode('raw')
+        }
+    }
+
     const handleSend = useCallback(async () => {
-        if (!upstream || !method) return
+        if (!method) return
+        if (targetMode === 'upstream' && !upstream) return
+        if (targetMode === 'url' && !targetUrl.trim()) return
 
         setError(null)
         setResponse(null)
@@ -139,9 +195,10 @@ export function Playground() {
         const startTime = performance.now()
         try {
             const resp = await sendReplay({
-                upstream,
+                ...(targetMode === 'upstream'
+                    ? { upstream, path }
+                    : { target_url: targetUrl.trim() }),
                 method,
-                path,
                 headers: headerMap,
                 body,
             })
@@ -153,7 +210,7 @@ export function Playground() {
         } finally {
             setSending(false)
         }
-    }, [upstream, method, path, headers, body])
+    }, [targetMode, upstream, targetUrl, method, path, headers, body])
 
     const RawBodyViewer = ({ text }: { text: string }) => (
         <pre className="whitespace-pre-wrap break-all text-[11px] font-mono leading-relaxed text-foreground select-text">
@@ -206,7 +263,7 @@ export function Playground() {
         <div className="w-full space-y-5 animate-fade-in">
 
             {/* Unified Address Bar */}
-            <div className="flex items-center gap-2 bg-muted/10 p-1.5 rounded-2xl">
+            <div className="flex flex-wrap items-center gap-2 bg-muted/10 p-1.5 rounded-2xl">
                 {/* Method Selector */}
                 <div className="relative shrink-0">
                     <button
@@ -240,55 +297,94 @@ export function Playground() {
                     )}
                 </div>
 
-                {/* Upstream Selector */}
-                <div className="relative shrink-0">
-                    <button
-                        onClick={() => setUpstreamOpen(!upstreamOpen)}
-                        className="flex items-center gap-1 px-3 py-2.5 rounded-xl border border-input bg-background/80 text-xs font-bold hover:bg-accent transition-all min-w-[90px] justify-between shadow-sm"
-                    >
-                        <span className="text-foreground/80 truncate max-w-[100px]">{upstream || t('playground.select_upstream')}</span>
-                        <ChevronDown className="h-3 w-3 opacity-50" />
-                    </button>
-                    {upstreamOpen && (
-                        <>
-                            <div className="fixed inset-0 z-40" onClick={() => setUpstreamOpen(false)} />
-                            <div className="absolute top-full left-0 mt-2 z-50 bg-popover border border-border shadow-xl py-1 min-w-[180px] rounded-lg">
-                                {upstreams.map((u) => (
-                                    <button
-                                        key={u.name}
-                                        onClick={() => { setUpstream(u.name); setUpstreamOpen(false) }}
-                                        className={cn(
-                                            'w-full px-3 py-1.5 text-left text-xs font-bold hover:bg-accent transition-colors',
-                                            u.name === upstream && 'bg-accent'
-                                        )}
-                                    >
-                                        <span className="font-black">{u.name}</span>
-                                        <span className="ml-2 text-muted-foreground font-normal truncate">{u.target}</span>
-                                    </button>
-                                ))}
-                                {upstreams.length === 0 && (
-                                    <div className="px-3 py-2 text-xs text-muted-foreground italic">
-                                        {t('playground.no_upstreams')}
-                                    </div>
-                                )}
-                            </div>
-                        </>
-                    )}
+                <div className="flex shrink-0 items-center gap-1 rounded-xl border border-border/40 bg-background/70 p-1 shadow-sm">
+                    {([
+                        { value: 'upstream', label: t('playground.target_upstream', 'Upstream') },
+                        { value: 'url', label: t('playground.target_url', 'URL') },
+                    ] as const).map((option) => (
+                        <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => setTargetMode(option.value)}
+                            className={cn(
+                                'h-7 rounded-lg px-2.5 text-[10px] font-black uppercase tracking-wider transition-all',
+                                targetMode === option.value
+                                    ? 'bg-secondary text-foreground shadow-sm'
+                                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                            )}
+                        >
+                            {option.label}
+                        </button>
+                    ))}
                 </div>
 
-                {/* Path Input */}
-                <input
-                    type="text"
-                    value={path}
-                    onChange={(e) => setPath(e.target.value)}
-                    placeholder="/v1/chat/completions"
-                    className="flex-1 min-w-0 px-3 py-2.5 rounded-xl bg-background border border-input text-sm font-mono placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
-                />
+                {targetMode === 'upstream' ? (
+                    <>
+                        {/* Upstream Selector */}
+                        <div className="relative shrink-0">
+                            <button
+                                onClick={() => setUpstreamOpen(!upstreamOpen)}
+                                className={cn(
+                                    'flex items-center gap-1 px-3 py-2.5 rounded-xl border bg-background/80 text-xs font-bold hover:bg-accent transition-all min-w-[90px] justify-between shadow-sm',
+                                    selectedUpstreamMissing ? 'border-amber-500/50 text-amber-600' : 'border-input'
+                                )}
+                            >
+                                <span className="text-foreground/80 truncate max-w-[100px]">{upstream || t('playground.select_upstream')}</span>
+                                <ChevronDown className="h-3 w-3 opacity-50" />
+                            </button>
+                            {upstreamOpen && (
+                                <>
+                                    <div className="fixed inset-0 z-40" onClick={() => setUpstreamOpen(false)} />
+                                    <div className="absolute top-full left-0 mt-2 z-50 bg-popover border border-border shadow-xl py-1 min-w-[180px] rounded-lg">
+                                        {upstreams.map((u) => (
+                                            <button
+                                                key={u.name}
+                                                onClick={() => { setUpstream(u.name); setUpstreamOpen(false) }}
+                                                className={cn(
+                                                    'w-full px-3 py-1.5 text-left text-xs font-bold hover:bg-accent transition-colors',
+                                                    u.name === upstream && 'bg-accent'
+                                                )}
+                                            >
+                                                <span className="font-black">{u.name}</span>
+                                                <span className="ml-2 text-muted-foreground font-normal truncate">{u.target}</span>
+                                            </button>
+                                        ))}
+                                        {upstreams.length === 0 && (
+                                            <div className="px-3 py-2 text-xs text-muted-foreground italic">
+                                                {t('playground.no_upstreams')}
+                                            </div>
+                                        )}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+
+                        {/* Path Input */}
+                        <input
+                            type="text"
+                            value={path}
+                            onChange={(e) => setPath(e.target.value)}
+                            placeholder="/v1/chat/completions"
+                            className="flex-1 min-w-[220px] px-3 py-2.5 rounded-xl bg-background border border-input text-sm font-mono placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                        />
+                    </>
+                ) : (
+                    <input
+                        type="url"
+                        value={targetUrl}
+                        onChange={(e) => setTargetUrl(e.target.value)}
+                        placeholder={t('playground.custom_url_placeholder', 'https://api.openai.com/v1/chat/completions')}
+                        className="flex-1 min-w-[260px] px-3 py-2.5 rounded-xl bg-background border border-input text-sm font-mono placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                    />
+                )}
 
                 {/* Send Button */}
                 <Button
                     onClick={handleSend}
-                    disabled={sending || !upstream}
+                    disabled={
+                        sending ||
+                        (targetMode === 'upstream' ? !upstream || selectedUpstreamMissing : !targetUrl.trim())
+                    }
                     className="shrink-0 px-5 py-2.5 h-auto font-black gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all"
                 >
                     {sending ? (
@@ -338,14 +434,74 @@ export function Playground() {
 
                 {/* Tab Content: Body */}
                 {activeTab === 'body' && (
-                    <div className="pt-3">
-                        <textarea
-                            value={body}
-                            onChange={(e) => setBody(e.target.value)}
-                            placeholder='{ "model": "gpt-4", "messages": [...] }'
-                            className="w-full h-[240px] px-4 py-3 rounded-xl bg-background border border-input text-xs font-mono leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none custom-scrollbar transition-all shadow-sm"
-                            spellCheck={false}
-                        />
+                    <div className="space-y-2 pt-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                                {body.trim() && (
+                                    <Badge
+                                        variant="outline"
+                                        className={cn(
+                                            'h-6 border-none px-2 text-[10px] font-bold',
+                                            requestBodyJsonError
+                                                ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                                                : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                                        )}
+                                        title={requestBodyJsonError || undefined}
+                                    >
+                                        {requestBodyJsonError
+                                            ? t('playground.json_invalid', 'Invalid JSON')
+                                            : t('playground.json_valid', 'JSON')}
+                                    </Badge>
+                                )}
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={formatRequestBody}
+                                    disabled={!body.trim() || !!requestBodyJsonError}
+                                    className="h-7 gap-1.5 px-2.5 text-[11px] font-bold"
+                                >
+                                    <Braces className="h-3.5 w-3.5" />
+                                    {t('playground.format_json', 'Format')}
+                                </Button>
+                            </div>
+                            <div className="flex items-center gap-1 rounded-md border border-border/40 bg-background/70 p-1">
+                                {([
+                                    { value: 'raw', label: t('log_detail.view_raw', 'Raw') },
+                                    { value: 'pretty', label: t('log_detail.view_pretty', 'Pretty') },
+                                ] as const).map((option) => (
+                                    <Button
+                                        key={option.value}
+                                        type="button"
+                                        variant={requestBodyViewMode === option.value ? 'secondary' : 'ghost'}
+                                        size="sm"
+                                        onClick={() => setRequestBodyViewMode(option.value)}
+                                        className="h-6 px-2 text-[10px] font-bold uppercase tracking-wider"
+                                    >
+                                        {option.label}
+                                    </Button>
+                                ))}
+                            </div>
+                        </div>
+                        {requestBodyViewMode === 'raw' ? (
+                            <textarea
+                                value={body}
+                                onChange={(e) => setBody(e.target.value)}
+                                placeholder='{ "model": "gpt-4", "messages": [...] }'
+                                className="w-full h-[260px] px-4 py-3 rounded-xl bg-background border border-input text-xs font-mono leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none custom-scrollbar transition-all shadow-sm"
+                                spellCheck={false}
+                            />
+                        ) : (
+                            <div className="h-[260px] overflow-auto rounded-xl border border-input bg-background px-4 py-3 shadow-sm custom-scrollbar">
+                                {body.trim() ? (
+                                    <JsonViewer data={parsedRequestBody ?? body} />
+                                ) : (
+                                    <div className="flex h-full items-center justify-center text-[11px] italic text-muted-foreground/40">
+                                        {t('playground.empty_state', 'Configure request parameters and send')}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 )}
 
