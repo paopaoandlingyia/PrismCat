@@ -99,7 +99,7 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
         setBlobError(null)
         setBlobLoading({ request: false, response: false })
         setRequestViewMode('pretty')
-        setResponseViewMode(log?.streaming ? 'raw' : 'pretty')
+        setResponseViewMode('pretty')
         setRequestExpandMode('default')
         setResponseExpandMode('default')
     }, [log?.id])
@@ -247,8 +247,8 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
                 if (kind === 'request') setFullRequestBody(body)
                 else setFullResponseBody(body)
             })
-        } catch (err: any) {
-            setBlobError(err?.message || 'Failed to load blob')
+        } catch (err: unknown) {
+            setBlobError(err instanceof Error ? err.message : 'Failed to load blob')
         } finally {
             setBlobLoading(prev => ({ ...prev, [kind]: false }))
         }
