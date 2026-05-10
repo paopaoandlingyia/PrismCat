@@ -40,8 +40,20 @@ popd
 
 echo.
 echo [3/4] Syncing embedded UI files...
-if exist "internal\server\ui" rmdir /s /q "internal\server\ui"
-mkdir "internal\server\ui"
+if not exist "internal\server\ui\README.md" (
+    echo Missing embedded UI placeholder: internal\server\ui\README.md
+    pause
+    popd
+    exit /b 1
+)
+git clean -fdX -- internal/server/ui
+if errorlevel 1 (
+    echo Failed to clean generated embedded UI files.
+    pause
+    popd
+    exit /b 1
+)
+if not exist "internal\server\ui" mkdir "internal\server\ui"
 if errorlevel 1 (
     echo Failed to create embedded UI directory.
     pause
