@@ -151,11 +151,14 @@ services:
     ports:
       - "8080:8080"
     environment:
-      # Hosts allowed to access the dashboard
+      # Dashboard hosts. Use localhost locally; use your domain or IP on a server.
       - PRISMCAT_UI_HOSTS=localhost,127.0.0.1
-      # Base domain for subdomain routing
+      # Base domain for subdomain routing. For bare-IP deployments, enable path routing instead.
       - PRISMCAT_PROXY_DOMAINS=localhost
-      # Set a password for public-facing deployments
+      # For bare IP / no wildcard domain deployments: set PRISMCAT_UI_HOSTS to your IP and enable path routing.
+      # - PRISMCAT_UI_HOSTS=YOUR_IP
+      # - PRISMCAT_ENABLE_PATH_ROUTING=true
+      # Recommended for public-facing deployments; leave empty to set it on first UI access
       - PRISMCAT_UI_PASSWORD=your_strong_password
       - PRISMCAT_RETENTION_DAYS=30
     volumes:
@@ -167,12 +170,12 @@ services:
 
 ## 🔀 Fallback: Path Routing Mode
 
-If your environment can't resolve `*.localhost` (some Windows network configurations, or inside certain containers), enable **path routing mode** in Settings to route by URL path instead of subdomain:
+If your environment can't resolve `*.localhost`, or you're deploying to a bare IP without a wildcard domain, enable **path routing mode** in Settings to route by URL path instead of subdomain:
 
 ```python
 # Path routing mode — no subdomain resolution needed
 client = OpenAI(
-    base_url="http://localhost:8080/_proxy/openai/v1",
+    base_url="http://localhost:8080/_proxy/openai/v1",  # On a server: http://YOUR_IP:8080/_proxy/openai/v1
     api_key="sk-..."
 )
 ```
@@ -218,7 +221,7 @@ server {
 }
 ```
 
-Then add `prismcat.example.com` to PrismCat's `proxy_domains`. Your upstream `openai` will be accessible at `openai.prismcat.example.com`.
+Then add `prismcat.example.com` to PrismCat's `proxy_domains`. The dashboard is available at `prismcat.example.com`, and your upstream `openai` is available at `openai.prismcat.example.com`.
 
 ---
 
@@ -232,7 +235,7 @@ The config file lives at `data/config.yaml` and is created on first launch. Most
 ```yaml
 server:
   port: 8080
-  ui_password: ""           # Dashboard password
+  ui_password: ""           # Console password; leave empty to set it on first UI access
   proxy_domains:            # Base domains for subdomain routing
     - localhost
 

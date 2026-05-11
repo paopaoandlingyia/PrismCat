@@ -21,6 +21,7 @@ server:
   ui_hosts:
     - localhost
     - 127.0.0.1
+  ui_password: ""
   proxy_domains:
     - localhost
 

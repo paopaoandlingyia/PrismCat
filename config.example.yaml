@@ -12,6 +12,9 @@ server:
   ui_hosts:
     - "localhost"
     - "127.0.0.1"
+  # 控制台密码。留空时，首次访问 UI 会要求设置密码。
+  # Docker/服务器部署也可使用 PRISMCAT_UI_PASSWORD 覆盖。
+  ui_password: ""
 
   # 代理域名后缀（用于 Host 路由）
   # 例如: openai.localhost -> upstream=openai

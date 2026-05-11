@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/paopaoandlingyia/PrismCat/internal/api"
+	"github.com/paopaoandlingyia/PrismCat/internal/auth"
 	"github.com/paopaoandlingyia/PrismCat/internal/config"
 	"github.com/paopaoandlingyia/PrismCat/internal/live"
 	"github.com/paopaoandlingyia/PrismCat/internal/proxy"
@@ -83,6 +84,15 @@ func applyCORS(w http.ResponseWriter, r *http.Request, cfg config.ServerConfig) 
 	if len(cfg.CORSAllowHeaders) > 0 {
 		w.Header().Set("Access-Control-Allow-Headers", strings.Join(cfg.CORSAllowHeaders, ", "))
 	}
+}
+
+func isPublicAPIPath(path string) bool {
+	return isHealthCheckPath(path) ||
+		strings.HasPrefix(path, "/api/auth/")
+}
+
+func isHealthCheckPath(path string) bool {
+	return path == "/api/health" || path == "/healthz"
 }
 
 func (h spaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -175,6 +185,7 @@ type Server struct {
 	live   *live.Registry
 	proxy  *proxy.Proxy
 	api    *api.Handler
+	auth   *auth.Manager
 	server *http.Server
 }
 
@@ -188,6 +199,7 @@ func New(cfg *config.Config, repo storage.Repository, blobs storage.BlobStore) *
 		live:  liveRegistry,
 		proxy: proxy.New(cfg, repo, liveRegistry),
 		api:   api.New(cfg, repo, blobs, liveRegistry),
+		auth:  auth.NewManager(cfg),
 	}
 }
 
@@ -198,6 +210,7 @@ func (s *Server) Start() error {
 
 	// 注册 API 路由
 	s.api.RegisterRoutes(mux)
+	auth.NewHandler(s.auth).RegisterRoutes(mux)
 
 	// 静态文件服务（UI）- 支持 SPA 路由
 	var uiHandler http.Handler
@@ -222,22 +235,6 @@ func (s *Server) Start() error {
 
 	var activeRequests atomic.Int64
 
-	// authMiddleware handles password protection for UI and API
-	authMiddleware := func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			serverCfg := s.cfg.ServerSnapshot()
-			if serverCfg.UIPassword != "" {
-				_, pass, ok := r.BasicAuth()
-				if !ok || pass != serverCfg.UIPassword {
-					w.Header().Set("WWW-Authenticate", `Basic realm="PrismCat Control Panel"`)
-					http.Error(w, "Unauthorized", http.StatusUnauthorized)
-					return
-				}
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
-
 	// Create main handler with routing and auth
 	mainHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		activeRequests.Add(1)
@@ -251,6 +248,11 @@ func (s *Server) Start() error {
 			return
 		}
 
+		if isHealthCheckPath(r.URL.Path) {
+			mux.ServeHTTP(w, r)
+			return
+		}
+
 		if s.cfg.IsUIHost(r.Host) && currentServerCfg.EnablePathRouting && config.IsPathRoutingRequest(r.URL.Path, currentServerCfg.PathRoutingPrefix) {
 			s.proxy.ServeHTTP(w, r)
 			return
@@ -258,7 +260,15 @@ func (s *Server) Start() error {
 
 		// Routing: UI Host (Control Panel + API) vs Proxy Host
 		if s.cfg.IsUIHost(r.Host) {
-			authMiddleware(mux).ServeHTTP(w, r)
+			if isPublicAPIPath(r.URL.Path) {
+				mux.ServeHTTP(w, r)
+				return
+			}
+			if strings.HasPrefix(r.URL.Path, "/api/") {
+				auth.RequireSession(s.auth, mux).ServeHTTP(w, r)
+				return
+			}
+			mux.ServeHTTP(w, r)
 		} else {
 			s.proxy.ServeHTTP(w, r)
 		}

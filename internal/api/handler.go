@@ -47,6 +47,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/upstreams", h.handleUpstreams)
 	mux.HandleFunc("/api/config", h.handleConfig)
 	mux.HandleFunc("/api/health", h.handleHealth)
+	mux.HandleFunc("/healthz", h.handleHealth)
 	mux.HandleFunc("/api/blobs/", h.handleBlob)
 	mux.HandleFunc("/api/replay", h.handleReplay)
 }

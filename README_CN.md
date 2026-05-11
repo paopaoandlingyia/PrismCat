@@ -151,11 +151,14 @@ services:
     ports:
       - "8080:8080"
     environment:
-      # 控制面板访问地址白名单
+      # 控制台访问 Host。本地用 localhost；服务器部署时填你的域名或 IP。
       - PRISMCAT_UI_HOSTS=localhost,127.0.0.1
-      # 代理基础域名（子域名路由依赖此配置）
+      # 子域名路由的基础域名。裸 IP 部署请开启路径路由，而不是把 IP 填到这里。
       - PRISMCAT_PROXY_DOMAINS=localhost
-      # 公网部署时请务必设置密码
+      # 裸 IP / 无泛域名部署时：把 PRISMCAT_UI_HOSTS 改成你的 IP，并开启路径路由。
+      # - PRISMCAT_UI_HOSTS=你的IP
+      # - PRISMCAT_ENABLE_PATH_ROUTING=true
+      # 公网部署建议设置控制台密码；也可留空后首次访问 UI 时设置
       - PRISMCAT_UI_PASSWORD=your_strong_password
       - PRISMCAT_RETENTION_DAYS=30
     volumes:
@@ -167,12 +170,12 @@ services:
 
 ## 🔀 备选：路径路由模式
 
-如果你的环境无法正确解析 `*.localhost`（少数 Windows 网络配置或容器内场景），可以在 Settings 中开启 **路径路由模式**，通过路径前缀代替子域名：
+如果你的环境无法正确解析 `*.localhost`，或者你是用裸 IP 部署、没有泛域名，可以在 Settings 中开启 **路径路由模式**，通过路径前缀代替子域名：
 
 ```python
 # 路径路由模式 —— 无需子域名解析
 client = OpenAI(
-    base_url="http://localhost:8080/_proxy/openai/v1",
+    base_url="http://localhost:8080/_proxy/openai/v1",  # 服务器上可替换为 http://你的IP:8080/_proxy/openai/v1
     api_key="sk-..."
 )
 ```
@@ -218,7 +221,7 @@ server {
 }
 ```
 
-然后在 PrismCat 的 `proxy_domains` 中添加 `prismcat.example.com`，上游 `openai` 即可通过 `openai.prismcat.example.com` 访问。
+然后在 PrismCat 的 `proxy_domains` 中添加 `prismcat.example.com`。控制台可通过 `prismcat.example.com` 访问，上游 `openai` 可通过 `openai.prismcat.example.com` 访问。
 
 ---
 
@@ -232,7 +235,7 @@ server {
 ```yaml
 server:
   port: 8080
-  ui_password: ""           # 控制面板密码
+  ui_password: ""           # 控制台密码；留空时首次访问 UI 设置
   proxy_domains:            # 子域名路由的基础域名
     - localhost
 

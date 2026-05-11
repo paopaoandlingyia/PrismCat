@@ -22,16 +22,19 @@ type Config struct {
 	Storage   StorageConfig             `yaml:"storage"`
 	Overrides RequestOverridesConfig    `yaml:"request_overrides"`
 
-	configPath string // 配置文件路径
-	mu         sync.RWMutex
+	configPath     string // 配置文件路径
+	fileUIPassword string
+	envUIPassword  bool
+	mu             sync.RWMutex
 }
 
 // ServerConfig 服务器配置
 type ServerConfig struct {
-	Addr       string   `yaml:"addr"`
-	Port       int      `yaml:"port"`
-	UIHosts    []string `yaml:"ui_hosts"`
-	UIPassword string   `yaml:"ui_password"`
+	Addr           string   `yaml:"addr"`
+	Port           int      `yaml:"port"`
+	UIHosts        []string `yaml:"ui_hosts"`
+	UIPassword     string   `yaml:"ui_password"`
+	UIPasswordHash string   `yaml:"ui_password_hash"`
 
 	// ProxyDomains defines the base domains used for host-based upstream routing.
 	// For example, if ProxyDomains contains "localhost", then requests to
@@ -199,6 +202,7 @@ func Load(path string) (*Config, error) {
 	}
 
 	c.configPath = path
+	c.fileUIPassword = c.Server.UIPassword
 
 	// 覆盖环境变量 (云端/容器化部署优先)
 	if envAddr := os.Getenv("PRISMCAT_ADDR"); envAddr != "" {
@@ -240,6 +244,7 @@ func Load(path string) (*Config, error) {
 		}
 	}
 	if envPassword := os.Getenv("PRISMCAT_UI_PASSWORD"); envPassword != "" {
+		c.envUIPassword = true
 		c.Server.UIPassword = envPassword
 	}
 	if envOverridesEnabled := os.Getenv("PRISMCAT_REQUEST_OVERRIDES_ENABLED"); envOverridesEnabled != "" {
@@ -612,6 +617,21 @@ func (c *Config) ServerSnapshot() ServerConfig {
 	return out
 }
 
+type AuthSnapshot struct {
+	UIPassword     string
+	UIPasswordHash string
+}
+
+func (c *Config) AuthSnapshot() AuthSnapshot {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return AuthSnapshot{
+		UIPassword:     c.Server.UIPassword,
+		UIPasswordHash: c.Server.UIPasswordHash,
+	}
+}
+
 // Get 获取当前配置（需要先调用 Load）
 func Get() *Config {
 	return cfg
@@ -623,7 +643,12 @@ func (c *Config) Save() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	data, err := yaml.Marshal(c)
+	saved := *c
+	if c.envUIPassword {
+		saved.Server.UIPassword = c.fileUIPassword
+	}
+
+	data, err := yaml.Marshal(saved)
 	if err != nil {
 		return fmt.Errorf("序列化配置失败: %w", err)
 	}
@@ -632,6 +657,15 @@ func (c *Config) Save() error {
 		return fmt.Errorf("写入配置文件失败: %w", err)
 	}
 	return nil
+}
+
+func (c *Config) SetUIPasswordHash(hash string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.Server.UIPassword = ""
+	c.Server.UIPasswordHash = strings.TrimSpace(hash)
+	c.fileUIPassword = ""
 }
 
 // AddUpstream 添加或更新上游配置
@@ -691,6 +725,12 @@ func (c *Config) IsUIHost(host string) bool {
 	host = normalizeLower(host)
 	for _, h := range c.Server.UIHosts {
 		if normalizeLower(h) == host {
+			return true
+		}
+	}
+	for _, d := range c.Server.ProxyDomains {
+		d = normalizeLower(strings.TrimPrefix(d, "."))
+		if d != "" && d == host {
 			return true
 		}
 	}

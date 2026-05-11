@@ -84,6 +84,55 @@ export interface LogFilter {
 // API 调用函数
 const API_BASE = '/api'
 
+export interface AuthStatus {
+    authenticated: boolean
+    auth_required: boolean
+    setup_required: boolean
+    session_expires_at?: string
+}
+
+export async function fetchAuthStatus(): Promise<AuthStatus> {
+    const response = await fetch(`${API_BASE}/auth/me`)
+    if (!response.ok) throw new Error('获取登录状态失败')
+    return response.json()
+}
+
+export async function login(password: string): Promise<AuthStatus> {
+    const response = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+    })
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: '请求失败' }))
+        throw new Error(error.error || '登录失败')
+    }
+    return response.json()
+}
+
+export async function setupPassword(password: string): Promise<AuthStatus> {
+    const response = await fetch(`${API_BASE}/auth/setup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+    })
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: '请求失败' }))
+        throw new Error(error.error || '初始化密码失败')
+    }
+    return response.json()
+}
+
+export async function logout(): Promise<void> {
+    const response = await fetch(`${API_BASE}/auth/logout`, {
+        method: 'POST',
+    })
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: '请求失败' }))
+        throw new Error(error.error || '退出登录失败')
+    }
+}
+
 export async function fetchLogs(filter: LogFilter = {}): Promise<LogListResponse> {
     const params = new URLSearchParams()
     Object.entries(filter).forEach(([key, value]) => {

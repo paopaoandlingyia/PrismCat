@@ -1,6 +1,11 @@
 package config
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 func TestExtractSubdomain(t *testing.T) {
 	tests := []struct {
@@ -54,6 +59,82 @@ func TestExtractSubdomain(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestIsUIHostIncludesProxyDomainBase(t *testing.T) {
+	cfg := &Config{
+		Server: ServerConfig{
+			UIHosts:      []string{"localhost"},
+			ProxyDomains: []string{"prismcat.example.com"},
+		},
+	}
+
+	if !cfg.IsUIHost("prismcat.example.com") {
+		t.Fatal("proxy domain base should be treated as UI host")
+	}
+	if !cfg.IsUIHost("prismcat.example.com:8080") {
+		t.Fatal("proxy domain base with port should be treated as UI host")
+	}
+	if cfg.IsUIHost("openai.prismcat.example.com") {
+		t.Fatal("upstream subdomain should not be treated as UI host")
+	}
+}
+
+func TestSaveDoesNotPersistEnvUIPassword(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.yaml")
+	dbPath := filepath.Join(dir, "data", "prismcat.db")
+	blobDir := filepath.Join(dir, "data", "blobs")
+	content := "server:\n  ui_password: file-secret\nstorage:\n  database: " + strconvQuote(dbPath) + "\n  blob_dir: " + strconvQuote(blobDir) + "\n"
+	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	t.Setenv("PRISMCAT_UI_PASSWORD", "env-secret")
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if got := cfg.AuthSnapshot().UIPassword; got != "env-secret" {
+		t.Fatalf("runtime password = %q, want env-secret", got)
+	}
+	if err := cfg.Save(); err != nil {
+		t.Fatalf("Save returned error: %v", err)
+	}
+
+	saved, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read saved config: %v", err)
+	}
+	if strings.Contains(string(saved), "env-secret") {
+		t.Fatalf("saved config leaked env password:\n%s", saved)
+	}
+	if !strings.Contains(string(saved), "file-secret") {
+		t.Fatalf("saved config did not preserve file password:\n%s", saved)
+	}
+}
+
+func TestFileUIPasswordIsRuntimePasswordWhenNoEnvOverride(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.yaml")
+	dbPath := filepath.Join(dir, "data", "prismcat.db")
+	blobDir := filepath.Join(dir, "data", "blobs")
+	content := "server:\n  ui_password: file-secret\n  ui_password_hash: generated-hash\nstorage:\n  database: " + strconvQuote(dbPath) + "\n  blob_dir: " + strconvQuote(blobDir) + "\n"
+	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if got := cfg.AuthSnapshot().UIPassword; got != "file-secret" {
+		t.Fatalf("runtime password = %q, want file-secret", got)
+	}
+}
+
+func strconvQuote(s string) string {
+	return `"` + strings.ReplaceAll(s, `\`, `\\`) + `"`
 }
 
 func TestNormalizePathRoutingPrefix(t *testing.T) {

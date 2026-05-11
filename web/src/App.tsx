@@ -1,5 +1,5 @@
-import { BrowserRouter, Routes, Route, NavLink, useLocation } from 'react-router-dom'
-import { Globe, LayoutDashboard, Settings as SettingsIcon, Zap } from 'lucide-react'
+import { BrowserRouter, Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { Globe, LayoutDashboard, LogOut, Settings as SettingsIcon, Zap } from 'lucide-react'
 import { PrismCatLogo } from '@/components/PrismCatLogo'
 import { useTranslation } from 'react-i18next'
 import { Dashboard } from '@/pages/Dashboard'
@@ -8,8 +8,9 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { Toaster } from '@/components/ui/sonner'
 import { Suspense, lazy, useState, useEffect } from 'react'
-import { fetchConfig } from '@/lib/api'
+import { fetchAuthStatus, fetchConfig, login, logout as logoutRequest, setupPassword } from '@/lib/api'
 import { logRequestDiffRoute } from '@/lib/routes'
+import { Login } from '@/pages/Login'
 
 const PlaygroundPage = lazy(async () => {
   const module = await import('@/pages/Playground')
@@ -26,7 +27,11 @@ const LogDiffPage = lazy(async () => {
   return { default: module.LogDiff }
 })
 
-function AppLayout() {
+interface AppLayoutProps {
+  onSignOut: () => void
+}
+
+function AppLayout({ onSignOut }: AppLayoutProps) {
   const { t, i18n } = useTranslation()
   const location = useLocation()
   const [version, setVersion] = useState<string>('v1.4.0') // 初始显式 v1.4.0，直到接口返回
@@ -118,6 +123,14 @@ function AppLayout() {
                 <Globe className="h-3.5 w-3.5" />
                 <span>{i18n.language === 'zh' ? 'English' : '中文'}</span>
               </button>
+              <button
+                onClick={onSignOut}
+                className="flex h-10 w-10 items-center justify-center rounded-lg border border-border/50 bg-accent/50 text-muted-foreground transition-all hover:border-border hover:bg-accent hover:text-foreground active:scale-95"
+                aria-label={t('auth.sign_out')}
+                title={t('auth.sign_out')}
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
             </div>
           </div>
 
@@ -168,11 +181,79 @@ function AppLayout() {
   )
 }
 
+function AppContent() {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [setupRequired, setSetupRequired] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    fetchAuthStatus()
+      .then((status) => {
+        if (cancelled) return
+        setIsAuthenticated(status.authenticated)
+        setSetupRequired(status.setup_required)
+      })
+      .catch((err) => {
+        console.error('Failed to fetch auth status:', err)
+        if (!cancelled) {
+          setIsAuthenticated(false)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsCheckingAuth(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const handleSignedIn = async (password: string) => {
+    const status = setupRequired
+      ? await setupPassword(password)
+      : await login(password)
+    if (!status.authenticated) {
+      throw new Error(t('auth.sign_in_failed'))
+    }
+    setIsAuthenticated(true)
+    setSetupRequired(status.setup_required)
+    navigate('/', { replace: true })
+  }
+
+  const handleSignOut = async () => {
+    await logoutRequest().catch(err => console.error('Failed to sign out:', err))
+    setIsAuthenticated(false)
+    navigate('/', { replace: true })
+  }
+
+  if (isCheckingAuth) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        <div className="text-sm font-medium text-muted-foreground">
+          {t('common.loading')}
+        </div>
+      </div>
+    )
+  }
+
+  if (!isAuthenticated) {
+    return <Login setupRequired={setupRequired} onSignedIn={handleSignedIn} />
+  }
+
+  return <AppLayout onSignOut={handleSignOut} />
+}
+
 function App() {
   return (
     <BrowserRouter>
       <TooltipProvider>
-        <AppLayout />
+        <AppContent />
         <Toaster position="top-right" expand={true} richColors />
       </TooltipProvider>
     </BrowserRouter>
