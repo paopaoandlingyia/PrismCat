@@ -51,9 +51,6 @@ export function Login({ setupRequired, onSignedIn }: LoginProps) {
             <p className="truncate text-lg font-bold prism-gradient-text">
               {t('app.title')}
             </p>
-            <p className="truncate text-xs font-medium text-muted-foreground">
-              {t('auth.secure_console')}
-            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
