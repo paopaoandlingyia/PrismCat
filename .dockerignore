@@ -1,0 +1,35 @@
+# Binaries
+prismcat
+prismcat.exe
+prismcat.exe*
+prismcat.exe~
+
+# Web dependencies
+web/node_modules/
+web/dist/
+
+# Git & GitHub
+.git
+.github
+
+# Local caches & tools
+.cache/
+.gocache/
+.gopath/
+.gotelemetry/
+.gemini/
+.agent/
+.claude/
+.vscode/
+.idea/
+
+# Data & Config
+data/
+config.yaml
+
+# Documentation
+README*
+LICENSE
+assets/
+promo-video/
+docs/
