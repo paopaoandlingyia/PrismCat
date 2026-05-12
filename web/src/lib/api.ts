@@ -26,6 +26,18 @@ export interface RequestLog {
     request_override_applied?: boolean
     request_override_rules?: string[]
     request_override_error?: string
+    annotation: LogAnnotation
+}
+
+export type LogAnnotationStatus = 'none' | 'todo' | 'done'
+
+export interface LogAnnotation {
+    saved: boolean
+    status: LogAnnotationStatus
+    note?: string
+    labels?: string[]
+    created_at?: string
+    updated_at?: string
 }
 
 export type LiveLogEvent =
@@ -75,6 +87,9 @@ export interface LogFilter {
     path?: string
     status_code?: number
     tag?: string
+    saved?: boolean
+    annotation_status?: LogAnnotationStatus
+    annotation_label?: string
     start_time?: string
     end_time?: string
     offset?: number
@@ -225,6 +240,22 @@ export interface AppConfig {
         }>
         rules: unknown[]
     }
+}
+
+export async function updateLogAnnotation(
+    id: string,
+    update: Partial<Pick<LogAnnotation, 'saved' | 'status' | 'note' | 'labels'>>,
+): Promise<LogAnnotation> {
+    const response = await fetch(`${API_BASE}/logs/${encodeURIComponent(id)}/annotation`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(update),
+    })
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: '请求失败' }))
+        throw new Error(error.error || '保存日志标记失败')
+    }
+    return response.json()
 }
 
 export interface ConfigUpdate {

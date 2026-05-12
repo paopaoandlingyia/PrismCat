@@ -128,9 +128,9 @@ type LoggingConfig struct {
 	EarlyRequestBodySnapshot bool `yaml:"early_request_body_snapshot"`
 
 	// DetachBodyOverBytes detaches large captured bodies into the blob store.
-	// The log table keeps only a short preview + a content-addressed reference.
+	// Log details keep only an inline preview + a content-addressed reference.
 	//
-	// 0: use default (256KB). <0: disable detaching.
+	// 0: disable detaching. Omit the field to use the default.
 	DetachBodyOverBytes int64 `yaml:"detach_body_over_bytes"`
 	// BodyPreviewBytes controls how many bytes of a detached body are kept inline
 	// in request_logs.request_body/response_body for quick viewing.
@@ -177,13 +177,13 @@ func Load(path string) (*Config, error) {
 			CORSAllowHeaders:       []string{"Content-Type", "Authorization"},
 		},
 		Logging: LoggingConfig{
-			MaxRequestBody:           1 << 20,  // 1MB
-			MaxResponseBody:          10 << 20, // 10MB
+			MaxRequestBody:           5 << 20,  // 5MB
+			MaxResponseBody:          32 << 20, // 32MB
 			SensitiveHeaders:         []string{"Authorization", "x-api-key", "api-key"},
 			StoreBase64:              true,
 			EarlyRequestBodySnapshot: false,
-			DetachBodyOverBytes:      256 * 1024,
-			BodyPreviewBytes:         4 * 1024,
+			DetachBodyOverBytes:      2 << 20,    // 2MB
+			BodyPreviewBytes:         512 * 1024, // 512KB
 		},
 		Storage: StorageConfig{
 			Database:    "./data/prismcat.db",

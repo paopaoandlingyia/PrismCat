@@ -30,14 +30,15 @@ type RequestLog struct {
 	ResponseBodySize int64               `json:"response_body_size"`
 
 	// 元数据
-	Streaming              bool     `json:"streaming"`       // 是否为流式响应
-	Latency                int64    `json:"latency_ms"`      // 响应延迟(毫秒)
-	Error                  string   `json:"error,omitempty"` // 错误信息
-	Truncated              bool     `json:"truncated"`       // 响应体是否被截断
-	Tag                    string   `json:"tag,omitempty"`   // 来自 X-PrismCat-Tag 请求头
-	RequestOverrideApplied bool     `json:"request_override_applied,omitempty"`
-	RequestOverrideRules   []string `json:"request_override_rules,omitempty"`
-	RequestOverrideError   string   `json:"request_override_error,omitempty"`
+	Streaming              bool          `json:"streaming"`       // 是否为流式响应
+	Latency                int64         `json:"latency_ms"`      // 响应延迟(毫秒)
+	Error                  string        `json:"error,omitempty"` // 错误信息
+	Truncated              bool          `json:"truncated"`       // 响应体是否被截断
+	Tag                    string        `json:"tag,omitempty"`   // 来自 X-PrismCat-Tag 请求头
+	RequestOverrideApplied bool          `json:"request_override_applied,omitempty"`
+	RequestOverrideRules   []string      `json:"request_override_rules,omitempty"`
+	RequestOverrideError   string        `json:"request_override_error,omitempty"`
+	Annotation             LogAnnotation `json:"annotation"`
 
 	// Transient capture state used only before async persistence.
 	RequestBodyRaw               []byte `json:"-"`
@@ -48,6 +49,15 @@ type RequestLog struct {
 	ResponseBodyCaptureTruncated bool   `json:"-"`
 }
 
+type LogAnnotation struct {
+	Saved     bool      `json:"saved"`
+	Status    string    `json:"status"`
+	Note      string    `json:"note,omitempty"`
+	Labels    []string  `json:"labels,omitempty"`
+	CreatedAt time.Time `json:"created_at,omitempty"`
+	UpdatedAt time.Time `json:"updated_at,omitempty"`
+}
+
 // LogFilter 日志查询过滤器
 type LogFilter struct {
 	Upstream   string     // 按上游名称过滤
@@ -55,6 +65,9 @@ type LogFilter struct {
 	StatusCode int        // 按状态码过滤
 	Path       string     // 按路径模糊搜索
 	Tag        string     // 按标签过滤
+	Saved      *bool      // 是否保存
+	Status     string     // 人工处理状态：none/todo/done
+	Label      string     // 按人工标签过滤
 	StartTime  *time.Time // 开始时间
 	EndTime    *time.Time // 结束时间
 	HasError   *bool      // 是否有错误
@@ -83,6 +96,8 @@ type Repository interface {
 	GetLog(id string) (*RequestLog, error)
 	ListLogs(filter LogFilter) ([]*RequestLog, int64, error) // 返回日志列表和总数
 	DeleteLogsBefore(before time.Time) (int64, error)        // 返回删除数量
+	GetLogAnnotation(logID string) (LogAnnotation, error)
+	SaveLogAnnotation(logID string, annotation LogAnnotation) (LogAnnotation, error)
 
 	// 统计
 	GetStats(since *time.Time) (*LogStats, error)

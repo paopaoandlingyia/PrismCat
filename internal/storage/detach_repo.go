@@ -43,6 +43,14 @@ func (r *DetachingRepository) DeleteLogsBefore(beforeTime time.Time) (int64, err
 	return r.inner.DeleteLogsBefore(beforeTime)
 }
 
+func (r *DetachingRepository) GetLogAnnotation(logID string) (LogAnnotation, error) {
+	return r.inner.GetLogAnnotation(logID)
+}
+
+func (r *DetachingRepository) SaveLogAnnotation(logID string, annotation LogAnnotation) (LogAnnotation, error) {
+	return r.inner.SaveLogAnnotation(logID, annotation)
+}
+
 func (r *DetachingRepository) GetStats(since *time.Time) (*LogStats, error) {
 	return r.inner.GetStats(since)
 }

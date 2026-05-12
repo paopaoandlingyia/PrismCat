@@ -240,13 +240,13 @@ server:
     - localhost
 
 logging:
-  max_request_body: 1048576       # 请求体记录上限 (1MB)
-  max_response_body: 10485760     # 响应体记录上限 (10MB)
+  max_request_body: 5242880       # 请求内容最多保存 5MB
+  max_response_body: 33554432     # 响应内容最多保存 32MB
   sensitive_headers:              # 自动脱敏的 Header
     - Authorization
     - api-key
     - x-api-key
-  detach_body_over_bytes: 262144  # 超过 256KB 的数据分离存储
+  detach_body_over_bytes: 2097152 # 超过 2MB 的内容按需加载
   early_request_body_snapshot: false
 
 storage:

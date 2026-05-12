@@ -119,6 +119,14 @@ func (a *AsyncRepository) DeleteLogsBefore(beforeTime time.Time) (int64, error) 
 	return a.inner.DeleteLogsBefore(beforeTime)
 }
 
+func (a *AsyncRepository) GetLogAnnotation(logID string) (LogAnnotation, error) {
+	return a.inner.GetLogAnnotation(logID)
+}
+
+func (a *AsyncRepository) SaveLogAnnotation(logID string, annotation LogAnnotation) (LogAnnotation, error) {
+	return a.inner.SaveLogAnnotation(logID, annotation)
+}
+
 func (a *AsyncRepository) GetStats(since *time.Time) (*LogStats, error) {
 	return a.inner.GetStats(since)
 }

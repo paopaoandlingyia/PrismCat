@@ -49,6 +49,14 @@ func (r *proxyTestRepo) DeleteLogsBefore(before time.Time) (int64, error) {
 	return 0, nil
 }
 
+func (r *proxyTestRepo) GetLogAnnotation(logID string) (storage.LogAnnotation, error) {
+	return storage.LogAnnotation{}, errors.New("not implemented")
+}
+
+func (r *proxyTestRepo) SaveLogAnnotation(logID string, annotation storage.LogAnnotation) (storage.LogAnnotation, error) {
+	return annotation, errors.New("not implemented")
+}
+
 func (r *proxyTestRepo) GetStats(since *time.Time) (*storage.LogStats, error) {
 	return &storage.LogStats{}, nil
 }

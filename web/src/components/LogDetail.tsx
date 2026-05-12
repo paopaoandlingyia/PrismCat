@@ -1,8 +1,8 @@
 import { cn, formatDate, formatLatency, formatSize, getStatusColor, getMethodColor } from '@/lib/utils'
-import { Copy, Check, Zap, AlertTriangle, ChevronDown, ChevronUp, ChevronsDownUp, ChevronsUpDown, FileCode, ListTree, Globe, Layers, RotateCcw, Maximize2, Minimize2, ExternalLink, Terminal } from 'lucide-react'
-import { fetchBlob } from '@/lib/api'
+import { Copy, Check, Zap, AlertTriangle, ChevronDown, ChevronUp, ChevronsDownUp, ChevronsUpDown, FileCode, ListTree, Globe, Layers, RotateCcw, Maximize2, Minimize2, ExternalLink, Terminal, Bookmark, BookmarkCheck, CheckCircle2, CircleDot, Tags } from 'lucide-react'
+import { fetchBlob, updateLogAnnotation } from '@/lib/api'
 import type { LiveLogEvent, RequestLog } from '@/lib/api'
-import { startTransition, useEffect, useMemo, useState, type ComponentType, type ReactNode } from 'react'
+import { startTransition, useCallback, useEffect, useMemo, useState, type ComponentType, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { JsonViewer, type JsonExpandMode } from './JsonViewer'
@@ -25,6 +25,7 @@ interface LogDetailProps {
     log: RequestLog | null
     loading?: boolean
     onClose: () => void
+    onLogChange?: (log: RequestLog) => void
 }
 
 type BodyViewMode = 'pretty' | 'raw'
@@ -34,6 +35,7 @@ type PanelWidthMode = 'wide' | 'full'
 
 const logDetailWidthStorageKey = 'prismcat.logDetail.width'
 const logDetailExpandedStorageKey = 'prismcat.logDetail.expanded'
+const autoLoadFullBodyLimit = 10 * 1024 * 1024
 
 const defaultExpandedSections = {
     url: true,
@@ -72,7 +74,7 @@ function getInitialExpandedSections(): typeof defaultExpandedSections {
     }
 }
 
-export function LogDetail({ log, loading, onClose }: LogDetailProps) {
+export function LogDetail({ log, loading, onClose, onLogChange }: LogDetailProps) {
     const { t, i18n } = useTranslation()
     const navigate = useNavigate()
     const [liveLog, setLiveLog] = useState<RequestLog | null>(null)
@@ -84,12 +86,19 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
         response: false,
     })
     const [blobError, setBlobError] = useState<string | null>(null)
+    const [previewOnly, setPreviewOnly] = useState<{ request: boolean; response: boolean }>({
+        request: false,
+        response: false,
+    })
     const [expandedSections, setExpandedSections] = useState(getInitialExpandedSections)
     const [requestViewMode, setRequestViewMode] = useState<RequestViewMode>('pretty')
     const [responseViewMode, setResponseViewMode] = useState<ResponseViewMode>('pretty')
     const [requestExpandMode, setRequestExpandMode] = useState<JsonExpandMode>('default')
     const [responseExpandMode, setResponseExpandMode] = useState<JsonExpandMode>('default')
     const [panelWidthMode, setPanelWidthMode] = useState<PanelWidthMode>(() => getInitialPanelWidthMode())
+    const [annotationSaving, setAnnotationSaving] = useState(false)
+    const [annotationNote, setAnnotationNote] = useState('')
+    const [annotationLabels, setAnnotationLabels] = useState('')
     const displayLog = liveLog ?? log
 
     useEffect(() => {
@@ -98,11 +107,19 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
         setFullResponseBody(null)
         setBlobError(null)
         setBlobLoading({ request: false, response: false })
+        setPreviewOnly({ request: false, response: false })
         setRequestViewMode('pretty')
         setResponseViewMode('pretty')
         setRequestExpandMode('default')
         setResponseExpandMode('default')
+        setAnnotationNote(log?.annotation?.note ?? '')
+        setAnnotationLabels((log?.annotation?.labels ?? []).join(', '))
     }, [log?.id])
+
+    useEffect(() => {
+        setAnnotationNote(displayLog?.annotation?.note ?? '')
+        setAnnotationLabels((displayLog?.annotation?.labels ?? []).join(', '))
+    }, [displayLog?.id, displayLog?.annotation?.note, displayLog?.annotation?.labels])
 
     useEffect(() => {
         if (typeof window === 'undefined') return
@@ -185,6 +202,10 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
     const responseBodyIsBinary = isBinaryPlaceholder(effectiveResponseBody)
     const shouldInspectRequestBody = expandedSections.requestBody && requestViewMode === 'pretty' && Boolean(effectiveRequestBody)
     const shouldInspectResponseBody = expandedSections.responseBody && Boolean(effectiveResponseBody)
+    const annotation = normalizedAnnotation(displayLog?.annotation)
+    const draftLabels = parseLabelDraft(annotationLabels)
+    const annotationChanged = annotationNote.trim() !== (annotation.note ?? '') ||
+        draftLabels.join('\n') !== (annotation.labels ?? []).join('\n')
 
     useEffect(() => {
         if (!hasRequestBodyDiff && requestViewMode === 'diff') {
@@ -238,8 +259,9 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
         setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }))
     }
 
-    const loadBlob = async (kind: 'request' | 'response', ref: string) => {
+    const loadBlob = useCallback(async (kind: 'request' | 'response', ref: string) => {
         setBlobError(null)
+        setPreviewOnly(prev => ({ ...prev, [kind]: false }))
         setBlobLoading(prev => ({ ...prev, [kind]: true }))
         try {
             const body = await fetchBlob(ref)
@@ -249,10 +271,67 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
             })
         } catch (err: unknown) {
             setBlobError(err instanceof Error ? err.message : 'Failed to load blob')
+            setPreviewOnly(prev => ({ ...prev, [kind]: true }))
         } finally {
             setBlobLoading(prev => ({ ...prev, [kind]: false }))
         }
-    }
+    }, [])
+
+    const saveAnnotation = useCallback(async (update: Parameters<typeof updateLogAnnotation>[1]) => {
+        if (!displayLog || annotationSaving) return
+        setAnnotationSaving(true)
+        try {
+            const nextAnnotation = await updateLogAnnotation(displayLog.id, update)
+            const nextLog = { ...displayLog, annotation: nextAnnotation }
+            startTransition(() => {
+                setLiveLog(current => current?.id === nextLog.id ? { ...current, annotation: nextAnnotation } : current)
+                onLogChange?.(nextLog)
+            })
+        } catch (err) {
+            console.error('Failed to save log annotation:', err)
+        } finally {
+            setAnnotationSaving(false)
+        }
+    }, [annotationSaving, displayLog, onLogChange])
+
+    useEffect(() => {
+        if (!displayLog) return
+
+        if (shouldAutoLoadBody({
+            blobRef: displayLog.request_body_ref,
+            bodySize: displayLog.request_body_size,
+            contentType: requestContentType,
+            previewBody: displayLog.request_body ?? '',
+            fullBody: fullRequestBody,
+            loading: blobLoading.request,
+            previewOnly: previewOnly.request,
+        })) {
+            loadBlob('request', displayLog.request_body_ref!)
+        }
+
+        if (shouldAutoLoadBody({
+            blobRef: displayLog.response_body_ref,
+            bodySize: displayLog.response_body_size,
+            contentType: responseContentType,
+            previewBody: displayLog.response_body ?? '',
+            fullBody: fullResponseBody,
+            loading: blobLoading.response,
+            previewOnly: previewOnly.response,
+        })) {
+            loadBlob('response', displayLog.response_body_ref!)
+        }
+    }, [
+        displayLog,
+        requestContentType,
+        responseContentType,
+        fullRequestBody,
+        fullResponseBody,
+        blobLoading.request,
+        blobLoading.response,
+        previewOnly.request,
+        previewOnly.response,
+        loadBlob,
+    ])
 
     if (!displayLog) return null
 
@@ -541,6 +620,102 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
                         ))}
                     </div>
 
+                    <div className="rounded-2xl border border-border/60 bg-card p-5">
+                        <div className="mb-4 flex flex-wrap items-center gap-2">
+                            <Button
+                                type="button"
+                                variant={annotation.saved ? 'default' : 'outline'}
+                                size="sm"
+                                disabled={annotationSaving}
+                                onClick={() => saveAnnotation({
+                                    saved: !annotation.saved,
+                                    status: annotation.saved ? 'none' : annotation.status,
+                                })}
+                                className="h-8 gap-1.5 rounded-lg px-3 text-xs font-semibold"
+                            >
+                                {annotation.saved ? <BookmarkCheck className="h-3.5 w-3.5" /> : <Bookmark className="h-3.5 w-3.5" />}
+                                {annotation.saved ? t('log_annotation.saved', '已保存') : t('log_annotation.save', '保存')}
+                            </Button>
+                            <Button
+                                type="button"
+                                variant={annotation.status === 'todo' ? 'secondary' : 'outline'}
+                                size="sm"
+                                disabled={annotationSaving}
+                                onClick={() => saveAnnotation({
+                                    saved: true,
+                                    status: annotation.status === 'todo' ? 'none' : 'todo',
+                                })}
+                                className={cn(
+                                    "h-8 gap-1.5 rounded-lg px-3 text-xs font-semibold",
+                                    annotation.status === 'todo' && "bg-amber-500/10 text-amber-700 hover:bg-amber-500/15 dark:text-amber-300"
+                                )}
+                            >
+                                <CircleDot className="h-3.5 w-3.5" />
+                                {t('log_annotation.todo', '待处理')}
+                            </Button>
+                            <Button
+                                type="button"
+                                variant={annotation.status === 'done' ? 'secondary' : 'outline'}
+                                size="sm"
+                                disabled={annotationSaving}
+                                onClick={() => saveAnnotation({
+                                    saved: true,
+                                    status: annotation.status === 'done' ? 'none' : 'done',
+                                })}
+                                className={cn(
+                                    "h-8 gap-1.5 rounded-lg px-3 text-xs font-semibold",
+                                    annotation.status === 'done' && "bg-green-500/10 text-green-700 hover:bg-green-500/15 dark:text-green-300"
+                                )}
+                            >
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                {t('log_annotation.done', '已处理')}
+                            </Button>
+                            {annotationSaving && (
+                                <span className="text-[11px] font-medium text-muted-foreground">{t('common.loading')}</span>
+                            )}
+                        </div>
+
+                        <div className="grid gap-3 lg:grid-cols-[1fr_280px]">
+                            <textarea
+                                value={annotationNote}
+                                onChange={(event) => setAnnotationNote(event.target.value)}
+                                placeholder={t('log_annotation.note_placeholder', '写下为什么保存这条日志，或后续要检查什么...')}
+                                className="min-h-20 resize-y rounded-lg border border-border/60 bg-muted/40 px-3 py-2 text-sm leading-relaxed outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary/40 focus:bg-background"
+                            />
+                            <div className="space-y-2">
+                                <div className="relative">
+                                    <Tags className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                                    <input
+                                        value={annotationLabels}
+                                        onChange={(event) => setAnnotationLabels(event.target.value)}
+                                        placeholder={t('log_annotation.labels_placeholder', '标签，用逗号分隔')}
+                                        className="h-10 w-full rounded-lg border border-border/60 bg-muted/40 pl-9 pr-3 text-sm outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary/40 focus:bg-background"
+                                    />
+                                </div>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    disabled={annotationSaving || !annotationChanged}
+                                    onClick={() => saveAnnotation({ note: annotationNote, labels: draftLabels })}
+                                    className="h-8 w-full rounded-lg text-xs font-semibold"
+                                >
+                                    <Check className="mr-1.5 h-3.5 w-3.5" />
+                                    {t('log_annotation.save_note', '保存备注')}
+                                </Button>
+                            </div>
+                        </div>
+
+                        {annotation.labels?.length ? (
+                            <div className="mt-3 flex flex-wrap gap-1.5">
+                                {annotation.labels.map((label) => (
+                                    <Badge key={label} variant="outline" className="border-primary/20 bg-primary/5 text-[11px] font-medium text-primary">
+                                        {label}
+                                    </Badge>
+                                ))}
+                            </div>
+                        ) : null}
+                    </div>
+
                     {/* URL 地址 */}
                     <div className={sectionCardClassName}>
                         <SectionHeader title={t('log_detail.url')} section="url" icon={Globe} />
@@ -617,7 +792,10 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
                                             loading={blobLoading.request}
                                             error={blobError}
                                             onLoad={() => loadBlob('request', displayLog.request_body_ref!)}
-                                            onUsePreview={() => setFullRequestBody(null)}
+                                            onUsePreview={() => {
+                                                setPreviewOnly(prev => ({ ...prev, request: true }))
+                                                setFullRequestBody(null)
+                                            }}
                                         />
                                     )}
 
@@ -750,7 +928,10 @@ export function LogDetail({ log, loading, onClose }: LogDetailProps) {
                                             loading={blobLoading.response}
                                             error={blobError}
                                             onLoad={() => loadBlob('response', displayLog.response_body_ref!)}
-                                            onUsePreview={() => setFullResponseBody(null)}
+                                            onUsePreview={() => {
+                                                setPreviewOnly(prev => ({ ...prev, response: true }))
+                                                setFullResponseBody(null)
+                                            }}
                                         />
                                     )}
 
@@ -856,6 +1037,70 @@ function parseLiveEvent(event: MessageEvent<string>): LiveLogEvent | null {
 
 function isBinaryPlaceholder(body: string) {
     return body.trimStart().startsWith('[binary content omitted;')
+}
+
+function shouldAutoLoadBody({
+    blobRef,
+    bodySize,
+    contentType,
+    previewBody,
+    fullBody,
+    loading,
+    previewOnly,
+}: {
+    blobRef?: string
+    bodySize?: number
+    contentType: string
+    previewBody: string
+    fullBody: string | null
+    loading: boolean
+    previewOnly: boolean
+}) {
+    if (!blobRef || fullBody !== null || loading || previewOnly) return false
+    if (!bodySize || bodySize > autoLoadFullBodyLimit) return false
+    if (isBinaryPlaceholder(previewBody)) return false
+    return isAutoLoadableTextContent(contentType, previewBody)
+}
+
+function isAutoLoadableTextContent(contentType: string, previewBody: string) {
+    const mediaType = contentType.split(';')[0]?.trim().toLowerCase() ?? ''
+    if (!mediaType) return Boolean(previewBody.trim())
+    if (mediaType.startsWith('text/')) return true
+    if (
+        mediaType === 'application/json' ||
+        mediaType === 'application/xml' ||
+        mediaType === 'application/x-ndjson' ||
+        mediaType === 'application/x-www-form-urlencoded' ||
+        mediaType === 'application/graphql' ||
+        mediaType === 'application/javascript'
+    ) {
+        return true
+    }
+    return mediaType.endsWith('+json') || mediaType.endsWith('+xml')
+}
+
+function normalizedAnnotation(annotation: RequestLog['annotation'] | undefined) {
+    return {
+        saved: annotation?.saved ?? false,
+        status: annotation?.status ?? 'none',
+        note: annotation?.note ?? '',
+        labels: annotation?.labels ?? [],
+    }
+}
+
+function parseLabelDraft(value: string) {
+    const seen = new Set<string>()
+    const labels: string[] = []
+    value
+        .split(/[,，\n]/)
+        .map(item => item.trim())
+        .filter(Boolean)
+        .forEach((label) => {
+            if (seen.has(label)) return
+            seen.add(label)
+            labels.push(label)
+        })
+    return labels
 }
 
 function firstHeaderValue(headers: Record<string, string[]> | undefined, name: string) {

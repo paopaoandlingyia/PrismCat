@@ -64,10 +64,10 @@ upstreams:
 
 # 日志配置
 logging:
-  # 最大请求体记录大小（字节）
-  max_request_body: 1048576   # 1MB
-  # 最大响应体记录大小（字节）
-  max_response_body: 10485760 # 10MB
+  # 请求内容最多保存的大小（字节）；超过后会截断，无法再加载完整内容
+  max_request_body: 5242880   # 5MB
+  # 响应内容最多保存的大小（字节）；超过后会截断，无法再加载完整内容
+  max_response_body: 33554432 # 32MB
 
   # 是否在“请求体已完整发送到上游，但上游还未返回响应头”时就提前保存一次数据库快照。
   # 注意：日志详情实时查看不依赖此项；关闭时，打开中的 UI 仍可通过 live 通道看到进行中请求的 Request Body。
@@ -75,10 +75,10 @@ logging:
   # 代价：每个请求会额外多一次数据库写入（高并发下可能降低吞吐/更易丢日志）。
   early_request_body_snapshot: false
 
-  # 大 body 自动分离到 blob 存储（内容寻址 + 去重）
-  # request_logs 表只保留预览片段 + hash/ref，详情可按需加载完整内容
-  detach_body_over_bytes: 262144 # 256KB；设为 0 可禁用；留空则默认 256KB
-  body_preview_bytes: 4096       # 4KB；设为 0 可关闭预览
+  # 超过此大小的内容会自动分离到 blob 存储（内容寻址 + 去重）
+  # 日志详情保留预览片段 + hash/ref；文本内容在安全大小内会自动加载完整内容
+  detach_body_over_bytes: 2097152 # 2MB；设为 0 可禁用；留空则默认 2MB
+  body_preview_bytes: 524288      # 512KB；设为 0 可关闭预览（通常无需调整）
 
   # 需要脱敏的请求头
   sensitive_headers:

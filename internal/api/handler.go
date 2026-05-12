@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -65,6 +66,13 @@ func (h *Handler) handleLogs(w http.ResponseWriter, r *http.Request) {
 		Method:   query.Get("method"),
 		Path:     query.Get("path"),
 		Tag:      query.Get("tag"),
+		Status:   query.Get("annotation_status"),
+		Label:    query.Get("annotation_label"),
+	}
+	if saved := query.Get("saved"); saved != "" {
+		if v, err := strconv.ParseBool(saved); err == nil {
+			filter.Saved = &v
+		}
 	}
 
 	if statusCode := query.Get("status_code"); statusCode != "" {
@@ -113,15 +121,24 @@ func (h *Handler) handleLogs(w http.ResponseWriter, r *http.Request) {
 
 // handleLogDetail 获取日志详情
 func (h *Handler) handleLogDetail(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		h.jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
-		return
-	}
-
 	// 从路径中提取 ID: /api/logs/{id}
 	path := strings.TrimPrefix(r.URL.Path, "/api/logs/")
 	if path == "" {
 		h.jsonError(w, "缺少日志 ID", http.StatusBadRequest)
+		return
+	}
+
+	if logID, ok := strings.CutSuffix(path, "/annotation"); ok {
+		if logID == "" {
+			h.jsonError(w, "缺少日志 ID", http.StatusBadRequest)
+			return
+		}
+		h.handleLogAnnotation(w, r, logID)
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		h.jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -135,7 +152,6 @@ func (h *Handler) handleLogDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := path
-
 	log, err := h.repo.GetLog(id)
 	if err != nil {
 		h.jsonError(w, "日志不存在", http.StatusNotFound)
@@ -143,6 +159,59 @@ func (h *Handler) handleLogDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.jsonResponse(w, log)
+}
+
+func (h *Handler) handleLogAnnotation(w http.ResponseWriter, r *http.Request, id string) {
+	if r.Method != http.MethodPatch && r.Method != http.MethodPut {
+		h.jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if _, err := h.repo.GetLog(id); err != nil {
+		h.jsonError(w, "日志不存在", http.StatusNotFound)
+		return
+	}
+
+	current, err := h.repo.GetLogAnnotation(id)
+	if err != nil && err != sql.ErrNoRows {
+		h.jsonError(w, "读取日志标记失败: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if current.Status == "" {
+		current.Status = "none"
+	}
+
+	var req struct {
+		Saved  *bool     `json:"saved"`
+		Status *string   `json:"status"`
+		Note   *string   `json:"note"`
+		Labels *[]string `json:"labels"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.jsonError(w, "无效的请求体", http.StatusBadRequest)
+		return
+	}
+
+	if req.Saved != nil {
+		current.Saved = *req.Saved
+	}
+	if req.Status != nil {
+		current.Status = *req.Status
+	}
+	if req.Note != nil {
+		current.Note = *req.Note
+	}
+	if req.Labels != nil {
+		current.Labels = *req.Labels
+	}
+
+	annotation, err := h.repo.SaveLogAnnotation(id, current)
+	if err != nil {
+		h.jsonError(w, "保存日志标记失败: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	h.jsonResponse(w, annotation)
 }
 
 func (h *Handler) handleLogLive(w http.ResponseWriter, r *http.Request, id string) {

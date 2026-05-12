@@ -89,9 +89,13 @@ export function LogFilters({
     const isMethodChanged = (draft.method || '') !== (filter.method || '')
     const isStatusCodeChanged = (draft.status_code || 0) !== (filter.status_code || 0)
     const isTagChanged = (draft.tag || '') !== (filter.tag || '')
+    const isSavedChanged = (draft.saved ?? undefined) !== (filter.saved ?? undefined)
+    const isAnnotationStatusChanged = (draft.annotation_status || '') !== (filter.annotation_status || '')
+    const isAnnotationLabelChanged = (draft.annotation_label || '') !== (filter.annotation_label || '')
     const isTimeChanged = (draft.start_time || '') !== (filter.start_time || '') ||
         (draft.end_time || '') !== (filter.end_time || '')
-    const hasChanges = isPathChanged || isUpstreamChanged || isMethodChanged || isStatusCodeChanged || isTagChanged || isTimeChanged
+    const hasChanges = isPathChanged || isUpstreamChanged || isMethodChanged || isStatusCodeChanged || isTagChanged ||
+        isSavedChanged || isAnnotationStatusChanged || isAnnotationLabelChanged || isTimeChanged
 
     return (
         <div className="flex flex-col gap-4 px-0 py-2 sm:px-4 sm:pr-6">
@@ -135,7 +139,7 @@ export function LogFilters({
 
             {/* 第二层级：属性筛选 (Grid对其) + 操作按钮 */}
             <div className="flex flex-col xl:flex-row gap-4 items-start xl:items-center justify-between">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 w-full xl:w-auto xl:flex-1">
+                <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3 w-full xl:w-auto xl:flex-1">
                     <Select
                         value={draft.upstream || "all"}
                         onValueChange={(val) => setDraft({ ...draft, upstream: val === "all" ? "" : val })}
@@ -201,6 +205,56 @@ export function LogFilters({
                         className={cn(
                             "w-full h-9 border border-input shadow-sm bg-background transition-all hover:bg-accent focus-visible:bg-background",
                             isTagChanged && "border-primary/50 ring-1 ring-primary/20"
+                        )}
+                    />
+
+                    <Select
+                        value={draft.saved === true ? 'saved' : draft.saved === false ? 'unsaved' : 'all'}
+                        onValueChange={(val) => setDraft({
+                            ...draft,
+                            saved: val === 'all' ? undefined : val === 'saved',
+                        })}
+                    >
+                        <SelectTrigger className={cn(
+                            "w-full h-9 bg-background border border-input shadow-sm hover:bg-accent",
+                            isSavedChanged && "border-primary/50 ring-1 ring-primary/20"
+                        )}>
+                            <SelectValue placeholder={t('filters.saved_all')} />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">{t('filters.saved_all')}</SelectItem>
+                            <SelectItem value="saved">{t('filters.saved_only')}</SelectItem>
+                            <SelectItem value="unsaved">{t('filters.unsaved_only')}</SelectItem>
+                        </SelectContent>
+                    </Select>
+
+                    <Select
+                        value={draft.annotation_status || 'all'}
+                        onValueChange={(val) => setDraft({ ...draft, annotation_status: val === 'all' ? undefined : val as LogFilter['annotation_status'] })}
+                    >
+                        <SelectTrigger className={cn(
+                            "w-full h-9 bg-background border border-input shadow-sm hover:bg-accent",
+                            isAnnotationStatusChanged && "border-primary/50 ring-1 ring-primary/20"
+                        )}>
+                            <SelectValue placeholder={t('filters.annotation_status')} />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">{t('filters.annotation_status')}</SelectItem>
+                            <SelectItem value="todo">{t('log_annotation.todo')}</SelectItem>
+                            <SelectItem value="done">{t('log_annotation.done')}</SelectItem>
+                        </SelectContent>
+                    </Select>
+
+                    <Input
+                        placeholder={t('filters.annotation_label_placeholder')}
+                        value={draft.annotation_label || ''}
+                        onChange={(e) => setDraft({ ...draft, annotation_label: e.target.value })}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSearch()
+                        }}
+                        className={cn(
+                            "w-full h-9 border border-input shadow-sm bg-background transition-all hover:bg-accent focus-visible:bg-background",
+                            isAnnotationLabelChanged && "border-primary/50 ring-1 ring-primary/20"
                         )}
                     />
                 </div>

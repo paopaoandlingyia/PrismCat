@@ -34,8 +34,14 @@ func (m *memRepo) ListLogs(filter LogFilter) ([]*RequestLog, int64, error) {
 	return nil, 0, errors.New("not implemented")
 }
 func (m *memRepo) DeleteLogsBefore(before time.Time) (int64, error) { return 0, nil }
-func (m *memRepo) GetStats(since *time.Time) (*LogStats, error)     { return &LogStats{}, nil }
-func (m *memRepo) Close() error                                     { m.mu.Lock(); m.closed = true; m.mu.Unlock(); return nil }
+func (m *memRepo) GetLogAnnotation(logID string) (LogAnnotation, error) {
+	return LogAnnotation{}, errors.New("not implemented")
+}
+func (m *memRepo) SaveLogAnnotation(logID string, annotation LogAnnotation) (LogAnnotation, error) {
+	return annotation, errors.New("not implemented")
+}
+func (m *memRepo) GetStats(since *time.Time) (*LogStats, error) { return &LogStats{}, nil }
+func (m *memRepo) Close() error                                 { m.mu.Lock(); m.closed = true; m.mu.Unlock(); return nil }
 
 func TestAsyncRepositoryCloseDrainsQueue(t *testing.T) {
 	inner := &memRepo{}

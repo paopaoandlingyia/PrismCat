@@ -1,5 +1,5 @@
 import { cn, formatDate, formatLatency, getMethodColor, getStatusColor } from '@/lib/utils'
-import { AlertTriangle, ChevronRight, Clock3, Server, Tag as TagIcon, Zap } from 'lucide-react'
+import { AlertTriangle, BookmarkCheck, CheckCircle2, ChevronRight, CircleDot, Clock3, Server, Tag as TagIcon, Tags, Zap } from 'lucide-react'
 import type { RequestLog } from '@/lib/api'
 import { useTranslation } from 'react-i18next'
 import {
@@ -92,7 +92,9 @@ function MobileLogCard({
     onSelect,
     dateLabel,
     detailLabel,
-    tagLabel,
+    savedLabel,
+    todoLabel,
+    doneLabel,
     streamingLabel,
     modifiedLabel,
 }: {
@@ -101,7 +103,9 @@ function MobileLogCard({
     onSelect: (log: RequestLog) => void
     dateLabel: string
     detailLabel: string
-    tagLabel: string
+    savedLabel: string
+    todoLabel: string
+    doneLabel: string
     streamingLabel: string
     modifiedLabel: string
 }) {
@@ -157,6 +161,24 @@ function MobileLogCard({
                                 <span className="truncate max-w-[120px]">{log.tag}</span>
                             </span>
                         )}
+                        {log.annotation?.saved && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-primary">
+                                <BookmarkCheck className="h-3 w-3" />
+                                {savedLabel}
+                            </span>
+                        )}
+                        {log.annotation?.status === 'todo' && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-600 dark:text-amber-400">
+                                <CircleDot className="h-3 w-3" />
+                                {todoLabel}
+                            </span>
+                        )}
+                        {log.annotation?.status === 'done' && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-green-600 dark:text-green-400">
+                                <CheckCircle2 className="h-3 w-3" />
+                                {doneLabel}
+                            </span>
+                        )}
                     </div>
 
                     <div className="space-y-1.5">
@@ -170,7 +192,12 @@ function MobileLogCard({
                                 {formatLatency(log.latency_ms)}
                             </span>
                             <span>{dateLabel}</span>
-                            {log.tag && <span>{tagLabel}</span>}
+                            {log.annotation?.labels?.length ? (
+                                <span className="inline-flex items-center gap-1">
+                                    <Tags className="h-3.5 w-3.5" />
+                                    {log.annotation.labels.join(', ')}
+                                </span>
+                            ) : null}
                         </div>
                     </div>
                 </div>
@@ -219,7 +246,9 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                         onSelect={onSelect}
                         dateLabel={formatDate(log.created_at, i18n.language)}
                         detailLabel={t('common.details')}
-                        tagLabel={`${t('log_table.tag')}: ${log.tag}`}
+                        savedLabel={t('log_annotation.saved', '已保存')}
+                        todoLabel={t('log_annotation.todo', '待处理')}
+                        doneLabel={t('log_annotation.done', '已处理')}
                         streamingLabel={t('log_detail.streaming', '流式')}
                         modifiedLabel={t('log_detail.modified', 'MODIFIED')}
                     />
@@ -315,6 +344,48 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                                                 </TooltipContent>
                                             </Tooltip>
                                         )}
+                                        {log.annotation?.saved && (
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <BookmarkCheck className="h-3.5 w-3.5 shrink-0 text-primary" />
+                                                </TooltipTrigger>
+                                                <TooltipContent side="right">
+                                                    <p className="text-[10px] font-bold uppercase">{t('log_annotation.saved', 'Saved')}</p>
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        )}
+                                        {log.annotation?.status === 'todo' && (
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <CircleDot className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                                                </TooltipTrigger>
+                                                <TooltipContent side="right">
+                                                    <p className="text-[10px] font-bold uppercase">{t('log_annotation.todo', 'Todo')}</p>
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        )}
+                                        {log.annotation?.status === 'done' && (
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-500" />
+                                                </TooltipTrigger>
+                                                <TooltipContent side="right">
+                                                    <p className="text-[10px] font-bold uppercase">{t('log_annotation.done', 'Done')}</p>
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        )}
+                                        {log.annotation?.labels?.map((label) => (
+                                            <Tooltip key={label}>
+                                                <TooltipTrigger asChild>
+                                                    <span className="shrink-0 inline-flex items-center h-[18px] px-1.5 rounded-[3px] text-[9px] font-black uppercase tracking-tight bg-primary/10 text-primary">
+                                                        {label}
+                                                    </span>
+                                                </TooltipTrigger>
+                                                <TooltipContent side="right">
+                                                    <p className="text-[10px] font-bold uppercase">{t('log_annotation.label', 'Label')}: {label}</p>
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        ))}
                                     </div>
                                 </TableCell>
                                 <TableCell className="text-right">

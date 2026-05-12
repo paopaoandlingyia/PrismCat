@@ -26,15 +26,15 @@ server:
     - localhost
 
 logging:
-  max_request_body: 1048576       # 1MB
-  max_response_body: 10485760     # 10MB
+  max_request_body: 5242880       # 5MB
+  max_response_body: 33554432     # 32MB
   sensitive_headers:
     - Authorization
     - api-key
     - x-api-key
   early_request_body_snapshot: false
-  detach_body_over_bytes: 262144  # 256KB
-  body_preview_bytes: 4096        # 4KB
+  detach_body_over_bytes: 2097152 # 2MB
+  body_preview_bytes: 524288      # 512KB
 
 storage:
   database: "data/prismcat.db"

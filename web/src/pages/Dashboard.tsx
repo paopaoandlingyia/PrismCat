@@ -96,6 +96,13 @@ export function Dashboard() {
         setSelectedLogLoading(false)
     }, [])
 
+    const handleLogChange = useCallback((nextLog: RequestLog) => {
+        setSelectedLog(nextLog)
+        setLogs(current => current
+            .map(item => item.id === nextLog.id ? { ...item, annotation: nextLog.annotation } : item)
+            .filter(item => item.id !== nextLog.id || matchesAnnotationFilter(nextLog, filter)))
+    }, [filter])
+
     const logDetailFallback = selectedLog ? (
         <div className="fixed inset-y-0 right-0 z-50 w-full border-l border-border/60 bg-background shadow-2xl sm:max-w-2xl">
             <div className="flex h-full flex-col items-center justify-center gap-4">
@@ -144,8 +151,17 @@ export function Dashboard() {
                     log={selectedLog}
                     loading={selectedLogLoading}
                     onClose={handleCloseLog}
+                    onLogChange={handleLogChange}
                 />
             </Suspense>
         </div>
     )
+}
+
+function matchesAnnotationFilter(log: RequestLog, filter: LogFilter) {
+    const annotation = log.annotation ?? { saved: false, status: 'none', labels: [] }
+    if (typeof filter.saved === 'boolean' && annotation.saved !== filter.saved) return false
+    if (filter.annotation_status && annotation.status !== filter.annotation_status) return false
+    if (filter.annotation_label && !(annotation.labels ?? []).includes(filter.annotation_label)) return false
+    return true
 }

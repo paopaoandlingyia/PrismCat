@@ -240,13 +240,13 @@ server:
     - localhost
 
 logging:
-  max_request_body: 1048576       # Max request body to log (1MB)
-  max_response_body: 10485760     # Max response body to log (10MB)
+  max_request_body: 5242880       # Save request content up to 5MB
+  max_response_body: 33554432     # Save response content up to 32MB
   sensitive_headers:              # Headers to auto-mask
     - Authorization
     - api-key
     - x-api-key
-  detach_body_over_bytes: 262144  # Store bodies > 256KB as separate files
+  detach_body_over_bytes: 2097152 # Load bodies > 2MB on demand
   early_request_body_snapshot: false
 
 storage:

@@ -276,11 +276,10 @@ export function Settings() {
     const [enablePathRouting, setEnablePathRouting] = useState(false)
     const [pathRoutingPrefix, setPathRoutingPrefix] = useState('/_proxy')
 
-    const [maxRequestBody, setMaxRequestBody] = useState(1)
-    const [maxResponseBody, setMaxResponseBody] = useState(10)
+    const [maxRequestBody, setMaxRequestBody] = useState(5120)
+    const [maxResponseBody, setMaxResponseBody] = useState(32768)
     const [sensitiveHeaders, setSensitiveHeaders] = useState('')
-    const [detachBodyOver, setDetachBodyOver] = useState(256)
-    const [bodyPreview, setBodyPreview] = useState(4096)
+    const [detachBodyOver, setDetachBodyOver] = useState(2048)
     const [storeBase64, setStoreBase64] = useState(true)
     const [earlyRequestBodySnapshot, setEarlyRequestBodySnapshot] = useState(false)
 
@@ -366,7 +365,6 @@ export function Settings() {
             setMaxResponseBody(Math.round(configData.logging.max_response_body / 1024))
             setSensitiveHeaders(configData.logging.sensitive_headers.join('\n'))
             setDetachBodyOver(Math.round(configData.logging.detach_body_over_bytes / 1024))
-            setBodyPreview(Math.round(configData.logging.body_preview_bytes / 1024))
             setStoreBase64(configData.logging.store_base64)
             setEarlyRequestBodySnapshot(configData.logging.early_request_body_snapshot)
             setRetentionDays(configData.storage.retention_days)
@@ -504,7 +502,6 @@ export function Settings() {
                     max_response_body: maxResponseBody * 1024,
                     sensitive_headers: sensitiveHeaders.split('\n').map(s => s.trim()).filter(Boolean),
                     detach_body_over_bytes: detachBodyOver * 1024,
-                    body_preview_bytes: bodyPreview * 1024,
                     store_base64: storeBase64,
                     early_request_body_snapshot: earlyRequestBodySnapshot,
                 },
@@ -1034,22 +1031,6 @@ export function Settings() {
                                                 min="0"
                                                 value={detachBodyOver}
                                                 onChange={e => setDetachBodyOver(Number(e.target.value))}
-                                                className="h-11 rounded-xl border-border/30 bg-background/50 text-sm shadow-sm transition-colors focus-visible:bg-background"
-                                            />
-                                        </FieldBlock>
-
-                                        <FieldBlock
-                                            label={t('settings.body_preview_bytes')}
-                                            hint={t('settings.body_preview_bytes_hint')}
-                                            htmlFor="preview-bytes"
-                                            unit="KB"
-                                        >
-                                            <Input
-                                                id="preview-bytes"
-                                                type="number"
-                                                min="0"
-                                                value={bodyPreview}
-                                                onChange={e => setBodyPreview(Number(e.target.value))}
                                                 className="h-11 rounded-xl border-border/30 bg-background/50 text-sm shadow-sm transition-colors focus-visible:bg-background"
                                             />
                                         </FieldBlock>

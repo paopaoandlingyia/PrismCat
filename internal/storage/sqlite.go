@@ -96,6 +96,19 @@ func (r *SQLiteRepository) migrate() error {
 	CREATE INDEX IF NOT EXISTS idx_logs_upstream ON request_logs(upstream);
 	CREATE INDEX IF NOT EXISTS idx_logs_status_code ON request_logs(status_code);
 	CREATE INDEX IF NOT EXISTS idx_logs_method ON request_logs(method);
+
+	CREATE TABLE IF NOT EXISTS log_annotations (
+		log_id TEXT PRIMARY KEY,
+		saved INTEGER NOT NULL DEFAULT 0,
+		status TEXT NOT NULL DEFAULT 'none',
+		note TEXT NOT NULL DEFAULT '',
+		labels TEXT NOT NULL DEFAULT '[]',
+		created_at_unix_ms INTEGER NOT NULL,
+		updated_at_unix_ms INTEGER NOT NULL
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_log_annotations_saved ON log_annotations(saved);
+	CREATE INDEX IF NOT EXISTS idx_log_annotations_status ON log_annotations(status);
 	`
 	if _, err := r.db.Exec(schema); err != nil {
 		return fmt.Errorf("database migrate failed: %w", err)
@@ -372,7 +385,16 @@ func (r *SQLiteRepository) GetLog(id string) (*RequestLog, error) {
 	FROM request_logs WHERE id = ?
 	`
 	row := r.db.QueryRow(query, id)
-	return r.scanLog(row)
+	log, err := r.scanLog(row)
+	if err != nil {
+		return nil, err
+	}
+	if annotation, err := r.GetLogAnnotation(id); err == nil {
+		log.Annotation = annotation
+	} else if err != sql.ErrNoRows {
+		return nil, err
+	}
+	return log, nil
 }
 
 func (r *SQLiteRepository) ListLogs(filter LogFilter) ([]*RequestLog, int64, error) {
@@ -380,43 +402,58 @@ func (r *SQLiteRepository) ListLogs(filter LogFilter) ([]*RequestLog, int64, err
 	var args []interface{}
 
 	if filter.Upstream != "" {
-		conditions = append(conditions, "upstream = ?")
+		conditions = append(conditions, "l.upstream = ?")
 		args = append(args, filter.Upstream)
 	}
 	if filter.Method != "" {
-		conditions = append(conditions, "method = ?")
+		conditions = append(conditions, "l.method = ?")
 		args = append(args, filter.Method)
 	}
 	if filter.StatusCode > 0 {
-		conditions = append(conditions, "status_code = ?")
+		conditions = append(conditions, "l.status_code = ?")
 		args = append(args, filter.StatusCode)
 	}
 	if filter.Path != "" {
-		conditions = append(conditions, "path LIKE ?")
+		conditions = append(conditions, "l.path LIKE ?")
 		args = append(args, "%"+filter.Path+"%")
 	}
 	if filter.StartTime != nil {
-		conditions = append(conditions, "created_at_unix_ms >= ?")
+		conditions = append(conditions, "l.created_at_unix_ms >= ?")
 		args = append(args, filter.StartTime.UTC().UnixMilli())
 	}
 	if filter.EndTime != nil {
-		conditions = append(conditions, "created_at_unix_ms <= ?")
+		conditions = append(conditions, "l.created_at_unix_ms <= ?")
 		args = append(args, filter.EndTime.UTC().UnixMilli())
 	}
 	if filter.HasError != nil {
 		if *filter.HasError {
-			conditions = append(conditions, "(error IS NOT NULL AND error != '')")
+			conditions = append(conditions, "(l.error IS NOT NULL AND l.error != '')")
 		} else {
-			conditions = append(conditions, "(error IS NULL OR error = '')")
+			conditions = append(conditions, "(l.error IS NULL OR l.error = '')")
 		}
 	}
 	if filter.Streaming != nil {
-		conditions = append(conditions, "streaming = ?")
+		conditions = append(conditions, "l.streaming = ?")
 		args = append(args, *filter.Streaming)
 	}
 	if filter.Tag != "" {
-		conditions = append(conditions, "tag = ?")
+		conditions = append(conditions, "l.tag = ?")
 		args = append(args, filter.Tag)
+	}
+	if filter.Saved != nil {
+		if *filter.Saved {
+			conditions = append(conditions, "COALESCE(a.saved, 0) = 1")
+		} else {
+			conditions = append(conditions, "COALESCE(a.saved, 0) = 0")
+		}
+	}
+	if filter.Status != "" {
+		conditions = append(conditions, "COALESCE(a.status, 'none') = ?")
+		args = append(args, normalizeAnnotationStatus(filter.Status))
+	}
+	if filter.Label != "" {
+		conditions = append(conditions, "EXISTS (SELECT 1 FROM json_each(COALESCE(a.labels, '[]')) WHERE value = ?)")
+		args = append(args, filter.Label)
 	}
 
 	where := ""
@@ -425,7 +462,7 @@ func (r *SQLiteRepository) ListLogs(filter LogFilter) ([]*RequestLog, int64, err
 	}
 
 	// Total count (for pagination).
-	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM request_logs %s", where)
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM request_logs l LEFT JOIN log_annotations a ON a.log_id = l.id %s", where)
 	var total int64
 	if err := r.db.QueryRow(countQuery, args...).Scan(&total); err != nil {
 		return nil, 0, err
@@ -440,11 +477,15 @@ func (r *SQLiteRepository) ListLogs(filter LogFilter) ([]*RequestLog, int64, err
 	}
 
 	query := fmt.Sprintf(`
-	SELECT id, created_at, upstream, target_url, method, path, query,
-		request_body_size, status_code, response_body_size,
-		streaming, latency_ms, error, truncated, tag, request_override_applied
-	FROM request_logs %s
-	ORDER BY created_at_unix_ms DESC, created_at DESC
+	SELECT l.id, l.created_at, l.upstream, l.target_url, l.method, l.path, l.query,
+		l.request_body_size, l.status_code, l.response_body_size,
+		l.streaming, l.latency_ms, l.error, l.truncated, l.tag, l.request_override_applied,
+		COALESCE(a.saved, 0), COALESCE(a.status, 'none'), COALESCE(a.note, ''), COALESCE(a.labels, '[]'),
+		COALESCE(a.created_at_unix_ms, 0), COALESCE(a.updated_at_unix_ms, 0)
+	FROM request_logs l
+	LEFT JOIN log_annotations a ON a.log_id = l.id
+	%s
+	ORDER BY l.created_at_unix_ms DESC, l.created_at DESC
 	LIMIT ? OFFSET ?
 	`, where)
 
@@ -471,11 +512,95 @@ func (r *SQLiteRepository) ListLogs(filter LogFilter) ([]*RequestLog, int64, err
 }
 
 func (r *SQLiteRepository) DeleteLogsBefore(before time.Time) (int64, error) {
-	result, err := r.db.Exec("DELETE FROM request_logs WHERE created_at_unix_ms < ?", before.UTC().UnixMilli())
+	tx, err := r.db.Begin()
 	if err != nil {
 		return 0, err
 	}
+	defer tx.Rollback()
+
+	result, err := tx.Exec(`
+		DELETE FROM request_logs
+		WHERE created_at_unix_ms < ?
+		  AND id NOT IN (
+			SELECT log_id FROM log_annotations WHERE saved = 1
+		  )
+	`, before.UTC().UnixMilli())
+	if err != nil {
+		return 0, err
+	}
+	if _, err := tx.Exec(`
+		DELETE FROM log_annotations
+		WHERE log_id NOT IN (SELECT id FROM request_logs)
+	`); err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
 	return result.RowsAffected()
+}
+
+func (r *SQLiteRepository) GetLogAnnotation(logID string) (LogAnnotation, error) {
+	var annotation LogAnnotation
+	var labelsJSON string
+	var saved int
+	var createdMS, updatedMS int64
+	err := r.db.QueryRow(`
+		SELECT saved, status, note, labels, created_at_unix_ms, updated_at_unix_ms
+		FROM log_annotations
+		WHERE log_id = ?
+	`, logID).Scan(&saved, &annotation.Status, &annotation.Note, &labelsJSON, &createdMS, &updatedMS)
+	if err != nil {
+		return LogAnnotation{}, err
+	}
+	annotation.Saved = saved == 1
+	annotation.Status = normalizeAnnotationStatus(annotation.Status)
+	_ = json.Unmarshal([]byte(labelsJSON), &annotation.Labels)
+	if createdMS > 0 {
+		annotation.CreatedAt = time.UnixMilli(createdMS).UTC()
+	}
+	if updatedMS > 0 {
+		annotation.UpdatedAt = time.UnixMilli(updatedMS).UTC()
+	}
+	return annotation, nil
+}
+
+func (r *SQLiteRepository) SaveLogAnnotation(logID string, annotation LogAnnotation) (LogAnnotation, error) {
+	logID = strings.TrimSpace(logID)
+	if logID == "" {
+		return LogAnnotation{}, fmt.Errorf("log id is empty")
+	}
+	annotation.Status = normalizeAnnotationStatus(annotation.Status)
+	annotation.Note = strings.TrimSpace(annotation.Note)
+	annotation.Labels = normalizeLabels(annotation.Labels)
+	if annotation.Status != "none" {
+		annotation.Saved = true
+	}
+
+	if !annotation.Saved && annotation.Status == "none" && annotation.Note == "" && len(annotation.Labels) == 0 {
+		if _, err := r.db.Exec("DELETE FROM log_annotations WHERE log_id = ?", logID); err != nil {
+			return LogAnnotation{}, err
+		}
+		return LogAnnotation{Status: "none"}, nil
+	}
+
+	now := time.Now().UTC().UnixMilli()
+	labelsJSON, _ := json.Marshal(annotation.Labels)
+	_, err := r.db.Exec(`
+		INSERT INTO log_annotations (
+			log_id, saved, status, note, labels, created_at_unix_ms, updated_at_unix_ms
+		) VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(log_id) DO UPDATE SET
+			saved = excluded.saved,
+			status = excluded.status,
+			note = excluded.note,
+			labels = excluded.labels,
+			updated_at_unix_ms = excluded.updated_at_unix_ms
+	`, logID, boolInt(annotation.Saved), annotation.Status, annotation.Note, string(labelsJSON), now, now)
+	if err != nil {
+		return LogAnnotation{}, err
+	}
+	return r.GetLogAnnotation(logID)
 }
 
 func (r *SQLiteRepository) GetStats(since *time.Time) (*LogStats, error) {
@@ -590,11 +715,16 @@ func (r *SQLiteRepository) ListBlobRefs() ([]string, error) {
 func (r *SQLiteRepository) scanLogSummary(scanner interface{ Scan(...interface{}) error }) (*RequestLog, error) {
 	var log RequestLog
 	var streaming, truncated, overrideApplied int
+	var annotationSaved int
+	var annotationLabels string
+	var annotationCreatedMS, annotationUpdatedMS int64
 
 	err := scanner.Scan(
 		&log.ID, &log.CreatedAt, &log.Upstream, &log.TargetURL, &log.Method, &log.Path, &log.Query,
 		&log.RequestBodySize, &log.StatusCode, &log.ResponseBodySize,
 		&streaming, &log.Latency, &log.Error, &truncated, &log.Tag, &overrideApplied,
+		&annotationSaved, &log.Annotation.Status, &log.Annotation.Note, &annotationLabels,
+		&annotationCreatedMS, &annotationUpdatedMS,
 	)
 	if err != nil {
 		return nil, err
@@ -604,6 +734,15 @@ func (r *SQLiteRepository) scanLogSummary(scanner interface{ Scan(...interface{}
 	log.Truncated = truncated == 1
 	log.RequestOverrideApplied = overrideApplied == 1
 	log.CreatedAt = log.CreatedAt.UTC()
+	log.Annotation.Saved = annotationSaved == 1
+	log.Annotation.Status = normalizeAnnotationStatus(log.Annotation.Status)
+	_ = json.Unmarshal([]byte(annotationLabels), &log.Annotation.Labels)
+	if annotationCreatedMS > 0 {
+		log.Annotation.CreatedAt = time.UnixMilli(annotationCreatedMS).UTC()
+	}
+	if annotationUpdatedMS > 0 {
+		log.Annotation.UpdatedAt = time.UnixMilli(annotationUpdatedMS).UTC()
+	}
 
 	return &log, nil
 }
@@ -660,4 +799,42 @@ func unmarshalHeaders(data string) map[string][]string {
 	}
 
 	return nil
+}
+
+func normalizeAnnotationStatus(status string) string {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "todo":
+		return "todo"
+	case "done":
+		return "done"
+	default:
+		return "none"
+	}
+}
+
+func normalizeLabels(labels []string) []string {
+	if len(labels) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(labels))
+	out := make([]string, 0, len(labels))
+	for _, label := range labels {
+		label = strings.TrimSpace(label)
+		if label == "" {
+			continue
+		}
+		if _, ok := seen[label]; ok {
+			continue
+		}
+		seen[label] = struct{}{}
+		out = append(out, label)
+	}
+	return out
+}
+
+func boolInt(v bool) int {
+	if v {
+		return 1
+	}
+	return 0
 }
