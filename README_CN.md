@@ -143,6 +143,10 @@ PrismCat 设计为 **7×24 小时静默运行的 LLM 黑匣子**。你不需要�
 
 ## 🐳 Docker 部署
 
+### Docker Compose
+
+创建 `docker-compose.yml`：
+
 ```yaml
 services:
   prismcat:
@@ -164,6 +168,24 @@ services:
     volumes:
       - ./data:/app/data
     restart: always
+```
+
+```bash
+docker compose up -d
+```
+
+### Docker Run
+
+```bash
+docker run -d --name prismcat \
+  -p 8080:8080 \
+  -e PRISMCAT_UI_HOSTS=localhost,127.0.0.1 \
+  -e PRISMCAT_PROXY_DOMAINS=localhost \
+  -e PRISMCAT_UI_PASSWORD=your_strong_password \
+  -e PRISMCAT_RETENTION_DAYS=30 \
+  -v ./data:/app/data \
+  --restart always \
+  ghcr.io/paopaoandlingyia/prismcat:latest
 ```
 
 ---

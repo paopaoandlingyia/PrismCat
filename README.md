@@ -143,6 +143,10 @@ PrismCat is designed to run as a **silent, 24/7 LLM black box**. You don't need 
 
 ## 🐳 Docker Deployment
 
+### Docker Compose
+
+Create a `docker-compose.yml`:
+
 ```yaml
 services:
   prismcat:
@@ -164,6 +168,24 @@ services:
     volumes:
       - ./data:/app/data
     restart: always
+```
+
+```bash
+docker compose up -d
+```
+
+### Docker Run
+
+```bash
+docker run -d --name prismcat \
+  -p 8080:8080 \
+  -e PRISMCAT_UI_HOSTS=localhost,127.0.0.1 \
+  -e PRISMCAT_PROXY_DOMAINS=localhost \
+  -e PRISMCAT_UI_PASSWORD=your_strong_password \
+  -e PRISMCAT_RETENTION_DAYS=30 \
+  -v ./data:/app/data \
+  --restart always \
+  ghcr.io/paopaoandlingyia/prismcat:latest
 ```
 
 ---
