@@ -10,34 +10,52 @@ import { Button } from '@/components/ui/button'
 import { fetchLog, type RequestLog } from '@/lib/api'
 import { cn, formatDate, formatSize, getMethodColor, getStatusColor } from '@/lib/utils'
 
+interface LogDiffState {
+    id?: string
+    log: RequestLog | null
+    loading: boolean
+    error: string | null
+}
+
+function createLogDiffState(id: string | undefined): LogDiffState {
+    return {
+        id,
+        log: null,
+        loading: Boolean(id),
+        error: id ? null : 'missing-id',
+    }
+}
+
 export function LogDiff() {
     const { id } = useParams()
     const { t, i18n } = useTranslation()
-    const [log, setLog] = useState<RequestLog | null>(null)
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState<string | null>(null)
+    const [state, setState] = useState(() => createLogDiffState(id))
+    let currentState = state
+    if (state.id !== id) {
+        currentState = createLogDiffState(id)
+        setState(currentState)
+    }
 
     useEffect(() => {
         let cancelled = false
-        setLoading(true)
-        setError(null)
-        setLog(null)
 
         if (!id) {
-            setError(t('log_diff.missing_id', 'Missing log id'))
-            setLoading(false)
             return
         }
 
         fetchLog(id)
             .then((next) => {
-                if (!cancelled) setLog(next)
+                if (!cancelled) setState({ id, log: next, loading: false, error: null })
             })
             .catch((err) => {
-                if (!cancelled) setError(err instanceof Error ? err.message : t('common.error'))
-            })
-            .finally(() => {
-                if (!cancelled) setLoading(false)
+                if (!cancelled) {
+                    setState({
+                        id,
+                        log: null,
+                        loading: false,
+                        error: err instanceof Error ? err.message : t('common.error'),
+                    })
+                }
             })
 
         return () => {
@@ -45,6 +63,10 @@ export function LogDiff() {
         }
     }, [id, t])
 
+    const { log, loading } = currentState
+    const error = currentState.error === 'missing-id'
+        ? t('log_diff.missing_id', 'Missing log id')
+        : currentState.error
     const originalBody = log?.request_body_original ?? ''
     const finalBody = log?.request_body_final ?? ''
     const hasDiff = Boolean(originalBody && finalBody && originalBody !== finalBody)

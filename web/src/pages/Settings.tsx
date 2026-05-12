@@ -113,6 +113,10 @@ const requestOverrideExample = JSON.stringify([
     },
 ], null, 2)
 
+function getErrorMessage(error: unknown, fallback: string) {
+    return error instanceof Error ? error.message : fallback
+}
+
 type OverrideBinding = {
     enabled: boolean
     rule_names: string[]
@@ -399,8 +403,8 @@ export function Settings() {
             setShowAddForm(false)
             loadData()
             toast.success(t('settings.upstream_added'))
-        } catch (err: any) {
-            toast.error(err.message || t('common.error'))
+        } catch (err: unknown) {
+            toast.error(getErrorMessage(err, t('common.error')))
         }
     }
 
@@ -410,8 +414,8 @@ export function Settings() {
             await removeUpstream(name)
             loadData()
             toast.success(t('settings.upstream_removed'))
-        } catch (err: any) {
-            toast.error(err.message || t('common.error'))
+        } catch (err: unknown) {
+            toast.error(getErrorMessage(err, t('common.error')))
         }
     }
 
@@ -480,8 +484,8 @@ export function Settings() {
             toast.success(t('settings.config_saved'))
             setEditingUpstream(null)
             loadData()
-        } catch (err: any) {
-            toast.error(err.message || t('common.error'))
+        } catch (err: unknown) {
+            toast.error(getErrorMessage(err, t('common.error')))
         } finally {
             setSaving(false)
         }
@@ -512,8 +516,8 @@ export function Settings() {
             })
             toast.success(t('settings.config_saved'))
             loadData()
-        } catch (err: any) {
-            toast.error(err.message || t('common.error'))
+        } catch (err: unknown) {
+            toast.error(getErrorMessage(err, t('common.error')))
         } finally {
             setSaving(false)
         }

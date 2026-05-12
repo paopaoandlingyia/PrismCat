@@ -28,10 +28,26 @@ interface HeaderEntry {
     id: string
 }
 
+interface ReplayLocationState {
+    replay?: {
+        upstream?: string
+        target_url?: string
+        targetUrl?: string
+        method?: string
+        path?: string
+        body?: string
+        headers?: Record<string, string | string[]>
+    }
+}
+
 type RequestTab = 'body' | 'headers'
 type ResponseViewMode = 'pretty' | 'raw'
 type RequestBodyViewMode = 'raw' | 'pretty'
 type TargetMode = 'upstream' | 'url'
+
+function getErrorMessage(error: unknown, fallback: string) {
+    return error instanceof Error ? error.message : fallback
+}
 
 export function Playground() {
     const { t } = useTranslation()
@@ -73,7 +89,7 @@ export function Playground() {
 
     // Pre-fill from navigation state (replay from LogDetail)
     useEffect(() => {
-        const state = location.state as any
+        const state = location.state as ReplayLocationState | null
         if (state?.replay) {
             const r = state.replay
             const replayTargetUrl = r.target_url || r.targetUrl || ''
@@ -88,7 +104,7 @@ export function Playground() {
             if (r.path) setPath(r.path)
             if (r.body) setBody(r.body)
             if (r.headers && typeof r.headers === 'object') {
-                const entries: HeaderEntry[] = Object.entries(r.headers as Record<string, string | string[]>)
+                const entries: HeaderEntry[] = Object.entries(r.headers)
                     .filter(([k]) => {
                         const skip = ['host', 'connection', 'keep-alive', 'transfer-encoding', 'te', 'trailer', 'upgrade', 'proxy-authorization', 'proxy-authenticate', 'proxy-connection']
                         return !skip.includes(k.toLowerCase())
@@ -132,8 +148,8 @@ export function Playground() {
         try {
             JSON.parse(text)
             return null
-        } catch (err: any) {
-            return err?.message || 'Invalid JSON'
+        } catch (err: unknown) {
+            return getErrorMessage(err, 'Invalid JSON')
         }
     }, [body])
 
@@ -204,9 +220,9 @@ export function Playground() {
             })
             setElapsed(Math.round(performance.now() - startTime))
             setResponse(resp)
-        } catch (err: any) {
+        } catch (err: unknown) {
             setElapsed(Math.round(performance.now() - startTime))
-            setError(err?.message || '请求失败')
+            setError(getErrorMessage(err, '请求失败'))
         } finally {
             setSending(false)
         }

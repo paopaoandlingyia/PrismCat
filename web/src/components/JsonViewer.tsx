@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Copy, Eye, Image as ImageIcon, FileCode } from 'lucide-react';
@@ -79,9 +79,10 @@ function detectionFromMime(mimeType: string): Base64Detection {
 // ─── Components ──────────────────────────────────────────────────────
 
 export type JsonExpandMode = 'default' | 'all' | 'none';
+type JsonContainer = Record<string, unknown> | unknown[];
 
 interface JsonViewerProps {
-    data: any;
+    data: unknown;
     initialExpanded?: boolean;
     expandMode?: JsonExpandMode;
 }
@@ -90,8 +91,9 @@ export function JsonViewer({ data, initialExpanded = true, expandMode = 'default
     if (typeof data === 'string') return <SmartText text={data} />;
     if (typeof data !== 'object' || data === null) return <ValueNode value={data} />;
 
+    const rootData: JsonContainer = Array.isArray(data) || isRecord(data) ? data : {};
     const rootInitialExpanded = shouldAutoExpandNode({
-        data,
+        data: rootData,
         depth: 0,
         isRoot: true,
         initialExpanded,
@@ -99,9 +101,13 @@ export function JsonViewer({ data, initialExpanded = true, expandMode = 'default
 
     return (
         <div className="font-mono text-[11px] leading-relaxed select-text">
-            <CollapsibleNode data={data} label="" isRoot initialExpanded={rootInitialExpanded} depth={0} expandMode={expandMode} />
+            <CollapsibleNode data={rootData} label="" isRoot initialExpanded={rootInitialExpanded} depth={0} expandMode={expandMode} />
         </div>
     );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 // ─── SmartText: raw text with base64 detection ───────────────────────
@@ -185,17 +191,17 @@ function LargeTextPreview({ text }: { text: string }) {
 
 // ─── CollapsibleNode: renders objects and arrays as a tree ────────────
 
-function getEntryCount(data: any): number {
+function getEntryCount(data: JsonContainer): number {
     return Array.isArray(data) ? data.length : Object.keys(data).length;
 }
 
-function getShallowValueKind(value: any): string {
+function getShallowValueKind(value: unknown): string {
     if (value === null) return 'null';
     if (Array.isArray(value)) return 'array';
     return typeof value === 'object' ? 'object' : typeof value;
 }
 
-function getShallowShapeSignature(value: any): string {
+function getShallowShapeSignature(value: unknown): string {
     if (value === null) return 'null';
 
     if (Array.isArray(value)) {
@@ -203,7 +209,7 @@ function getShallowShapeSignature(value: any): string {
         return `array:${previewKinds.join('|')}:${value.length > 3 ? 'more' : 'full'}`;
     }
 
-    if (typeof value === 'object') {
+    if (isRecord(value)) {
         const keys = Object.keys(value).sort();
         const limitedKeys = keys.slice(0, 20);
         const fields = limitedKeys.map((key) => `${key}:${getShallowValueKind(value[key])}`);
@@ -221,7 +227,7 @@ function shouldAutoExpandNode({
     initialExpanded,
     forceExpanded = false,
 }: {
-    data: any;
+    data: JsonContainer;
     depth: number;
     isRoot: boolean;
     initialExpanded: boolean;
@@ -236,13 +242,43 @@ function shouldAutoExpandNode({
     return depth < 1 && entryCount <= CHILD_AUTO_EXPAND_LIMIT;
 }
 
+function createExpansionSnapshot({
+    data,
+    depth,
+    isRoot,
+    initialExpanded,
+    forceExpanded,
+    expandMode,
+}: {
+    data: JsonContainer;
+    depth: number;
+    isRoot: boolean;
+    initialExpanded: boolean;
+    forceExpanded: boolean;
+    expandMode: JsonExpandMode;
+}) {
+    return {
+        data,
+        depth,
+        isRoot,
+        initialExpanded,
+        forceExpanded,
+        expandMode,
+        expanded: expandMode === 'all'
+            ? true
+            : expandMode === 'none'
+                ? false
+                : shouldAutoExpandNode({ data, depth, isRoot, initialExpanded, forceExpanded }),
+    };
+}
+
 /** Produce a CSS indent string for the given depth (2 spaces per level). */
 function indent(depth: number): string {
     return '\u00A0\u00A0'.repeat(depth); // Non-breaking spaces × 2 per level
 }
 
 function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, initialExpanded = true, forceExpanded = false, suffix = null, depth = 0, expandMode = 'default' }: {
-    data: any;
+    data: JsonContainer;
     label: string;
     isRoot?: boolean;
     isArrayItem?: boolean;
@@ -253,11 +289,37 @@ function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, ini
     expandMode?: JsonExpandMode;
 }) {
     const { t } = useTranslation();
-    const [expanded, setExpanded] = useState(() => {
-        if (expandMode === 'all') return true;
-        if (expandMode === 'none') return false;
-        return shouldAutoExpandNode({ data, depth, isRoot, initialExpanded, forceExpanded });
-    });
+    const [expansion, setExpansion] = useState(() => createExpansionSnapshot({
+        data,
+        depth,
+        isRoot,
+        initialExpanded,
+        forceExpanded,
+        expandMode,
+    }));
+    let currentExpansion = expansion;
+    if (
+        expansion.data !== data ||
+        expansion.depth !== depth ||
+        expansion.isRoot !== isRoot ||
+        expansion.initialExpanded !== initialExpanded ||
+        expansion.forceExpanded !== forceExpanded ||
+        expansion.expandMode !== expandMode
+    ) {
+        currentExpansion = createExpansionSnapshot({
+            data,
+            depth,
+            isRoot,
+            initialExpanded,
+            forceExpanded,
+            expandMode,
+        });
+        setExpansion(currentExpansion);
+    }
+    const expanded = currentExpansion.expanded;
+    const setExpanded = (value: boolean) => {
+        setExpansion((current) => ({ ...current, expanded: value }));
+    };
     const isArray = Array.isArray(data);
     const entries = Object.entries(data);
     const isEmpty = entries.length === 0;
@@ -265,7 +327,7 @@ function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, ini
     const showLabel = !isRoot && !isArrayItem;
     const pad = indent(depth);
     const sampledArrayShapes = useMemo(() => {
-        if (!isArray) return null;
+        if (!Array.isArray(data)) return null;
 
         const sampleSize = Math.min(data.length, ARRAY_SHAPE_SAMPLE_SIZE);
         const shapes = new Set<string>();
@@ -277,15 +339,9 @@ function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, ini
         }
 
         return { sampleSize, shapes };
-    }, [data, isArray]);
+    }, [data]);
 
-    useEffect(() => {
-        if (expandMode === 'all') setExpanded(true);
-        else if (expandMode === 'none') setExpanded(false);
-        else setExpanded(shouldAutoExpandNode({ data, depth, isRoot, initialExpanded, forceExpanded }));
-    }, [data, depth, isRoot, initialExpanded, forceExpanded, expandMode]);
-
-    const shouldForceExpandArrayChild = (idx: number, value: any) => {
+    const shouldForceExpandArrayChild = (idx: number, value: unknown) => {
         if (!isArray || !sampledArrayShapes || value === null || typeof value !== 'object') {
             return false;
         }
@@ -339,7 +395,7 @@ function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, ini
                     return (
                         <CollapsibleNode
                             key={key}
-                            data={value}
+                            data={Array.isArray(value) || isRecord(value) ? value : {}}
                             label={key}
                             isArrayItem={isArray}
                             initialExpanded={forceExpandChild || (depth === 0 && idx < 3)}
@@ -374,7 +430,7 @@ function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, ini
 
 // ─── ValueNode: renders leaf values ──────────────────────────────────
 
-function ValueNode({ value }: { value: any }) {
+function ValueNode({ value }: { value: unknown }) {
     if (value === null) return <span className="text-rose-600 dark:text-rose-400 font-semibold">null</span>;
     if (typeof value === 'boolean') return <span className="text-indigo-600 dark:text-indigo-400 font-semibold">{value.toString()}</span>;
     if (typeof value === 'number') return <span className="text-orange-600 dark:text-orange-400">{value}</span>;

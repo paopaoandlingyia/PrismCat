@@ -2,30 +2,24 @@ import { Moon, Sun } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useEffect, useState } from 'react'
 
+function getInitialDarkMode() {
+    return typeof localStorage === 'undefined' || localStorage.getItem('theme') !== 'light'
+}
+
+function applyTheme(isDark: boolean) {
+    document.documentElement.classList.toggle('dark', isDark)
+    localStorage.setItem('theme', isDark ? 'dark' : 'light')
+}
+
 export function ThemeToggle() {
-    const [isDark, setIsDark] = useState(true) // 默认暗色
+    const [isDark, setIsDark] = useState(getInitialDarkMode)
 
     useEffect(() => {
-        // 初始化
-        const isDarkStored = localStorage.getItem('theme') !== 'light'
-        setIsDark(isDarkStored)
-        if (isDarkStored) {
-            document.documentElement.classList.add('dark')
-        } else {
-            document.documentElement.classList.remove('dark')
-        }
-    }, [])
+        applyTheme(isDark)
+    }, [isDark])
 
     const toggleTheme = () => {
-        const newDark = !isDark
-        setIsDark(newDark)
-        if (newDark) {
-            document.documentElement.classList.add('dark')
-            localStorage.setItem('theme', 'dark')
-        } else {
-            document.documentElement.classList.remove('dark')
-            localStorage.setItem('theme', 'light')
-        }
+        setIsDark((current) => !current)
     }
 
     return (

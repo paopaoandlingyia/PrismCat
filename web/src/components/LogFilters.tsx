@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils'
 import { Search, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react'
 import type { Upstream, LogFilter } from '@/lib/api'
-import { Suspense, lazy, useState, useEffect } from 'react'
+import { Suspense, lazy, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -55,12 +55,26 @@ export function LogFilters({
     const { t } = useTranslation()
 
     // 本地暂存的筛选条件（不触发查询）
-    const [draft, setDraft] = useState<LogFilter>(() => ({ ...filter }))
-
-    // 当外部 filter 变化时同步到 draft（例如分页或重置后）
-    useEffect(() => {
-        setDraft({ ...filter })
-    }, [filter])
+    const [draftState, setDraftState] = useState(() => ({
+        source: filter,
+        draft: { ...filter },
+    }))
+    let currentDraftState = draftState
+    if (draftState.source !== filter) {
+        const nextDraftState = {
+            source: filter,
+            draft: { ...filter },
+        }
+        setDraftState(nextDraftState)
+        currentDraftState = nextDraftState
+    }
+    const draft = currentDraftState.draft
+    const setDraft = (nextDraft: LogFilter) => {
+        setDraftState((current) => ({
+            ...current,
+            draft: nextDraft,
+        }))
+    }
 
     // 提交查询
     const handleSearch = () => {
