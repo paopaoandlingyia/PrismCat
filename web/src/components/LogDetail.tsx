@@ -99,6 +99,8 @@ export function LogDetail({ log, loading, onClose, onLogChange }: LogDetailProps
     const [annotationSaving, setAnnotationSaving] = useState(false)
     const [annotationNote, setAnnotationNote] = useState('')
     const [annotationLabels, setAnnotationLabels] = useState('')
+    const [annotationPanelOpen, setAnnotationPanelOpen] = useState(false)
+    const [idTooltipOpen, setIdTooltipOpen] = useState(false)
     const displayLog = liveLog ?? log
 
     useEffect(() => {
@@ -112,8 +114,8 @@ export function LogDetail({ log, loading, onClose, onLogChange }: LogDetailProps
         setResponseViewMode('pretty')
         setRequestExpandMode('default')
         setResponseExpandMode('default')
-        setAnnotationNote(log?.annotation?.note ?? '')
-        setAnnotationLabels((log?.annotation?.labels ?? []).join(', '))
+        setAnnotationPanelOpen(false)
+        setIdTooltipOpen(false)
     }, [log?.id])
 
     useEffect(() => {
@@ -206,6 +208,9 @@ export function LogDetail({ log, loading, onClose, onLogChange }: LogDetailProps
     const draftLabels = parseLabelDraft(annotationLabels)
     const annotationChanged = annotationNote.trim() !== (annotation.note ?? '') ||
         draftLabels.join('\n') !== (annotation.labels ?? []).join('\n')
+    const annotationSummary = annotation.note || annotation.labels.length
+        ? [annotation.note, ...annotation.labels.map(label => `#${label}`)].filter(Boolean).join(' · ')
+        : t('log_annotation.empty_summary', 'No note or labels')
 
     useEffect(() => {
         if (!hasRequestBodyDiff && requestViewMode === 'diff') {
@@ -478,8 +483,8 @@ export function LogDetail({ log, loading, onClose, onLogChange }: LogDetailProps
         <Sheet open={!!log} onOpenChange={(open) => !open && onClose()}>
             <SheetContent className={sheetWidthClassName}>
                 {/* 头部固定区域 */}
-                <SheetHeader className="border-b border-border/60 bg-card px-6 py-5">
-                    <div className="flex flex-wrap items-center gap-3">
+                <SheetHeader className="border-b border-border/60 bg-card px-5 py-3.5">
+                    <div className="flex flex-wrap items-center gap-2.5">
                         <div
                                 className={cn(
                                     "w-14 py-0.5 rounded-[3px] text-[10px] text-center uppercase font-bold border",
@@ -511,6 +516,36 @@ export function LogDetail({ log, loading, onClose, onLogChange }: LogDetailProps
                                 {t('log_detail.modified', 'MODIFIED')}
                             </Badge>
                         )}
+                        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-xs font-semibold text-muted-foreground">
+                            <span className="truncate text-foreground">{displayLog.upstream}</span>
+                            <span className="text-border">/</span>
+                            <span className="font-mono">{formatLatency(displayLog.latency_ms)}</span>
+                            <span className="text-border">/</span>
+                            <span>{formatDate(displayLog.created_at, i18n.language)}</span>
+                            <span className="text-border">/</span>
+                            <Tooltip open={idTooltipOpen}>
+                                <TooltipTrigger asChild>
+                                    <button
+                                        type="button"
+                                        onClick={() => copyToClipboard(displayLog.id, 'id')}
+                                        onMouseEnter={() => setIdTooltipOpen(true)}
+                                        onMouseLeave={() => setIdTooltipOpen(false)}
+                                        onBlur={() => setIdTooltipOpen(false)}
+                                        className="rounded px-1 py-0.5 font-mono transition-colors hover:bg-muted hover:text-foreground"
+                                        aria-label={t('log_detail.copy_id', 'Copy log ID')}
+                                    >
+                                        {copiedField === 'id' ? (
+                                            <span className="text-green-500">{t('common.copied', 'Copied')}</span>
+                                        ) : (
+                                            `${displayLog.id.substring(0, 8)}...`
+                                        )}
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom" sideOffset={6} className="max-w-[420px] break-all font-mono">
+                                    {copiedField === 'id' ? t('common.copied', 'Copied') : displayLog.id}
+                                </TooltipContent>
+                            </Tooltip>
+                        </div>
                         {loading && (
                             <div className="ml-auto flex items-center gap-2 text-[11px] font-bold text-primary animate-pulse">
                                 <div className="h-1 w-1 rounded-full bg-current" />
@@ -599,29 +634,9 @@ export function LogDetail({ log, loading, onClose, onLogChange }: LogDetailProps
                 </SheetHeader>
 
                 {/* 主内容区域 */}
-                <div className="custom-scrollbar flex-1 space-y-6 overflow-y-auto bg-muted/30 px-6 py-6">
-                    {/* 基本信息网格 */}
-                    <div className="grid grid-cols-2 gap-6 rounded-2xl border border-border/60 bg-card p-5 sm:grid-cols-4">
-                        {[
-                            { label: t('log_table.upstream'), value: displayLog.upstream, mono: false },
-                            { label: t('log_table.latency'), value: formatLatency(displayLog.latency_ms), mono: true },
-                            { label: t('log_table.time'), value: formatDate(displayLog.created_at, i18n.language), mono: false },
-                            { label: 'ID', value: displayLog.id.substring(0, 8) + '...', mono: true, full: displayLog.id }
-                        ].map((item, idx) => (
-                            <div key={idx} className="space-y-1">
-                                <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">{item.label}</div>
-                                <div className={cn(
-                                    "text-sm font-bold truncate text-foreground",
-                                    item.mono ? "font-mono" : ""
-                                )} title={item.full}>
-                                    {item.value}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-
-                    <div className="rounded-2xl border border-border/60 bg-card p-5">
-                        <div className="mb-4 flex flex-wrap items-center gap-2">
+                <div className="custom-scrollbar flex-1 space-y-4 overflow-y-auto bg-muted/30 px-5 py-4">
+                    <div className="rounded-xl border border-border/60 bg-card px-3 py-2.5">
+                        <div className="flex flex-wrap items-center gap-2">
                             <Button
                                 type="button"
                                 variant={annotation.saved ? 'default' : 'outline'}
@@ -673,39 +688,54 @@ export function LogDetail({ log, loading, onClose, onLogChange }: LogDetailProps
                             {annotationSaving && (
                                 <span className="text-[11px] font-medium text-muted-foreground">{t('common.loading')}</span>
                             )}
+                            <button
+                                type="button"
+                                onClick={() => setAnnotationPanelOpen(current => !current)}
+                                className="ml-auto flex min-w-0 items-center gap-2 rounded-lg px-2 py-1 text-left text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                            >
+                                <Tags className="h-3.5 w-3.5 shrink-0" />
+                                <span className="max-w-[360px] truncate">{annotationSummary}</span>
+                                {annotationPanelOpen ? (
+                                    <ChevronUp className="h-3.5 w-3.5 shrink-0" />
+                                ) : (
+                                    <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+                                )}
+                            </button>
                         </div>
 
-                        <div className="grid gap-3 lg:grid-cols-[1fr_280px]">
-                            <textarea
-                                value={annotationNote}
-                                onChange={(event) => setAnnotationNote(event.target.value)}
-                                placeholder={t('log_annotation.note_placeholder', '写下为什么保存这条日志，或后续要检查什么...')}
-                                className="min-h-20 resize-y rounded-lg border border-border/60 bg-muted/40 px-3 py-2 text-sm leading-relaxed outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary/40 focus:bg-background"
-                            />
-                            <div className="space-y-2">
-                                <div className="relative">
-                                    <Tags className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                                    <input
-                                        value={annotationLabels}
-                                        onChange={(event) => setAnnotationLabels(event.target.value)}
-                                        placeholder={t('log_annotation.labels_placeholder', '标签，用逗号分隔')}
-                                        className="h-10 w-full rounded-lg border border-border/60 bg-muted/40 pl-9 pr-3 text-sm outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary/40 focus:bg-background"
-                                    />
+                        {annotationPanelOpen && (
+                            <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_280px]">
+                                <textarea
+                                    value={annotationNote}
+                                    onChange={(event) => setAnnotationNote(event.target.value)}
+                                    placeholder={t('log_annotation.note_placeholder', '写下为什么保存这条日志，或后续要检查什么...')}
+                                    className="min-h-20 resize-y rounded-lg border border-border/60 bg-muted/40 px-3 py-2 text-sm leading-relaxed outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary/40 focus:bg-background"
+                                />
+                                <div className="space-y-2">
+                                    <div className="relative">
+                                        <Tags className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                                        <input
+                                            value={annotationLabels}
+                                            onChange={(event) => setAnnotationLabels(event.target.value)}
+                                            placeholder={t('log_annotation.labels_placeholder', '标签，用逗号分隔')}
+                                            className="h-10 w-full rounded-lg border border-border/60 bg-muted/40 pl-9 pr-3 text-sm outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary/40 focus:bg-background"
+                                        />
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        disabled={annotationSaving || !annotationChanged}
+                                        onClick={() => saveAnnotation({ note: annotationNote, labels: draftLabels })}
+                                        className="h-8 w-full rounded-lg text-xs font-semibold"
+                                    >
+                                        <Check className="mr-1.5 h-3.5 w-3.5" />
+                                        {t('log_annotation.save_note', '保存备注')}
+                                    </Button>
                                 </div>
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    disabled={annotationSaving || !annotationChanged}
-                                    onClick={() => saveAnnotation({ note: annotationNote, labels: draftLabels })}
-                                    className="h-8 w-full rounded-lg text-xs font-semibold"
-                                >
-                                    <Check className="mr-1.5 h-3.5 w-3.5" />
-                                    {t('log_annotation.save_note', '保存备注')}
-                                </Button>
                             </div>
-                        </div>
+                        )}
 
-                        {annotation.labels?.length ? (
+                        {annotationPanelOpen && annotation.labels?.length ? (
                             <div className="mt-3 flex flex-wrap gap-1.5">
                                 {annotation.labels.map((label) => (
                                     <Badge key={label} variant="outline" className="border-primary/20 bg-primary/5 text-[11px] font-medium text-primary">
@@ -717,13 +747,30 @@ export function LogDetail({ log, loading, onClose, onLogChange }: LogDetailProps
                     </div>
 
                     {/* URL 地址 */}
-                    <div className={sectionCardClassName}>
-                        <SectionHeader title={t('log_detail.url')} section="url" icon={Globe} />
+                    <div className="rounded-xl border border-border/60 bg-card px-3 py-2">
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => toggleSection('url')}
+                                className="group flex min-w-0 flex-1 items-center gap-2 rounded-lg px-1 py-1 text-left transition-colors hover:bg-muted"
+                            >
+                                <div className="rounded-md bg-muted p-1.5 text-muted-foreground group-hover:text-primary">
+                                    <Globe className="h-3.5 w-3.5" />
+                                </div>
+                                <span className="shrink-0 text-xs font-bold text-foreground">{t('log_detail.url')}</span>
+                                <span className="min-w-0 flex-1" />
+                                {expandedSections.url ? (
+                                    <ChevronUp className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                ) : (
+                                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                )}
+                            </button>
+                            <CopyButton text={displayLog.target_url} field="url" />
+                        </div>
                         {expandedSections.url && (
-                            <div className={cn(contentCardClassName, "group flex items-center gap-2 transition-colors hover:bg-muted")}>
-                                <code className="flex-1 text-xs font-mono break-all leading-relaxed text-foreground">{displayLog.target_url}</code>
-                                <CopyButton text={displayLog.target_url} field="url" />
-                            </div>
+                            <code className="mt-2 block rounded-lg bg-muted/50 px-3 py-2 text-xs font-mono leading-relaxed break-all text-foreground">
+                                {displayLog.target_url}
+                            </code>
                         )}
                     </div>
 

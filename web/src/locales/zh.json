@@ -121,7 +121,8 @@
         "modified": "已修改",
         "request_override": "参数覆盖",
         "open_diff": "打开 Diff",
-        "copy_as_curl": "复制为 cURL"
+        "copy_as_curl": "复制为 cURL",
+        "copy_id": "复制日志 ID"
     },
     "log_annotation": {
         "save": "保存",
@@ -131,7 +132,8 @@
         "label": "人工标签",
         "note_placeholder": "写下为什么保存这条日志，或后续要检查什么...",
         "labels_placeholder": "标签，用逗号分隔",
-        "save_note": "保存备注"
+        "save_note": "保存备注",
+        "empty_summary": "备注/标签"
     },
     "json_viewer": {
         "items": "{{count}} 项",

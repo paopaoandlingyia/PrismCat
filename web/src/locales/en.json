@@ -121,7 +121,8 @@
         "modified": "MODIFIED",
         "request_override": "Request Override",
         "open_diff": "Open Diff",
-        "copy_as_curl": "Copy as cURL"
+        "copy_as_curl": "Copy as cURL",
+        "copy_id": "Copy log ID"
     },
     "log_annotation": {
         "save": "Save",
@@ -131,7 +132,8 @@
         "label": "Manual label",
         "note_placeholder": "Write why this log is worth saving, or what to check later...",
         "labels_placeholder": "Labels, separated by commas",
-        "save_note": "Save note"
+        "save_note": "Save note",
+        "empty_summary": "Note / labels"
     },
     "json_viewer": {
         "items": "{{count}} items",
