@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: '要补充文件的 Release 标签 (例如 v1.0.0)'
+        description: '要补充文件的 Release 标签 (例如 v1.6.0)'
         required: true
-        default: 'v1.0.0'
+        default: 'v1.6.0'
 
 jobs:
   build-and-release:
@@ -61,9 +61,13 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0 # 关键：关闭 CGO 使二进制文件在 Linux/macOS 上具备极致的便携性
         run: |
-          go build -ldflags="-s -w" -o prismcat-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }} ./cmd/prismcat
+          VERSION="${{ github.event.inputs.tag_name }}"
+          VERSION="${VERSION#v}"
+          ASSET_NAME="prismcat-${{ github.event.inputs.tag_name }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}"
+          go build -ldflags="-s -w -X github.com/paopaoandlingyia/PrismCat/internal/config.Version=${VERSION}" -o "${ASSET_NAME}" ./cmd/prismcat
+          echo "ASSET_NAME=${ASSET_NAME}" >> "$GITHUB_ENV"
 
       - name: 上传到现有的 Release
-        run: gh release upload "${{ github.event.inputs.tag_name }}" "prismcat-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}" --clobber
+        run: gh release upload "${{ github.event.inputs.tag_name }}" "${ASSET_NAME}" --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -18,6 +18,9 @@ import (
 	"github.com/paopaoandlingyia/PrismCat/internal/live"
 	"github.com/paopaoandlingyia/PrismCat/internal/outbound"
 	"github.com/paopaoandlingyia/PrismCat/internal/storage"
+	"github.com/paopaoandlingyia/PrismCat/internal/storageusage"
+	"github.com/paopaoandlingyia/PrismCat/internal/systemmetrics"
+	"github.com/paopaoandlingyia/PrismCat/internal/updatecheck"
 )
 
 // Handler API 处理器
@@ -27,6 +30,8 @@ type Handler struct {
 	blobs   storage.BlobStore
 	live    *live.Registry
 	clients *outbound.ClientCache
+	metrics *systemmetrics.Collector
+	updates *updatecheck.Checker
 }
 
 // New 创建 API 处理器
@@ -37,6 +42,8 @@ func New(cfg *config.Config, repo storage.Repository, blobs storage.BlobStore, l
 		blobs:   blobs,
 		live:    liveRegistry,
 		clients: outbound.NewClientCache(50, 10),
+		metrics: systemmetrics.NewCollector(),
+		updates: updatecheck.NewChecker(),
 	}
 }
 
@@ -48,6 +55,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/upstreams", h.handleUpstreams)
 	mux.HandleFunc("/api/config", h.handleConfig)
 	mux.HandleFunc("/api/health", h.handleHealth)
+	mux.HandleFunc("/api/system/metrics", h.handleSystemMetrics)
+	mux.HandleFunc("/api/system/storage", h.handleSystemStorage)
+	mux.HandleFunc("/api/system/update", h.handleSystemUpdate)
 	mux.HandleFunc("/healthz", h.handleHealth)
 	mux.HandleFunc("/api/blobs/", h.handleBlob)
 	mux.HandleFunc("/api/replay", h.handleReplay)
@@ -410,6 +420,43 @@ func (h *Handler) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"version": config.Version,
 		"time":    time.Now().Format(time.RFC3339),
 	})
+}
+
+func (h *Handler) handleSystemMetrics(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	h.jsonResponse(w, h.metrics.Snapshot())
+}
+
+func (h *Handler) handleSystemStorage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	usage, err := storageusage.Calculate(h.cfg.StorageSnapshot())
+	if err != nil {
+		h.jsonError(w, "计算存储占用失败: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	h.jsonResponse(w, usage)
+}
+
+func (h *Handler) handleSystemUpdate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	info, err := h.updates.Check(r.Context(), config.Version)
+	if err != nil {
+		h.jsonError(w, "检查更新失败: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+	h.jsonResponse(w, info)
 }
 
 // handleConfig 获取或更新配置

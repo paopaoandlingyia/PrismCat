@@ -292,6 +292,84 @@ export async function fetchConfig(): Promise<AppConfig> {
     return response.json()
 }
 
+export interface SystemMetrics {
+    timestamp: string
+    platform: string
+    runtime: {
+        go_version: string
+        num_cpu: number
+        goroutines: number
+        uptime_seconds: number
+    }
+    process: {
+        pid: number
+        rss_bytes?: number
+        heap_alloc_bytes: number
+        heap_sys_bytes: number
+        cpu_seconds?: number
+        cpu_percent?: number
+    }
+    memory: {
+        total_bytes?: number
+        used_bytes?: number
+        available_bytes?: number
+        source: string
+    }
+}
+
+export async function fetchSystemMetrics(): Promise<SystemMetrics> {
+    const response = await fetch(`${API_BASE}/system/metrics`)
+    if (!response.ok) throw new Error('获取资源占用失败')
+    return response.json()
+}
+
+export interface StorageUsage {
+    calculated_at: string
+    blob_store: string
+    database_bytes: number
+    database_files: number
+    blob_bytes: number
+    blob_files: number
+    total_bytes: number
+}
+
+export async function fetchStorageUsage(): Promise<StorageUsage> {
+    const response = await fetch(`${API_BASE}/system/storage`)
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: '请求失败' }))
+        throw new Error(error.error || '计算存储占用失败')
+    }
+    return response.json()
+}
+
+export interface UpdateAsset {
+    name: string
+    download_url: string
+    size: number
+}
+
+export interface UpdateInfo {
+    current_version: string
+    latest_version: string
+    latest_tag: string
+    update_available: boolean
+    release_url: string
+    published_at: string
+    platform: string
+    arch: string
+    assets: UpdateAsset[]
+    matching_asset?: UpdateAsset
+}
+
+export async function fetchUpdateInfo(): Promise<UpdateInfo> {
+    const response = await fetch(`${API_BASE}/system/update`)
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: '请求失败' }))
+        throw new Error(error.error || '检查更新失败')
+    }
+    return response.json()
+}
+
 export async function updateConfig(update: ConfigUpdate): Promise<void> {
     const response = await fetch(`${API_BASE}/config`, {
         method: 'PUT',
