@@ -1465,37 +1465,41 @@ export function Settings() {
                                                     className={cn(
                                                         "rounded-full px-3 py-1 text-xs font-semibold",
                                                         updateInfo.update_available
-                                                            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                                                            : "border-border/50 bg-muted/40 text-muted-foreground"
+                                                            ? "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                                                            : "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                                                     )}
                                                 >
                                                     {updateInfo.update_available ? t('settings.update_available') : t('settings.update_latest')}
                                                 </Badge>
-                                                <span className="text-sm text-muted-foreground">
-                                                    {t('settings.update_latest_version', {
-                                                        version: updateInfo.latest_tag || `v${updateInfo.latest_version}`,
-                                                    })}
-                                                </span>
+                                                {updateInfo.update_available && (
+                                                    <span className="text-sm text-muted-foreground">
+                                                        {t('settings.update_latest_version', {
+                                                            version: updateInfo.latest_tag || `v${updateInfo.latest_version}`,
+                                                        })}
+                                                    </span>
+                                                )}
                                             </div>
 
-                                            <div className="flex flex-wrap gap-2">
-                                                {updateInfo.update_available && updateInfo.matching_asset && (
-                                                    <Button asChild className="h-10 rounded-xl">
-                                                        <a href={updateInfo.matching_asset.download_url} target="_blank" rel="noreferrer noopener">
-                                                            <Download className="mr-2 h-4 w-4" />
-                                                            {t('settings.update_download_asset', {
-                                                                size: formatBytes(updateInfo.matching_asset.size),
-                                                            })}
+                                            {updateInfo.update_available && (
+                                                <div className="flex flex-wrap gap-2">
+                                                    {updateInfo.matching_asset && (
+                                                        <Button asChild className="h-10 rounded-xl">
+                                                            <a href={updateInfo.matching_asset.download_url} target="_blank" rel="noreferrer noopener">
+                                                                <Download className="mr-2 h-4 w-4" />
+                                                                {t('settings.update_download_asset', {
+                                                                    size: formatBytes(updateInfo.matching_asset.size),
+                                                                })}
+                                                            </a>
+                                                        </Button>
+                                                    )}
+                                                    <Button asChild variant="outline" className="h-10 rounded-xl">
+                                                        <a href={updateInfo.release_url} target="_blank" rel="noreferrer noopener">
+                                                            <ExternalLink className="mr-2 h-4 w-4" />
+                                                            {t('settings.update_open_release')}
                                                         </a>
                                                     </Button>
-                                                )}
-                                                <Button asChild variant="outline" className="h-10 rounded-xl">
-                                                    <a href={updateInfo.release_url} target="_blank" rel="noreferrer noopener">
-                                                        <ExternalLink className="mr-2 h-4 w-4" />
-                                                        {t('settings.update_open_release')}
-                                                    </a>
-                                                </Button>
-                                            </div>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>
