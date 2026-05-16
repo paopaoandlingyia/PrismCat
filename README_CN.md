@@ -329,6 +329,14 @@ PrismCat 使用异步日志写入，代理本身的延迟通常在 1ms 以内。
 
 ---
 
+## ❤️ 支持 PrismCat
+
+如果 PrismCat 帮你节省了调试 LLM 应用的时间，也欢迎请我喝杯咖啡：
+
+[在爱发电支持 PrismCat](https://afdian.com/a/etgpao)
+
+---
+
 ## 🛡️ License
 
 [MIT License](LICENSE)

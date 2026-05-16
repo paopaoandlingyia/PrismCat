@@ -329,6 +329,14 @@ PrismCat uses asynchronous log writing. The proxy overhead is typically under 1m
 
 ---
 
+## ❤️ Support PrismCat
+
+If PrismCat helps you debug LLM apps or saves you time, you can support the project here:
+
+[Support PrismCat on Afdian](https://afdian.com/a/etgpao)
+
+---
+
 ## 🛡️ License
 
 [MIT License](LICENSE)
