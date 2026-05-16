@@ -1,11 +1,11 @@
 import { cn, formatDate, formatLatency, formatSize, getStatusColor, getMethodColor } from '@/lib/utils'
-import { Copy, Check, Zap, AlertTriangle, ChevronDown, ChevronUp, ChevronsDownUp, ChevronsUpDown, FileCode, ListTree, Globe, Layers, RotateCcw, Maximize2, Minimize2, ExternalLink, Terminal, Bookmark, BookmarkCheck, CheckCircle2, CircleDot, Tags } from 'lucide-react'
+import { Copy, Check, Zap, AlertTriangle, ChevronDown, ChevronUp, ChevronsDownUp, ChevronsUpDown, FileCode, ListTree, Globe, Layers, RotateCcw, Maximize2, Minimize2, ExternalLink, Terminal, Bookmark, BookmarkCheck, CheckCircle2, CircleDot, Tags, Search, X } from 'lucide-react'
 import { fetchBlob, updateLogAnnotation } from '@/lib/api'
 import type { LiveLogEvent, RequestLog } from '@/lib/api'
-import { startTransition, useCallback, useEffect, useMemo, useState, type ComponentType, type ReactNode } from 'react'
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { JsonViewer, type JsonExpandMode } from './JsonViewer'
+import { JsonViewer, type JsonExpandMode, HighlightText, countJsonSearchMatches } from './JsonViewer'
 import { JsonDiffViewer } from './JsonDiffViewer'
 import { BlobPanel } from './BlobPanel'
 import { mergeStreamBody } from '@/lib/streamMerge'
@@ -74,6 +74,105 @@ function getInitialExpandedSections(): typeof defaultExpandedSections {
     }
 }
 
+function countTextMatches(text: string, term: string): number {
+    if (!term || !text) return 0;
+    const lower = text.toLowerCase();
+    const lowerTerm = term.toLowerCase();
+    let count = 0, idx = 0;
+    while ((idx = lower.indexOf(lowerTerm, idx)) !== -1) { count++; idx += lowerTerm.length; }
+    return count;
+}
+
+function navigateSearchMatch(container: HTMLElement | null, direction: 'prev' | 'next') {
+    if (!container) return;
+    const matches = Array.from(container.querySelectorAll<HTMLElement>('[data-search-match]'));
+    if (!matches.length) return;
+    const prev = container.querySelector<HTMLElement>('[data-search-match-active]');
+    if (prev) prev.removeAttribute('data-search-match-active');
+    const currentIdx = prev ? matches.indexOf(prev) : -1;
+    let nextIdx: number;
+    if (direction === 'next') {
+        nextIdx = currentIdx + 1 >= matches.length ? 0 : currentIdx + 1;
+    } else {
+        nextIdx = currentIdx - 1 < 0 ? matches.length - 1 : currentIdx - 1;
+    }
+    matches[nextIdx].setAttribute('data-search-match-active', '');
+    matches[nextIdx].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function RawBodyViewer({ text, searchTerm }: { text: string; searchTerm?: string }) {
+    return (
+        <pre className="whitespace-pre-wrap break-all text-[11px] font-mono leading-relaxed text-foreground select-text">
+            {searchTerm ? <HighlightText text={text} searchTerm={searchTerm} /> : text}
+        </pre>
+    );
+}
+
+function BodySearchBar({
+    searchTerm,
+    onSearchTermChange,
+    matchCount,
+    onNavigate,
+    onClose,
+}: {
+    searchTerm: string;
+    onSearchTermChange: (term: string) => void;
+    matchCount: number;
+    onNavigate: (dir: 'prev' | 'next') => void;
+    onClose: () => void;
+}) {
+    const { t } = useTranslation();
+    return (
+        <div className="flex items-center gap-2 border-b border-border/60 px-3 py-1.5 bg-muted/20">
+            <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <input
+                autoFocus
+                value={searchTerm}
+                onChange={(e) => onSearchTermChange(e.target.value)}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); onNavigate(e.shiftKey ? 'prev' : 'next'); }
+                    if (e.key === 'Escape') { e.preventDefault(); onClose(); }
+                }}
+                placeholder={t('body_search.placeholder', 'Search in body...')}
+                className="flex-1 min-w-0 bg-transparent text-xs outline-none placeholder:text-muted-foreground/50"
+            />
+            {searchTerm && (
+                <span className="text-[10px] font-bold text-muted-foreground whitespace-nowrap">
+                    {matchCount > 0
+                        ? t('body_search.match_count', { count: matchCount })
+                        : t('body_search.no_matches', 'No matches')
+                    }
+                </span>
+            )}
+            <div className="flex items-center">
+                <button
+                    type="button"
+                    onClick={() => onNavigate('prev')}
+                    disabled={!searchTerm || matchCount === 0}
+                    className="h-6 w-6 inline-flex items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-30 disabled:pointer-events-none"
+                >
+                    <ChevronUp className="h-3 w-3" />
+                </button>
+                <button
+                    type="button"
+                    onClick={() => onNavigate('next')}
+                    disabled={!searchTerm || matchCount === 0}
+                    className="h-6 w-6 inline-flex items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-30 disabled:pointer-events-none"
+                >
+                    <ChevronDown className="h-3 w-3" />
+                </button>
+            </div>
+            <button
+                type="button"
+                onClick={onClose}
+                className="h-6 w-6 inline-flex items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+                <X className="h-3 w-3" />
+            </button>
+        </div>
+    );
+}
+
 export function LogDetail({ log, loading, onClose, onLogChange }: LogDetailProps) {
     const { t, i18n } = useTranslation()
     const navigate = useNavigate()
@@ -101,6 +200,12 @@ export function LogDetail({ log, loading, onClose, onLogChange }: LogDetailProps
     const [annotationLabels, setAnnotationLabels] = useState('')
     const [annotationPanelOpen, setAnnotationPanelOpen] = useState(false)
     const [idTooltipOpen, setIdTooltipOpen] = useState(false)
+    const [requestSearchOpen, setRequestSearchOpen] = useState(false)
+    const [requestSearchTerm, setRequestSearchTerm] = useState('')
+    const [responseSearchOpen, setResponseSearchOpen] = useState(false)
+    const [responseSearchTerm, setResponseSearchTerm] = useState('')
+    const requestBodyRef = useRef<HTMLDivElement>(null)
+    const responseBodyRef = useRef<HTMLDivElement>(null)
     const displayLog = liveLog ?? log
 
     useEffect(() => {
@@ -116,6 +221,10 @@ export function LogDetail({ log, loading, onClose, onLogChange }: LogDetailProps
         setResponseExpandMode('default')
         setAnnotationPanelOpen(false)
         setIdTooltipOpen(false)
+        setRequestSearchOpen(false)
+        setRequestSearchTerm('')
+        setResponseSearchOpen(false)
+        setResponseSearchTerm('')
     }, [log?.id])
 
     useEffect(() => {
@@ -241,6 +350,22 @@ export function LogDetail({ log, loading, onClose, onLogChange }: LogDetailProps
         return mergeStreamBody(effectiveResponseBody)
     }, [shouldInspectResponseBody, displayLog?.streaming, responseViewMode, effectiveResponseBody])
 
+    const requestSearchMatchCount = useMemo(() => {
+        if (!requestSearchTerm) return 0
+        if (requestViewMode === 'raw' || requestViewMode === 'diff') return countTextMatches(effectiveRequestBody, requestSearchTerm)
+        return parsedRequestBody
+            ? countJsonSearchMatches(parsedRequestBody, requestSearchTerm)
+            : countTextMatches(effectiveRequestBody, requestSearchTerm)
+    }, [requestSearchTerm, requestViewMode, effectiveRequestBody, parsedRequestBody])
+
+    const responseSearchMatchCount = useMemo(() => {
+        if (!responseSearchTerm) return 0
+        if (responseViewMode === 'raw') return countTextMatches(effectiveResponseBody, responseSearchTerm)
+        if (responseViewMode === 'merged' && mergedResponse) return countJsonSearchMatches(mergedResponse.merged, responseSearchTerm)
+        return parsedResponseBody
+            ? countJsonSearchMatches(parsedResponseBody, responseSearchTerm)
+            : countTextMatches(effectiveResponseBody, responseSearchTerm)
+    }, [responseSearchTerm, responseViewMode, effectiveResponseBody, parsedResponseBody, mergedResponse])
 
     const copyToClipboard = async (text: string, field: string) => {
         await navigator.clipboard.writeText(text)
@@ -377,10 +502,25 @@ export function LogDetail({ log, loading, onClose, onLogChange }: LogDetailProps
         )
     }
 
-    const RawBodyViewer = ({ text }: { text: string }) => (
-        <pre className="whitespace-pre-wrap break-all text-[11px] font-mono leading-relaxed text-foreground select-text">
-            {text}
-        </pre>
+    const SearchToggle = ({ active, onClick }: { active: boolean; onClick: () => void }) => (
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={onClick}
+                    className={cn(
+                        "h-7 w-7 rounded-md transition-all",
+                        active ? "bg-primary/10 text-primary hover:bg-primary/15" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    )}
+                    aria-label={t('body_search.search', 'Search')}
+                >
+                    <Search className="h-3.5 w-3.5" />
+                </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>{t('body_search.search', 'Search')}</TooltipContent>
+        </Tooltip>
     )
 
     const ViewToggle = ({
@@ -883,16 +1023,29 @@ export function LogDetail({ log, loading, onClose, onLogChange }: LogDetailProps
                                                             </TooltipContent>
                                                         </Tooltip>
                                                     )}
+                                                    <SearchToggle active={requestSearchOpen} onClick={() => {
+                                                        setRequestSearchOpen(v => !v)
+                                                        if (requestSearchOpen) setRequestSearchTerm('')
+                                                    }} />
                                                     <CopyButton text={effectiveRequestBody} field="requestBody" />
                                                 </div>
                                             </div>
-                                            <div className="custom-scrollbar flex-1 overflow-x-auto overflow-y-auto p-4">
+                                            {requestSearchOpen && (
+                                                <BodySearchBar
+                                                    searchTerm={requestSearchTerm}
+                                                    onSearchTermChange={setRequestSearchTerm}
+                                                    matchCount={requestSearchMatchCount}
+                                                    onNavigate={(dir) => navigateSearchMatch(requestBodyRef.current, dir)}
+                                                    onClose={() => { setRequestSearchOpen(false); setRequestSearchTerm(''); }}
+                                                />
+                                            )}
+                                            <div ref={requestBodyRef} className="custom-scrollbar flex-1 overflow-x-auto overflow-y-auto p-4">
                                                 {requestViewMode === 'raw' ? (
-                                                    <RawBodyViewer text={effectiveRequestBody} />
+                                                    <RawBodyViewer text={effectiveRequestBody} searchTerm={requestSearchTerm || undefined} />
                                                 ) : requestViewMode === 'diff' && hasRequestBodyDiff ? (
                                                     <JsonDiffViewer beforeText={originalRequestBody} afterText={finalRequestBody} />
                                                 ) : (
-                                                    <JsonViewer data={parsedRequestBody ?? effectiveRequestBody} expandMode={requestExpandMode} />
+                                                    <JsonViewer data={parsedRequestBody ?? effectiveRequestBody} expandMode={requestExpandMode} searchTerm={requestSearchTerm || undefined} />
                                                 )}
                                             </div>
                                         </div>
@@ -1002,6 +1155,10 @@ export function LogDetail({ log, loading, onClose, onLogChange }: LogDetailProps
                                                     {(responseViewMode === 'pretty' || (responseViewMode === 'merged' && mergedResponse)) && (
                                                         <ExpandToggle mode={responseExpandMode} onChange={setResponseExpandMode} />
                                                     )}
+                                                    <SearchToggle active={responseSearchOpen} onClick={() => {
+                                                        setResponseSearchOpen(v => !v)
+                                                        if (responseSearchOpen) setResponseSearchTerm('')
+                                                    }} />
                                                     <CopyButton
                                                         text={
                                                             responseViewMode === 'merged' && mergedResponse
@@ -1012,19 +1169,28 @@ export function LogDetail({ log, loading, onClose, onLogChange }: LogDetailProps
                                                     />
                                                 </div>
                                             </div>
-                                            <div className="custom-scrollbar flex-1 overflow-x-auto overflow-y-auto p-4">
+                                            {responseSearchOpen && (
+                                                <BodySearchBar
+                                                    searchTerm={responseSearchTerm}
+                                                    onSearchTermChange={setResponseSearchTerm}
+                                                    matchCount={responseSearchMatchCount}
+                                                    onNavigate={(dir) => navigateSearchMatch(responseBodyRef.current, dir)}
+                                                    onClose={() => { setResponseSearchOpen(false); setResponseSearchTerm(''); }}
+                                                />
+                                            )}
+                                            <div ref={responseBodyRef} className="custom-scrollbar flex-1 overflow-x-auto overflow-y-auto p-4">
                                                 {responseViewMode === 'raw' ? (
-                                                    <RawBodyViewer text={effectiveResponseBody} />
+                                                    <RawBodyViewer text={effectiveResponseBody} searchTerm={responseSearchTerm || undefined} />
                                                 ) : responseViewMode === 'merged' ? (
                                                     mergedResponse ? (
-                                                        <JsonViewer data={mergedResponse.merged} expandMode={responseExpandMode} />
+                                                        <JsonViewer data={mergedResponse.merged} expandMode={responseExpandMode} searchTerm={responseSearchTerm || undefined} />
                                                     ) : (
                                                         <div className={cn(emptyStateClassName, "text-[11px] italic text-muted-foreground")}>
                                                             {t('log_detail.stream_merge_unavailable', '当前无法生成合并视图，请切换到 Raw 查看原始内容。')}
                                                         </div>
                                                     )
                                                 ) : (
-                                                    <JsonViewer data={parsedResponseBody ?? effectiveResponseBody} expandMode={responseExpandMode} />
+                                                    <JsonViewer data={parsedResponseBody ?? effectiveResponseBody} expandMode={responseExpandMode} searchTerm={responseSearchTerm || undefined} />
                                                 )}
                                             </div>
                                         </div>

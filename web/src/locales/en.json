@@ -135,6 +135,12 @@
         "save_note": "Save note",
         "empty_summary": "Note / labels"
     },
+    "body_search": {
+        "search": "Search",
+        "placeholder": "Search in body...",
+        "match_count": "{{count}} matches",
+        "no_matches": "No matches"
+    },
     "json_viewer": {
         "items": "{{count}} items",
         "keys": "{{count}} keys",

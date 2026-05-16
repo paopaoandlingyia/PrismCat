@@ -135,6 +135,12 @@
         "save_note": "保存备注",
         "empty_summary": "备注/标签"
     },
+    "body_search": {
+        "search": "搜索",
+        "placeholder": "在内容中搜索...",
+        "match_count": "{{count}} 个匹配",
+        "no_matches": "无匹配"
+    },
     "json_viewer": {
         "items": "{{count}} 项",
         "keys": "{{count}} 个键",

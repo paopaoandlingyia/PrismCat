@@ -1,5 +1,4 @@
-import { useMemo, useState } from 'react';
-import type { ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Copy, Eye, Image as ImageIcon, FileCode } from 'lucide-react';
 import { Button } from './ui/button';
@@ -76,6 +75,73 @@ function detectionFromMime(mimeType: string): Base64Detection {
     return { isBase64: true, fileType: 'unknown', isImage: mimeType.startsWith('image/'), mimeType, label: mimeType.split('/')[1]?.toUpperCase() || 'Base64' };
 }
 
+// ─── Search utilities ────────────────────────────────────────────────
+
+export function containsSearchMatch(data: unknown, term: string): boolean {
+    if (!term) return false;
+    const lower = term.toLowerCase();
+    function check(value: unknown, key?: string): boolean {
+        if (key !== undefined && key.toLowerCase().includes(lower)) return true;
+        if (value === null) return 'null'.includes(lower);
+        if (value === undefined) return false;
+        if (typeof value === 'string') return value.toLowerCase().includes(lower);
+        if (typeof value === 'number') return String(value).includes(lower);
+        if (typeof value === 'boolean') return String(value).includes(lower);
+        if (Array.isArray(value)) return value.some((v) => check(v));
+        if (typeof value === 'object') return Object.entries(value as Record<string, unknown>).some(([k, v]) => check(v, k));
+        return false;
+    }
+    return check(data);
+}
+
+export function countJsonSearchMatches(data: unknown, term: string): number {
+    if (!term) return 0;
+    const lower = term.toLowerCase();
+    let count = 0;
+    function countIn(text: string) {
+        const t = text.toLowerCase();
+        let idx = 0;
+        while ((idx = t.indexOf(lower, idx)) !== -1) { count++; idx += lower.length; }
+    }
+    function traverse(value: unknown, key?: string, isArrayItem?: boolean) {
+        if (key !== undefined && !isArrayItem) countIn(key);
+        if (value === null) { countIn('null'); return; }
+        if (value === undefined) return;
+        if (typeof value === 'string') { countIn(value); return; }
+        if (typeof value === 'number') { countIn(String(value)); return; }
+        if (typeof value === 'boolean') { countIn(String(value)); return; }
+        if (Array.isArray(value)) { value.forEach((v, i) => traverse(v, String(i), true)); return; }
+        if (typeof value === 'object') {
+            for (const [k, v] of Object.entries(value as Record<string, unknown>)) traverse(v, k, false);
+        }
+    }
+    traverse(data);
+    return count;
+}
+
+export function HighlightText({ text, searchTerm }: { text: string; searchTerm?: string }) {
+    if (!searchTerm) return <>{text}</>;
+    const lowerText = text.toLowerCase();
+    const lowerTerm = searchTerm.toLowerCase();
+    if (!lowerText.includes(lowerTerm)) return <>{text}</>;
+    const parts: ReactNode[] = [];
+    let lastIndex = 0;
+    let idx = lowerText.indexOf(lowerTerm);
+    let k = 0;
+    while (idx !== -1) {
+        if (idx > lastIndex) parts.push(text.slice(lastIndex, idx));
+        parts.push(
+            <mark key={k++} className="bg-yellow-200 dark:bg-yellow-500/30 text-inherit rounded-[2px]" data-search-match="">
+                {text.slice(idx, idx + searchTerm.length)}
+            </mark>
+        );
+        lastIndex = idx + searchTerm.length;
+        idx = lowerText.indexOf(lowerTerm, lastIndex);
+    }
+    if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+    return <>{parts}</>;
+}
+
 // ─── Components ──────────────────────────────────────────────────────
 
 export type JsonExpandMode = 'default' | 'all' | 'none';
@@ -85,11 +151,12 @@ interface JsonViewerProps {
     data: unknown;
     initialExpanded?: boolean;
     expandMode?: JsonExpandMode;
+    searchTerm?: string;
 }
 
-export function JsonViewer({ data, initialExpanded = true, expandMode = 'default' }: JsonViewerProps) {
-    if (typeof data === 'string') return <SmartText text={data} />;
-    if (typeof data !== 'object' || data === null) return <ValueNode value={data} />;
+export function JsonViewer({ data, initialExpanded = true, expandMode = 'default', searchTerm }: JsonViewerProps) {
+    if (typeof data === 'string') return <SmartText text={data} searchTerm={searchTerm} />;
+    if (typeof data !== 'object' || data === null) return <ValueNode value={data} searchTerm={searchTerm} />;
 
     const rootData: JsonContainer = Array.isArray(data) || isRecord(data) ? data : {};
     const rootInitialExpanded = shouldAutoExpandNode({
@@ -101,7 +168,7 @@ export function JsonViewer({ data, initialExpanded = true, expandMode = 'default
 
     return (
         <div className="font-mono text-[11px] leading-relaxed select-text">
-            <CollapsibleNode data={rootData} label="" isRoot initialExpanded={rootInitialExpanded} depth={0} expandMode={expandMode} />
+            <CollapsibleNode data={rootData} label="" isRoot initialExpanded={rootInitialExpanded} depth={0} expandMode={expandMode} searchTerm={searchTerm} />
         </div>
     );
 }
@@ -112,7 +179,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 // ─── SmartText: raw text with base64 detection ───────────────────────
 
-export function SmartText({ text }: { text: string }) {
+export function SmartText({ text, searchTerm }: { text: string; searchTerm?: string }) {
     const isLargeText = text.length > LARGE_TEXT_THRESHOLD;
     type Seg = { type: 'text'; content: string } | { type: 'b64'; content: string; detection: Base64Detection; prefix?: string };
     const segments = useMemo(() => {
@@ -141,12 +208,12 @@ export function SmartText({ text }: { text: string }) {
         return <LargeTextPreview text={text} />;
     }
 
-    if (!segments) return <pre className="whitespace-pre-wrap break-all text-[11px] font-mono">{text}</pre>;
+    if (!segments) return <pre className="whitespace-pre-wrap break-all text-[11px] font-mono">{searchTerm ? <HighlightText text={text} searchTerm={searchTerm} /> : text}</pre>;
     return (
         <div className="whitespace-pre-wrap break-all leading-relaxed text-[11px] font-mono">
             {segments.map((seg, i) =>
                 seg.type === 'text'
-                    ? <span key={i}>{seg.content}</span>
+                    ? <span key={i}>{searchTerm ? <HighlightText text={seg.content} searchTerm={searchTerm} /> : seg.content}</span>
                     : <Base64Placeholder key={i} value={seg.content} detection={seg.detection} dataUriPrefix={seg.prefix} />
             )}
         </div>
@@ -249,6 +316,7 @@ function createExpansionSnapshot({
     initialExpanded,
     forceExpanded,
     expandMode,
+    searchTerm,
 }: {
     data: JsonContainer;
     depth: number;
@@ -256,7 +324,18 @@ function createExpansionSnapshot({
     initialExpanded: boolean;
     forceExpanded: boolean;
     expandMode: JsonExpandMode;
+    searchTerm?: string;
 }) {
+    let expanded: boolean;
+    if (searchTerm && containsSearchMatch(data, searchTerm)) {
+        expanded = true;
+    } else if (expandMode === 'all') {
+        expanded = true;
+    } else if (expandMode === 'none') {
+        expanded = false;
+    } else {
+        expanded = shouldAutoExpandNode({ data, depth, isRoot, initialExpanded, forceExpanded });
+    }
     return {
         data,
         depth,
@@ -264,11 +343,8 @@ function createExpansionSnapshot({
         initialExpanded,
         forceExpanded,
         expandMode,
-        expanded: expandMode === 'all'
-            ? true
-            : expandMode === 'none'
-                ? false
-                : shouldAutoExpandNode({ data, depth, isRoot, initialExpanded, forceExpanded }),
+        searchTerm,
+        expanded,
     };
 }
 
@@ -277,7 +353,7 @@ function indent(depth: number): string {
     return '\u00A0\u00A0'.repeat(depth); // Non-breaking spaces × 2 per level
 }
 
-function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, initialExpanded = true, forceExpanded = false, suffix = null, depth = 0, expandMode = 'default' }: {
+function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, initialExpanded = true, forceExpanded = false, suffix = null, depth = 0, expandMode = 'default', searchTerm }: {
     data: JsonContainer;
     label: string;
     isRoot?: boolean;
@@ -287,6 +363,7 @@ function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, ini
     suffix?: ReactNode;
     depth?: number;
     expandMode?: JsonExpandMode;
+    searchTerm?: string;
 }) {
     const { t } = useTranslation();
     const [expansion, setExpansion] = useState(() => createExpansionSnapshot({
@@ -296,6 +373,7 @@ function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, ini
         initialExpanded,
         forceExpanded,
         expandMode,
+        searchTerm,
     }));
     let currentExpansion = expansion;
     if (
@@ -304,7 +382,8 @@ function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, ini
         expansion.isRoot !== isRoot ||
         expansion.initialExpanded !== initialExpanded ||
         expansion.forceExpanded !== forceExpanded ||
-        expansion.expandMode !== expandMode
+        expansion.expandMode !== expandMode ||
+        expansion.searchTerm !== searchTerm
     ) {
         currentExpansion = createExpansionSnapshot({
             data,
@@ -313,6 +392,7 @@ function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, ini
             initialExpanded,
             forceExpanded,
             expandMode,
+            searchTerm,
         });
         setExpansion(currentExpansion);
     }
@@ -361,7 +441,7 @@ function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, ini
         return (
             <div>
                 <span className="text-muted-foreground/30 select-none">{pad}</span>
-                {showLabel && <span className="text-violet-600 dark:text-violet-400 font-semibold mr-1">"{label}": </span>}
+                {showLabel && <span className="text-violet-600 dark:text-violet-400 font-semibold mr-1">"<HighlightText text={label} searchTerm={searchTerm} />": </span>}
                 <span className="text-muted-foreground/60">{open}{close}</span>{suffix}
             </div>
         );
@@ -375,7 +455,7 @@ function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, ini
                 onClick={() => setExpanded(!expanded)}
             >
                 <span className="text-muted-foreground/30 select-none">{pad}</span>
-                {showLabel && <span className="text-violet-600 dark:text-violet-400 font-semibold mr-1">"{label}": </span>}
+                {showLabel && <span className="text-violet-600 dark:text-violet-400 font-semibold mr-1">"<HighlightText text={label} searchTerm={searchTerm} />": </span>}
                 <span className="text-muted-foreground/60">{open}</span>
                 {!expanded && (
                     <>
@@ -403,15 +483,16 @@ function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, ini
                             suffix={comma}
                             depth={depth + 1}
                             expandMode={expandMode}
+                            searchTerm={searchTerm}
                         />
                     );
                 }
                 return (
                     <div key={key} className="flex items-start">
                         <span className="text-muted-foreground/30 select-none shrink-0">{indent(depth + 1)}</span>
-                        {!isArray && <span className="text-violet-600 dark:text-violet-400 font-semibold mr-1 shrink-0">"{key}": </span>}
+                        {!isArray && <span className="text-violet-600 dark:text-violet-400 font-semibold mr-1 shrink-0">"<HighlightText text={key} searchTerm={searchTerm} />": </span>}
                         <span className="flex-1 min-w-0 break-all">
-                            <ValueNode value={value} />{comma}
+                            <ValueNode value={value} searchTerm={searchTerm} />{comma}
                         </span>
                     </div>
                 );
@@ -430,10 +511,10 @@ function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, ini
 
 // ─── ValueNode: renders leaf values ──────────────────────────────────
 
-function ValueNode({ value }: { value: unknown }) {
-    if (value === null) return <span className="text-rose-600 dark:text-rose-400 font-semibold">null</span>;
-    if (typeof value === 'boolean') return <span className="text-indigo-600 dark:text-indigo-400 font-semibold">{value.toString()}</span>;
-    if (typeof value === 'number') return <span className="text-orange-600 dark:text-orange-400">{value}</span>;
+function ValueNode({ value, searchTerm }: { value: unknown; searchTerm?: string }) {
+    if (value === null) return <span className="text-rose-600 dark:text-rose-400 font-semibold"><HighlightText text="null" searchTerm={searchTerm} /></span>;
+    if (typeof value === 'boolean') return <span className="text-indigo-600 dark:text-indigo-400 font-semibold"><HighlightText text={value.toString()} searchTerm={searchTerm} /></span>;
+    if (typeof value === 'number') return <span className="text-orange-600 dark:text-orange-400"><HighlightText text={String(value)} searchTerm={searchTerm} /></span>;
 
     if (typeof value === 'string') {
         // Case 1: data URI → show prefix visibly, replace only base64 part
@@ -461,7 +542,7 @@ function ValueNode({ value }: { value: unknown }) {
         }
 
         // Case 3: normal string
-        return <span className="text-emerald-600 dark:text-emerald-400 break-all leading-relaxed">"{value}"</span>;
+        return <span className="text-emerald-600 dark:text-emerald-400 break-all leading-relaxed">"<HighlightText text={value} searchTerm={searchTerm} />"</span>;
     }
 
     return <span>{String(value)}</span>;
