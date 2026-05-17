@@ -466,6 +466,19 @@ func defaultUsageExtractionConfig() UsageExtractionConfig {
 				},
 			},
 			{
+				Name:    "OpenAI Responses",
+				Enabled: true,
+				Match: UsageExtractionMatch{
+					ContentTypes: []string{"application/json", "text/event-stream"},
+				},
+				Paths: UsageExtractionPaths{
+					InputTokens:  []string{"/usage/input_tokens", "/response/usage/input_tokens"},
+					OutputTokens: []string{"/usage/output_tokens", "/response/usage/output_tokens"},
+					TotalTokens:  []string{"/usage/total_tokens", "/response/usage/total_tokens"},
+					RawUsage:     []string{"/usage", "/response/usage"},
+				},
+			},
+			{
 				Name:    "Anthropic",
 				Enabled: true,
 				Match: UsageExtractionMatch{

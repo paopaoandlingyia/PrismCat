@@ -55,6 +55,15 @@ usage_extraction:
         output_tokens: ["/usage/completion_tokens", "/usage/output_tokens"]
         total_tokens: ["/usage/total_tokens"]
         raw_usage: ["/usage"]
+    - name: OpenAI Responses
+      enabled: true
+      match:
+        content_types: ["application/json", "text/event-stream"]
+      paths:
+        input_tokens: ["/usage/input_tokens", "/response/usage/input_tokens"]
+        output_tokens: ["/usage/output_tokens", "/response/usage/output_tokens"]
+        total_tokens: ["/usage/total_tokens", "/response/usage/total_tokens"]
+        raw_usage: ["/usage", "/response/usage"]
     - name: Anthropic
       enabled: true
       match:
