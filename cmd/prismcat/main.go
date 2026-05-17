@@ -41,6 +41,37 @@ storage:
   retention_days: 7
   blob_store: "fs"
   blob_dir: "data/blobs"
+
+usage_extraction:
+  enabled: false
+  upstreams: {}
+  rules:
+    - name: OpenAI compatible
+      enabled: true
+      match:
+        content_types: ["application/json", "text/event-stream"]
+      paths:
+        input_tokens: ["/usage/prompt_tokens", "/usage/input_tokens"]
+        output_tokens: ["/usage/completion_tokens", "/usage/output_tokens"]
+        total_tokens: ["/usage/total_tokens"]
+        raw_usage: ["/usage"]
+    - name: Anthropic
+      enabled: true
+      match:
+        content_types: ["application/json", "text/event-stream"]
+      paths:
+        input_tokens: ["/usage/input_tokens", "/message/usage/input_tokens"]
+        output_tokens: ["/usage/output_tokens", "/message/usage/output_tokens"]
+        raw_usage: ["/usage", "/message/usage"]
+    - name: Gemini
+      enabled: true
+      match:
+        content_types: ["application/json", "text/event-stream"]
+      paths:
+        input_tokens: ["/usageMetadata/promptTokenCount"]
+        output_tokens: ["/usageMetadata/candidatesTokenCount"]
+        total_tokens: ["/usageMetadata/totalTokenCount"]
+        raw_usage: ["/usageMetadata"]
 `
 
 func main() {
@@ -120,8 +151,7 @@ func main() {
 		log.Fatalf("不支持的 blob_store: %s", cfg.Storage.BlobStore)
 	}
 
-	detachingRepo := storage.NewDetachingRepository(sqliteRepo, blobStore, cfg)
-	asyncRepo := storage.NewAsyncRepository(detachingRepo, cfg, cfg.Storage.AsyncBuffer, blobStore)
+	asyncRepo := storage.NewAsyncRepository(sqliteRepo, cfg, cfg.Storage.AsyncBuffer, blobStore)
 	defer asyncRepo.Close()
 
 	// Best-effort log retention cleanup.

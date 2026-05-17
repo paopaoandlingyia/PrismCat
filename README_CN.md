@@ -269,6 +269,7 @@ logging:
     - api-key
     - x-api-key
   detach_body_over_bytes: 2097152 # 超过 2MB 的内容按需加载
+  body_preview_bytes: 524288      # 内联可读预览；长期高频运行可适当调小
   early_request_body_snapshot: false
 
 storage:

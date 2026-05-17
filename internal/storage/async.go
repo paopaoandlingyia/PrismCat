@@ -127,6 +127,14 @@ func (a *AsyncRepository) SaveLogAnnotation(logID string, annotation LogAnnotati
 	return a.inner.SaveLogAnnotation(logID, annotation)
 }
 
+func (a *AsyncRepository) ListTraces(filter TraceFilter) ([]TraceSummary, int64, error) {
+	return a.inner.ListTraces(filter)
+}
+
+func (a *AsyncRepository) GetTraceRequests(traceID string) ([]*RequestLog, error) {
+	return a.inner.GetTraceRequests(traceID)
+}
+
 func (a *AsyncRepository) GetStats(since *time.Time) (*LogStats, error) {
 	return a.inner.GetStats(since)
 }
@@ -163,6 +171,9 @@ func cloneRequestLog(in *RequestLog) *RequestLog {
 	out.RequestBodyOriginalRaw = cloneBytes(in.RequestBodyOriginalRaw)
 	out.RequestBodyFinalRaw = cloneBytes(in.RequestBodyFinalRaw)
 	out.ResponseBodyRaw = cloneBytes(in.ResponseBodyRaw)
+	out.UsageInputTokens = cloneInt64Ptr(in.UsageInputTokens)
+	out.UsageOutputTokens = cloneInt64Ptr(in.UsageOutputTokens)
+	out.UsageTotalTokens = cloneInt64Ptr(in.UsageTotalTokens)
 	return &out
 }
 
@@ -190,4 +201,12 @@ func cloneBytes(in []byte) []byte {
 	out := make([]byte, len(in))
 	copy(out, in)
 	return out
+}
+
+func cloneInt64Ptr(in *int64) *int64 {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	return &out
 }

@@ -1,6 +1,6 @@
 import { cn, formatDate, formatLatency, formatSize, getStatusColor, getMethodColor } from '@/lib/utils'
 import { Copy, Check, Zap, AlertTriangle, ChevronDown, ChevronUp, ChevronsDownUp, ChevronsUpDown, FileCode, ListTree, Globe, Layers, RotateCcw, Maximize2, Minimize2, ExternalLink, Terminal, Bookmark, BookmarkCheck, CheckCircle2, CircleDot, Tags, Search, X } from 'lucide-react'
-import { fetchBlob, updateLogAnnotation } from '@/lib/api'
+import { fetchBlob, fetchLogBody, updateLogAnnotation } from '@/lib/api'
 import type { LiveLogEvent, RequestLog } from '@/lib/api'
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -106,6 +106,17 @@ function RawBodyViewer({ text, searchTerm }: { text: string; searchTerm?: string
             {searchTerm ? <HighlightText text={text} searchTerm={searchTerm} /> : text}
         </pre>
     );
+}
+
+function UsageMetric({ label, value }: { label: string; value?: number }) {
+    return (
+        <div className="rounded-lg border border-border/40 bg-background/60 px-3 py-2">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{label}</div>
+            <div className="mt-1 font-mono text-sm font-bold text-foreground">
+                {typeof value === 'number' ? value.toLocaleString() : '-'}
+            </div>
+        </div>
+    )
 }
 
 function BodySearchBar({
@@ -320,6 +331,9 @@ export function LogDetail({ log, loading, onClose, onLogChange }: LogDetailProps
     const annotationSummary = annotation.note || annotation.labels.length
         ? [annotation.note, ...annotation.labels.map(label => `#${label}`)].filter(Boolean).join(' · ')
         : t('log_annotation.empty_summary', 'No note or labels')
+    const hasUsage = displayLog?.usage_input_tokens !== undefined ||
+        displayLog?.usage_output_tokens !== undefined ||
+        displayLog?.usage_total_tokens !== undefined
 
     useEffect(() => {
         if (!hasRequestBodyDiff && requestViewMode === 'diff') {
@@ -379,7 +393,7 @@ export function LogDetail({ log, loading, onClose, onLogChange }: LogDetailProps
 
         let body = currentLog.request_body_final || fullRequestBody || currentLog.request_body || ''
         if (!currentLog.request_body_final && currentLog.request_body_ref && !fullRequestBody) {
-            body = await fetchBlob(currentLog.request_body_ref)
+            body = (await fetchLogBody(currentLog.id, 'request')).body
             startTransition(() => setFullRequestBody(body))
         }
         await copyToClipboard(buildCurlCommand(currentLog, body), 'curl')
@@ -394,7 +408,7 @@ export function LogDetail({ log, loading, onClose, onLogChange }: LogDetailProps
         setPreviewOnly(prev => ({ ...prev, [kind]: false }))
         setBlobLoading(prev => ({ ...prev, [kind]: true }))
         try {
-            const body = await fetchBlob(ref)
+            const body = displayLog?.id ? (await fetchLogBody(displayLog.id, kind)).body : await fetchBlob(ref)
             startTransition(() => {
                 if (kind === 'request') setFullRequestBody(body)
                 else setFullResponseBody(body)
@@ -405,7 +419,7 @@ export function LogDetail({ log, loading, onClose, onLogChange }: LogDetailProps
         } finally {
             setBlobLoading(prev => ({ ...prev, [kind]: false }))
         }
-    }, [])
+    }, [displayLog?.id])
 
     const saveAnnotation = useCallback(async (update: Parameters<typeof updateLogAnnotation>[1]) => {
         if (!displayLog || annotationSaving) return
@@ -754,7 +768,7 @@ export function LogDetail({ log, loading, onClose, onLogChange }: LogDetailProps
                                         // If blob ref exists and not yet loaded, fetch full body first
                                         if (displayLog.request_body_ref && !fullRequestBody) {
                                             try {
-                                                const full = await fetchBlob(displayLog.request_body_ref)
+                                                const full = (await fetchLogBody(displayLog.id, 'request')).body
                                                 navigateToPlayground(full)
                                             } catch {
                                                 // Fallback to preview if blob fetch fails
@@ -942,6 +956,25 @@ export function LogDetail({ log, loading, onClose, onLogChange }: LogDetailProps
                             ) : null}
                             {displayLog.request_override_error && (
                                 <pre className="text-xs text-amber-700 dark:text-amber-300 font-mono whitespace-pre-wrap leading-relaxed">{displayLog.request_override_error}</pre>
+                            )}
+                        </div>
+                    )}
+
+                    {hasUsage && (
+                        <div className="overflow-hidden rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+                            <div className="mb-3 flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold text-xs uppercase tracking-wider">
+                                <CircleDot className="h-4 w-4" />
+                                {t('log_detail.usage', 'Usage')}
+                            </div>
+                            <div className="grid gap-2 sm:grid-cols-3">
+                                <UsageMetric label={t('log_detail.usage_input', 'Input')} value={displayLog.usage_input_tokens} />
+                                <UsageMetric label={t('log_detail.usage_output', 'Output')} value={displayLog.usage_output_tokens} />
+                                <UsageMetric label={t('log_detail.usage_total', 'Total')} value={displayLog.usage_total_tokens} />
+                            </div>
+                            {displayLog.usage_source && (
+                                <div className="mt-3 font-mono text-[11px] text-muted-foreground">
+                                    {displayLog.usage_source}
+                                </div>
                             )}
                         </div>
                     )}

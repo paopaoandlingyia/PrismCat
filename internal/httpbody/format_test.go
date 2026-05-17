@@ -2,6 +2,7 @@ package httpbody
 
 import (
 	"bytes"
+	"compress/gzip"
 	"mime/multipart"
 	"net/textproto"
 	"strings"
@@ -29,6 +30,58 @@ func TestFormatForDisplayDecodesZstdJSON(t *testing.T) {
 	}
 	if !strings.Contains(formatted.Text, "b64_json") {
 		t.Fatalf("decoded text does not contain b64_json")
+	}
+}
+
+func TestFormatPreviewForDisplayTruncatesPlainText(t *testing.T) {
+	formatted := FormatPreviewForDisplay("application/json", "", []byte(`{"message":"hello world"}`), FormatOptions{
+		MaxOutputBytes: 10,
+	})
+
+	if formatted.Text != `{"message"` {
+		t.Fatalf("Text = %q, want truncated preview", formatted.Text)
+	}
+	if !formatted.Truncated {
+		t.Fatalf("Truncated = false, want true")
+	}
+}
+
+func TestFormatPreviewForDisplayLimitsDecodedGzip(t *testing.T) {
+	var compressed bytes.Buffer
+	gz := gzip.NewWriter(&compressed)
+	if _, err := gz.Write([]byte(strings.Repeat("a", 1024))); err != nil {
+		t.Fatalf("gzip write: %v", err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatalf("gzip close: %v", err)
+	}
+
+	formatted := FormatPreviewForDisplay("text/plain", "gzip", compressed.Bytes(), FormatOptions{
+		MaxOutputBytes: 32,
+	})
+
+	if len(formatted.Text) != 32 {
+		t.Fatalf("preview length = %d, want 32", len(formatted.Text))
+	}
+	if !formatted.Truncated {
+		t.Fatalf("Truncated = false, want true")
+	}
+	if !formatted.Decoded || formatted.DecodedFrom != "gzip" {
+		t.Fatalf("Decoded = %v, DecodedFrom = %q; want gzip", formatted.Decoded, formatted.DecodedFrom)
+	}
+}
+
+func TestFormatForDisplayCanRequireContentEncodingDecode(t *testing.T) {
+	formatted := FormatForDisplay("application/json", "gzip", []byte(`{"already":"display"}`), FormatOptions{
+		MaxOutputBytes:               1024,
+		RequireContentEncodingDecode: true,
+	})
+
+	if !formatted.DecodeFailed {
+		t.Fatalf("DecodeFailed = false, want true")
+	}
+	if formatted.Text == `{"already":"display"}` {
+		t.Fatalf("Text fell back to display body, want strict decode failure")
 	}
 }
 

@@ -23,14 +23,16 @@ import (
 	"github.com/paopaoandlingyia/PrismCat/internal/outbound"
 	"github.com/paopaoandlingyia/PrismCat/internal/requestoverride"
 	"github.com/paopaoandlingyia/PrismCat/internal/storage"
+	"github.com/paopaoandlingyia/PrismCat/internal/trace"
 )
 
 // Proxy handles host-based upstream routing and request/response logging.
 type Proxy struct {
-	cfg     *config.Config
-	repo    storage.Repository
-	live    *live.Registry
-	clients *outbound.ClientCache
+	cfg      *config.Config
+	repo     storage.Repository
+	live     *live.Registry
+	clients  *outbound.ClientCache
+	traceSeq *trace.Sequencer
 }
 
 const copyBufferSize = 32 * 1024
@@ -43,12 +45,13 @@ var copyBufferPool = sync.Pool{
 }
 
 // New creates a new proxy instance.
-func New(cfg *config.Config, repo storage.Repository, liveRegistry *live.Registry) *Proxy {
+func New(cfg *config.Config, repo storage.Repository, liveRegistry *live.Registry, traceSeq *trace.Sequencer) *Proxy {
 	return &Proxy{
-		cfg:     cfg,
-		repo:    repo,
-		live:    liveRegistry,
-		clients: outbound.NewClientCache(100, 50),
+		cfg:      cfg,
+		repo:     repo,
+		live:     liveRegistry,
+		clients:  outbound.NewClientCache(100, 50),
+		traceSeq: traceSeq,
 	}
 }
 
@@ -86,6 +89,12 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	upstreamURL := buildUpstreamURL(targetURL, requestURL)
 
 	// Initial log entry (best-effort). This allows the UI to show in-flight requests.
+	traceID := strings.TrimSpace(r.Header.Get("X-PrismCat-Trace-ID"))
+	var traceSeq int
+	if traceID != "" && p.traceSeq != nil {
+		traceSeq = p.traceSeq.Next(traceID)
+	}
+
 	logEntry := &storage.RequestLog{
 		ID:        uuid.NewString(),
 		CreatedAt: startTime,
@@ -95,6 +104,8 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Query:     requestURL.RawQuery,
 		TargetURL: upstreamURL.String(),
 		Tag:       r.Header.Get("X-PrismCat-Tag"),
+		TraceID:   traceID,
+		TraceSeq:  traceSeq,
 
 		RequestHeaders: p.sanitizeHeaders(r.Header, loggingCfg.SensitiveHeaders),
 	}
@@ -322,12 +333,12 @@ func (p *Proxy) publishRequestReady(logEntry *storage.RequestLog) {
 
 	contentType := firstHeaderValue(logEntry.RequestHeaders, "Content-Type")
 	contentEncoding := firstHeaderValue(logEntry.RequestHeaders, "Content-Encoding")
-	body, truncated := p.formatLiveBody(contentType, contentEncoding, logEntry.RequestBodyRaw, p.cfg.LoggingSnapshot().MaxRequestBody)
+	body, _ := p.formatLiveBody(contentType, contentEncoding, logEntry.RequestBodyRaw, p.cfg.LoggingSnapshot().BodyPreviewBytes)
 
 	p.live.UpdateSnapshot(logEntry.ID, func(snapshot *storage.RequestLog) {
 		snapshot.RequestBody = body
 		snapshot.RequestBodySize = logEntry.RequestBodySize
-		snapshot.Truncated = snapshot.Truncated || logEntry.RequestBodyCaptureTruncated || truncated
+		snapshot.Truncated = snapshot.Truncated || logEntry.RequestBodyCaptureTruncated
 	})
 }
 
@@ -386,29 +397,29 @@ func (p *Proxy) completeLive(logEntry *storage.RequestLog) {
 	finalLog := cloneLog(logEntry)
 	loggingCfg := p.cfg.LoggingSnapshot()
 
-	requestBody, requestTruncated := p.formatLiveBody(
+	requestBody, _ := p.formatLiveBody(
 		firstHeaderValue(finalLog.RequestHeaders, "Content-Type"),
 		firstHeaderValue(finalLog.RequestHeaders, "Content-Encoding"),
 		finalLog.RequestBodyRaw,
-		loggingCfg.MaxRequestBody,
+		loggingCfg.BodyPreviewBytes,
 	)
-	responseBody, responseTruncated := p.formatLiveBody(
+	responseBody, _ := p.formatLiveBody(
 		firstHeaderValue(finalLog.ResponseHeaders, "Content-Type"),
 		firstHeaderValue(finalLog.ResponseHeaders, "Content-Encoding"),
 		finalLog.ResponseBodyRaw,
-		loggingCfg.MaxResponseBody,
+		loggingCfg.BodyPreviewBytes,
 	)
-	requestBodyOriginal, originalTruncated := p.formatLiveBody(
+	requestBodyOriginal, _ := p.formatLiveBody(
 		firstHeaderValue(finalLog.RequestHeaders, "Content-Type"),
 		firstHeaderValue(finalLog.RequestHeaders, "Content-Encoding"),
 		finalLog.RequestBodyOriginalRaw,
-		loggingCfg.MaxRequestBody,
+		loggingCfg.BodyPreviewBytes,
 	)
-	requestBodyFinal, finalTruncated := p.formatLiveBody(
+	requestBodyFinal, _ := p.formatLiveBody(
 		firstHeaderValue(finalLog.RequestHeaders, "Content-Type"),
 		firstHeaderValue(finalLog.RequestHeaders, "Content-Encoding"),
 		finalLog.RequestBodyFinalRaw,
-		loggingCfg.MaxRequestBody,
+		loggingCfg.BodyPreviewBytes,
 	)
 
 	finalLog.RequestBody = requestBody
@@ -417,11 +428,7 @@ func (p *Proxy) completeLive(logEntry *storage.RequestLog) {
 	finalLog.RequestBodyFinal = requestBodyFinal
 	finalLog.Truncated = finalLog.Truncated ||
 		finalLog.RequestBodyCaptureTruncated ||
-		finalLog.ResponseBodyCaptureTruncated ||
-		requestTruncated ||
-		responseTruncated ||
-		originalTruncated ||
-		finalTruncated
+		finalLog.ResponseBodyCaptureTruncated
 
 	p.live.Complete(finalLog)
 }
@@ -431,7 +438,7 @@ func (p *Proxy) formatLiveBody(contentType string, contentEncoding string, body 
 		return "", false
 	}
 
-	formatted := httpbody.FormatForDisplay(contentType, contentEncoding, body, httpbody.FormatOptions{
+	formatted := httpbody.FormatPreviewForDisplay(contentType, contentEncoding, body, httpbody.FormatOptions{
 		MaxOutputBytes:  maxOutputBytes,
 		TrimLargeBase64: !p.cfg.LoggingSnapshot().StoreBase64,
 	})
@@ -714,6 +721,9 @@ func cloneLog(in *storage.RequestLog) *storage.RequestLog {
 	if len(in.RequestOverrideRules) > 0 {
 		out.RequestOverrideRules = append([]string(nil), in.RequestOverrideRules...)
 	}
+	out.UsageInputTokens = cloneInt64Ptr(in.UsageInputTokens)
+	out.UsageOutputTokens = cloneInt64Ptr(in.UsageOutputTokens)
+	out.UsageTotalTokens = cloneInt64Ptr(in.UsageTotalTokens)
 	return &out
 }
 
@@ -748,6 +758,14 @@ func firstHeaderValue(headers map[string][]string, key string) string {
 		}
 	}
 	return ""
+}
+
+func cloneInt64Ptr(in *int64) *int64 {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	return &out
 }
 
 func isLiveTextResponse(contentType string) bool {

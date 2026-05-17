@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils'
-import { Search, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Search, RotateCcw, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import type { Upstream, LogFilter } from '@/lib/api'
-import { Suspense, lazy, useState } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -91,10 +91,25 @@ export function LogFilters({
     // 分页计算
     const pageSize = filter.limit || 50
     const currentPage = Math.floor((filter.offset || 0) / pageSize) + 1
-    const totalPages = Math.ceil(total / pageSize)
+    const totalPages = Math.max(1, Math.ceil(total / pageSize))
+    const [pageDraft, setPageDraft] = useState(String(currentPage))
+
+    useEffect(() => {
+        setPageDraft(String(currentPage))
+    }, [currentPage])
 
     const goToPage = (page: number) => {
-        onSearch({ ...filter, offset: (page - 1) * pageSize })
+        const nextPage = Math.min(totalPages, Math.max(1, page))
+        onSearch({ ...filter, offset: (nextPage - 1) * pageSize })
+    }
+
+    const commitPageDraft = () => {
+        const parsed = Number.parseInt(pageDraft, 10)
+        if (!Number.isFinite(parsed)) {
+            setPageDraft(String(currentPage))
+            return
+        }
+        goToPage(parsed)
     }
 
     // 检查各个字段是否有未提交的更改
@@ -102,13 +117,14 @@ export function LogFilters({
     const isUpstreamChanged = (draft.upstream || '') !== (filter.upstream || '')
     const isMethodChanged = (draft.method || '') !== (filter.method || '')
     const isStatusCodeChanged = (draft.status_code || 0) !== (filter.status_code || 0)
+    const isTraceIdChanged = (draft.trace_id || '') !== (filter.trace_id || '')
     const isTagChanged = (draft.tag || '') !== (filter.tag || '')
     const isSavedChanged = (draft.saved ?? undefined) !== (filter.saved ?? undefined)
     const isAnnotationStatusChanged = (draft.annotation_status || '') !== (filter.annotation_status || '')
     const isAnnotationLabelChanged = (draft.annotation_label || '') !== (filter.annotation_label || '')
     const isTimeChanged = (draft.start_time || '') !== (filter.start_time || '') ||
         (draft.end_time || '') !== (filter.end_time || '')
-    const hasChanges = isPathChanged || isUpstreamChanged || isMethodChanged || isStatusCodeChanged || isTagChanged ||
+    const hasChanges = isPathChanged || isUpstreamChanged || isMethodChanged || isStatusCodeChanged || isTraceIdChanged || isTagChanged ||
         isSavedChanged || isAnnotationStatusChanged || isAnnotationLabelChanged || isTimeChanged
 
     return (
@@ -325,12 +341,22 @@ export function LogFilters({
                     </span>
                     {total > 0 && (
                         <Badge variant="outline" className="text-[9px] border-border bg-background text-muted-foreground/75">
-                            {pageSize} / PAGE
+                            {t('filters.per_page', { count: pageSize })}
                         </Badge>
                     )}
                 </div>
 
-                <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-end">
+                <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-end">
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 rounded-md border border-border bg-background shadow-sm hover:bg-accent hover:text-accent-foreground transition-all"
+                        onClick={() => goToPage(1)}
+                        disabled={currentPage <= 1}
+                        aria-label={t('filters.first_page')}
+                    >
+                        <ChevronsLeft className="h-4 w-4" />
+                    </Button>
                     <Button
                         variant="outline"
                         size="icon"
@@ -341,10 +367,26 @@ export function LogFilters({
                         <ChevronLeft className="h-4 w-4" />
                     </Button>
 
-                    <div className="flex items-center h-8 px-4 rounded-md border border-border shadow-sm bg-background font-mono text-xs font-bold text-foreground/80">
-                        <span className="text-primary">{currentPage}</span>
+                    <div className="flex items-center h-8 rounded-md border border-border shadow-sm bg-background px-2 font-mono text-xs font-bold text-foreground/80">
+                        <Input
+                            value={pageDraft}
+                            inputMode="numeric"
+                            aria-label={t('filters.page_number')}
+                            onChange={e => setPageDraft(e.target.value.replace(/\D/g, '').slice(0, 5))}
+                            onBlur={commitPageDraft}
+                            onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                    e.currentTarget.blur()
+                                }
+                                if (e.key === 'Escape') {
+                                    setPageDraft(String(currentPage))
+                                    e.currentTarget.blur()
+                                }
+                            }}
+                            className="h-6 w-10 border-0 bg-transparent p-0 text-center font-mono text-xs font-bold text-primary shadow-none focus-visible:ring-0"
+                        />
                         <span className="mx-2 text-muted-foreground/30">/</span>
-                        <span>{totalPages || 1}</span>
+                        <span>{totalPages}</span>
                     </div>
 
                     <Button
@@ -355,6 +397,16 @@ export function LogFilters({
                         disabled={currentPage >= totalPages}
                     >
                         <ChevronRight className="h-4 w-4" />
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 rounded-md border border-border bg-background shadow-sm hover:bg-accent hover:text-accent-foreground transition-all"
+                        onClick={() => goToPage(totalPages)}
+                        disabled={currentPage >= totalPages}
+                        aria-label={t('filters.last_page')}
+                    >
+                        <ChevronsRight className="h-4 w-4" />
                     </Button>
                 </div>
             </div>

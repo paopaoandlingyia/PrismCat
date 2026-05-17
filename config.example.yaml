@@ -75,10 +75,11 @@ logging:
   # 代价：每个请求会额外多一次数据库写入（高并发下可能降低吞吐/更易丢日志）。
   early_request_body_snapshot: false
 
-  # 超过此大小的内容会自动分离到 blob 存储（内容寻址 + 去重）
-  # 日志详情保留预览片段 + hash/ref；文本内容在安全大小内会自动加载完整内容
+  # 超过此大小的完整 Body 会自动分离到 blob 存储（内容寻址 + 去重）
   detach_body_over_bytes: 2097152 # 2MB；设为 0 可禁用；留空则默认 2MB
-  body_preview_bytes: 524288      # 512KB；设为 0 可关闭预览（通常无需调整）
+  # 写入日志时最多保留多少可读 Body 预览；完整 Body 仍会按上方配置保存到 blob
+  # 长期高频运行可适当调小；低频调试可调大，便于详情页直接预览更多内容
+  body_preview_bytes: 524288      # 512KB；设为 0 可关闭预览
 
   # 需要脱敏的请求头
   sensitive_headers:
@@ -129,3 +130,36 @@ request_overrides:
   #       - op: add
   #         path: "/metadata/user_id"
   #         value: "demo-user"
+
+# Usage / token 用量提取（默认关闭）
+# 规则只做响应后的 best-effort 元数据提取，不影响代理转发或日志保存。
+usage_extraction:
+  enabled: false
+  upstreams: {}
+  rules:
+    - name: OpenAI compatible
+      enabled: true
+      match:
+        content_types: ["application/json", "text/event-stream"]
+      paths:
+        input_tokens: ["/usage/prompt_tokens", "/usage/input_tokens"]
+        output_tokens: ["/usage/completion_tokens", "/usage/output_tokens"]
+        total_tokens: ["/usage/total_tokens"]
+        raw_usage: ["/usage"]
+    - name: Anthropic
+      enabled: true
+      match:
+        content_types: ["application/json", "text/event-stream"]
+      paths:
+        input_tokens: ["/usage/input_tokens", "/message/usage/input_tokens"]
+        output_tokens: ["/usage/output_tokens", "/message/usage/output_tokens"]
+        raw_usage: ["/usage", "/message/usage"]
+    - name: Gemini
+      enabled: true
+      match:
+        content_types: ["application/json", "text/event-stream"]
+      paths:
+        input_tokens: ["/usageMetadata/promptTokenCount"]
+        output_tokens: ["/usageMetadata/candidatesTokenCount"]
+        total_tokens: ["/usageMetadata/totalTokenCount"]
+        raw_usage: ["/usageMetadata"]

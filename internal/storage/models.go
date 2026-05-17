@@ -33,11 +33,19 @@ type RequestLog struct {
 	Streaming              bool          `json:"streaming"`       // 是否为流式响应
 	Latency                int64         `json:"latency_ms"`      // 响应延迟(毫秒)
 	Error                  string        `json:"error,omitempty"` // 错误信息
-	Truncated              bool          `json:"truncated"`       // 响应体是否被截断
+	Truncated              bool          `json:"truncated"`       // 请求或响应内容是否无法完整恢复
 	Tag                    string        `json:"tag,omitempty"`   // 来自 X-PrismCat-Tag 请求头
+	TraceID                string        `json:"trace_id,omitempty"`
+	ParentLogID            string        `json:"parent_log_id,omitempty"`
+	TraceSeq               int           `json:"trace_seq,omitempty"`
 	RequestOverrideApplied bool          `json:"request_override_applied,omitempty"`
 	RequestOverrideRules   []string      `json:"request_override_rules,omitempty"`
 	RequestOverrideError   string        `json:"request_override_error,omitempty"`
+	UsageInputTokens       *int64        `json:"usage_input_tokens,omitempty"`
+	UsageOutputTokens      *int64        `json:"usage_output_tokens,omitempty"`
+	UsageTotalTokens       *int64        `json:"usage_total_tokens,omitempty"`
+	UsageRaw               string        `json:"usage_raw,omitempty"`
+	UsageSource            string        `json:"usage_source,omitempty"`
 	Annotation             LogAnnotation `json:"annotation"`
 
 	// Transient capture state used only before async persistence.
@@ -65,6 +73,7 @@ type LogFilter struct {
 	StatusCode int        // 按状态码过滤
 	Path       string     // 按路径模糊搜索
 	Tag        string     // 按标签过滤
+	TraceID    string     // 按 trace ID 过滤
 	Saved      *bool      // 是否保存
 	Status     string     // 人工处理状态：none/todo/done
 	Label      string     // 按人工标签过滤
@@ -89,6 +98,34 @@ type LogStats struct {
 	ByStatusCode   map[int]int64    `json:"by_status_code"`
 }
 
+// TraceSummary trace 列表的聚合摘要
+type TraceSummary struct {
+	TraceID           string   `json:"trace_id"`
+	RequestCount      int      `json:"request_count"`
+	FirstTime         int64    `json:"first_time"`
+	LastTime          int64    `json:"last_time"`
+	TotalLatency      int64    `json:"total_latency_ms"`
+	ErrorCount        int      `json:"error_count"`
+	UsageInputTokens  *int64   `json:"usage_input_tokens,omitempty"`
+	UsageOutputTokens *int64   `json:"usage_output_tokens,omitempty"`
+	UsageTotalTokens  *int64   `json:"usage_total_tokens,omitempty"`
+	Upstreams         []string `json:"upstreams"`
+	Tags              []string `json:"tags"`
+}
+
+// TraceFilter trace 查询过滤器
+type TraceFilter struct {
+	TraceID   string     // 模糊搜索 trace ID
+	Upstream  string     // 按上游名称过滤
+	Tag       string     // 按标签过滤
+	HasError  *bool      // 是否有错误
+	StartTime *time.Time // 开始时间
+	EndTime   *time.Time // 结束时间
+
+	Offset int
+	Limit  int
+}
+
 // Repository 存储接口
 type Repository interface {
 	// 日志操作
@@ -98,6 +135,10 @@ type Repository interface {
 	DeleteLogsBefore(before time.Time) (int64, error)        // 返回删除数量
 	GetLogAnnotation(logID string) (LogAnnotation, error)
 	SaveLogAnnotation(logID string, annotation LogAnnotation) (LogAnnotation, error)
+
+	// Trace 操作
+	ListTraces(filter TraceFilter) ([]TraceSummary, int64, error)
+	GetTraceRequests(traceID string) ([]*RequestLog, error)
 
 	// 统计
 	GetStats(since *time.Time) (*LogStats, error)

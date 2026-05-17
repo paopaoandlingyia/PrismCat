@@ -1,6 +1,7 @@
 import { cn, formatDate, formatLatency, getMethodColor, getStatusColor } from '@/lib/utils'
-import { AlertTriangle, BookmarkCheck, CheckCircle2, ChevronRight, CircleDot, Clock3, Server, Tag as TagIcon, Tags, Zap } from 'lucide-react'
+import { AlertTriangle, BookmarkCheck, CheckCircle2, ChevronRight, CircleDot, Clock3, Network, Server, Tag as TagIcon, Tags, Zap } from 'lucide-react'
 import type { RequestLog } from '@/lib/api'
+import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
     Table,
@@ -31,6 +32,13 @@ function getStatusBadgeColor(code: number): string {
     if (code >= 400 && code < 500) return 'bg-orange-500/10 text-orange-600 dark:text-orange-400'
     if (code >= 500) return 'bg-red-500/10 text-red-600 dark:text-red-400'
     return 'bg-slate-500/10 text-slate-600 dark:text-slate-400'
+}
+
+function formatTokenCount(value?: number): string {
+    if (typeof value !== 'number') return '-'
+    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value >= 10_000_000 ? 0 : 1)}M`
+    if (value >= 10_000) return `${(value / 1_000).toFixed(value >= 100_000 ? 0 : 1)}k`
+    return value.toLocaleString()
 }
 
 function MobileLogSkeleton() {
@@ -97,6 +105,8 @@ function MobileLogCard({
     doneLabel,
     streamingLabel,
     modifiedLabel,
+    tokensLabel,
+    showUsage,
 }: {
     log: RequestLog
     selected: boolean
@@ -108,6 +118,8 @@ function MobileLogCard({
     doneLabel: string
     streamingLabel: string
     modifiedLabel: string
+    tokensLabel: string
+    showUsage: boolean
 }) {
     return (
         <button
@@ -155,6 +167,12 @@ function MobileLogCard({
                                 {modifiedLabel}
                             </span>
                         )}
+                        {log.trace_id && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/10 px-2.5 py-1 text-[10px] font-bold tracking-[0.14em] text-cyan-600 dark:text-cyan-400">
+                                <Network className="h-3 w-3" />
+                                TRACE
+                            </span>
+                        )}
                         {log.tag && (
                             <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-600 dark:text-amber-400">
                                 <TagIcon className="h-3 w-3" />
@@ -191,6 +209,9 @@ function MobileLogCard({
                                 <Clock3 className="h-3.5 w-3.5" />
                                 {formatLatency(log.latency_ms)}
                             </span>
+                            {showUsage && typeof log.usage_total_tokens === 'number' && (
+                                <span>{tokensLabel}: {formatTokenCount(log.usage_total_tokens)}</span>
+                            )}
                             <span>{dateLabel}</span>
                             {log.annotation?.labels?.length ? (
                                 <span className="inline-flex items-center gap-1">
@@ -213,6 +234,8 @@ function MobileLogCard({
 
 export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps) {
     const { t, i18n } = useTranslation()
+    const navigate = useNavigate()
+    const showUsage = logs.some(log => typeof log.usage_total_tokens === 'number')
 
     if (loading) {
         return (
@@ -251,6 +274,8 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                         doneLabel={t('log_annotation.done', '已处理')}
                         streamingLabel={t('log_detail.streaming', '流式')}
                         modifiedLabel={t('log_detail.modified', 'MODIFIED')}
+                        tokensLabel={t('log_table.tokens', 'Tokens')}
+                        showUsage={showUsage}
                     />
                 ))}
             </div>
@@ -263,6 +288,9 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                             <TableHead className="w-[70px] font-bold text-[11px] uppercase tracking-tighter text-center">{t('log_table.status')}</TableHead>
                             <TableHead className="w-[100px] font-bold text-[11px] uppercase tracking-tighter">{t('log_table.upstream')}</TableHead>
                             <TableHead className="font-bold text-[11px] uppercase tracking-tighter">{t('log_table.path')}</TableHead>
+                            {showUsage && (
+                                <TableHead className="w-[90px] font-bold text-[11px] uppercase tracking-tighter text-right">{t('log_table.tokens', 'Tokens')}</TableHead>
+                            )}
                             <TableHead className="w-[100px] font-bold text-[11px] uppercase tracking-tighter text-right">{t('log_table.latency')}</TableHead>
                             <TableHead className="w-[180px] font-bold text-[11px] uppercase tracking-tighter text-right">{t('log_table.time')}</TableHead>
                             <TableHead className="w-[100px]"></TableHead>
@@ -308,6 +336,23 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                                             {log.path}
                                             {log.query && <span className="text-muted-foreground/75">?{log.query}</span>}
                                         </span>
+                                        {log.trace_id && (
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <span
+                                                        role="link"
+                                                        onClick={(e) => { e.stopPropagation(); navigate(`/traces/${encodeURIComponent(log.trace_id!)}`) }}
+                                                        className="shrink-0 inline-flex items-center gap-0.5 h-[18px] px-1.5 rounded-[3px] text-[9px] font-black tracking-tight bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 cursor-pointer hover:bg-cyan-500/20 transition-colors"
+                                                    >
+                                                        <Network className="h-2.5 w-2.5" />
+                                                        TRACE
+                                                    </span>
+                                                </TooltipTrigger>
+                                                <TooltipContent side="right">
+                                                    <p className="text-[10px] font-bold">Trace: {log.trace_id}</p>
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        )}
                                         {log.tag && (
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
@@ -388,6 +433,13 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                                         ))}
                                     </div>
                                 </TableCell>
+                                {showUsage && (
+                                    <TableCell className="text-right">
+                                        <span className="font-mono text-xs font-semibold text-muted-foreground">
+                                            {formatTokenCount(log.usage_total_tokens)}
+                                        </span>
+                                    </TableCell>
+                                )}
                                 <TableCell className="text-right">
                                     <span className="text-xs text-muted-foreground font-mono font-medium">
                                         {formatLatency(log.latency_ms)}

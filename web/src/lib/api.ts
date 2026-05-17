@@ -23,9 +23,17 @@ export interface RequestLog {
     error?: string
     truncated: boolean
     tag?: string
+    trace_id?: string
+    parent_log_id?: string
+    trace_seq?: number
     request_override_applied?: boolean
     request_override_rules?: string[]
     request_override_error?: string
+    usage_input_tokens?: number
+    usage_output_tokens?: number
+    usage_total_tokens?: number
+    usage_raw?: string
+    usage_source?: string
     annotation: LogAnnotation
 }
 
@@ -87,6 +95,7 @@ export interface LogFilter {
     path?: string
     status_code?: number
     tag?: string
+    trace_id?: string
     saved?: boolean
     annotation_status?: LogAnnotationStatus
     annotation_label?: string
@@ -94,6 +103,55 @@ export interface LogFilter {
     end_time?: string
     offset?: number
     limit?: number
+}
+
+// Trace 类型
+export interface TraceSummary {
+    trace_id: string
+    request_count: number
+    first_time: number
+    last_time: number
+    total_latency_ms: number
+    error_count: number
+    usage_input_tokens?: number
+    usage_output_tokens?: number
+    usage_total_tokens?: number
+    upstreams: string[] | null
+    tags: string[] | null
+}
+
+export interface TraceFilter {
+    trace_id?: string
+    upstream?: string
+    tag?: string
+    has_error?: boolean
+    start_time?: string
+    end_time?: string
+    offset?: number
+    limit?: number
+}
+
+export interface TraceListResponse {
+    traces: TraceSummary[] | null
+    total: number
+    offset: number
+    limit: number
+}
+
+export interface TraceDetail {
+    trace_id: string
+    requests: RequestLog[]
+    summary: {
+        request_count: number
+        total_latency_ms: number
+        error_count: number
+        first_time: number
+        last_time: number
+        upstreams: string[]
+        usage_input_tokens?: number
+        usage_output_tokens?: number
+        usage_total_tokens?: number
+    }
 }
 
 // API 调用函数
@@ -180,6 +238,24 @@ export async function fetchUpstreams(): Promise<Upstream[]> {
     return response.json()
 }
 
+export async function fetchTraces(filter: TraceFilter = {}): Promise<TraceListResponse> {
+    const params = new URLSearchParams()
+    Object.entries(filter).forEach(([key, value]) => {
+        if (value !== undefined && value !== '') {
+            params.append(key, String(value))
+        }
+    })
+    const response = await fetch(`${API_BASE}/traces?${params}`)
+    if (!response.ok) throw new Error('获取 Trace 列表失败')
+    return response.json()
+}
+
+export async function fetchTraceDetail(traceId: string): Promise<TraceDetail> {
+    const response = await fetch(`${API_BASE}/traces/${encodeURIComponent(traceId)}`)
+    if (!response.ok) throw new Error('获取 Trace 详情失败')
+    return response.json()
+}
+
 export async function addUpstream(
     name: string,
     target: string,
@@ -240,6 +316,14 @@ export interface AppConfig {
         }>
         rules: unknown[]
     }
+    usage_extraction: {
+        enabled: boolean
+        upstreams: Record<string, {
+            enabled: boolean
+            rule_names: string[]
+        }>
+        rules: unknown[]
+    }
 }
 
 export async function updateLogAnnotation(
@@ -278,6 +362,14 @@ export interface ConfigUpdate {
     request_overrides?: {
         enabled?: boolean
         max_body_bytes?: number
+        upstreams?: Record<string, {
+            enabled: boolean
+            rule_names: string[]
+        }>
+        rules?: unknown[]
+    }
+    usage_extraction?: {
+        enabled?: boolean
         upstreams?: Record<string, {
             enabled: boolean
             rule_names: string[]
@@ -388,6 +480,21 @@ export async function fetchBlob(ref: string): Promise<string> {
     const response = await fetch(`${API_BASE}/blobs/${encodeURIComponent(ref)}`)
     if (!response.ok) throw new Error('获取 Blob 失败')
     return response.text()
+}
+
+export interface LogBodyResponse {
+    body: string
+    truncated?: boolean
+    body_decoded?: boolean
+    body_decoded_from?: string
+    decode_failed?: boolean
+}
+
+export async function fetchLogBody(id: string, part: 'request' | 'response'): Promise<LogBodyResponse> {
+    const params = new URLSearchParams({ part })
+    const response = await fetch(`${API_BASE}/logs/${encodeURIComponent(id)}/body?${params}`)
+    if (!response.ok) throw new Error('获取 Body 失败')
+    return response.json()
 }
 
 // Replay (Playground)

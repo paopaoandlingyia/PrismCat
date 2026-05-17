@@ -24,16 +24,18 @@ import (
 var b64Regex = regexp.MustCompile(`(data:[^\s]+?;base64,)?([A-Za-z0-9+/]{200,}[=]{0,2})`)
 
 type FormatOptions struct {
-	MaxOutputBytes  int64
-	TrimLargeBase64 bool
+	MaxOutputBytes               int64
+	TrimLargeBase64              bool
+	RequireContentEncodingDecode bool
 }
 
 type FormatResult struct {
-	Text        string
-	Truncated   bool
-	Decoded     bool
-	DecodedFrom string
-	Binary      bool
+	Text         string
+	Truncated    bool
+	Decoded      bool
+	DecodedFrom  string
+	DecodeFailed bool
+	Binary       bool
 }
 
 func FormatForDisplay(contentType, contentEncoding string, body []byte, opts FormatOptions) FormatResult {
@@ -46,11 +48,17 @@ func FormatForDisplay(contentType, contentEncoding string, body []byte, opts For
 	truncated := false
 	decodedFrom := ""
 
-	if decoded, wasTruncated, appliedEncoding, ok := decodeContent(contentEncoding, body, opts.MaxOutputBytes); ok {
+	tokens := normalizedEncodings(contentEncoding)
+	if decoded, wasTruncated, appliedEncoding, ok := decodeContentTokens(tokens, body, opts.MaxOutputBytes); ok {
 		data = decoded
 		decompressed = true
 		truncated = truncated || wasTruncated
 		decodedFrom = appliedEncoding
+	} else if opts.RequireContentEncodingDecode && len(tokens) > 0 {
+		return FormatResult{
+			Text:         fmt.Sprintf("[encoded content omitted; unable to decode %s]", strings.Join(tokens, ", ")),
+			DecodeFailed: true,
+		}
 	}
 
 	if multipartText, ok := formatMultipartForDisplay(contentType, data, opts.TrimLargeBase64); ok {
@@ -102,6 +110,27 @@ func FormatForDisplay(contentType, contentEncoding string, body []byte, opts For
 		Text:   fmt.Sprintf("[binary content omitted; %d bytes captured]", len(body)),
 		Binary: true,
 	}
+}
+
+func FormatPreviewForDisplay(contentType, contentEncoding string, body []byte, opts FormatOptions) FormatResult {
+	if len(body) == 0 || opts.MaxOutputBytes <= 0 {
+		return FormatResult{}
+	}
+
+	previewBody := body
+	inputTruncated := false
+	if len(normalizedEncodings(contentEncoding)) == 0 && int64(len(body)) > opts.MaxOutputBytes {
+		previewBody = truncateBytesForPreview(body, opts.MaxOutputBytes)
+		inputTruncated = true
+	}
+
+	result := FormatForDisplay(contentType, contentEncoding, previewBody, opts)
+	if int64(len(result.Text)) > opts.MaxOutputBytes {
+		result.Text = truncateStringForPreview(result.Text, opts.MaxOutputBytes)
+		result.Truncated = true
+	}
+	result.Truncated = result.Truncated || inputTruncated
+	return result
 }
 
 func formatMultipartForDisplay(contentType string, body []byte, trimLargeBase64 bool) (string, bool) {
@@ -184,7 +213,10 @@ func isImageContentType(contentType string) bool {
 }
 
 func decodeContent(contentEncoding string, body []byte, maxOutputBytes int64) ([]byte, bool, string, bool) {
-	tokens := normalizedEncodings(contentEncoding)
+	return decodeContentTokens(normalizedEncodings(contentEncoding), body, maxOutputBytes)
+}
+
+func decodeContentTokens(tokens []string, body []byte, maxOutputBytes int64) ([]byte, bool, string, bool) {
 	if len(tokens) == 0 {
 		return nil, false, "", false
 	}
@@ -279,6 +311,52 @@ func readAllLimited(r io.Reader, max int64) ([]byte, bool, error) {
 		return data, false, nil
 	}
 	return data[:max], true, nil
+}
+
+func truncateBytesForPreview(body []byte, max int64) []byte {
+	if max <= 0 {
+		return nil
+	}
+	if int64(len(body)) <= max {
+		return body
+	}
+	cut := int(max)
+	for cut > 0 && (body[cut]&0xC0) == 0x80 {
+		cut--
+	}
+	for cut > 0 && !utf8.Valid(body[:cut]) {
+		cut--
+		for cut > 0 && (body[cut]&0xC0) == 0x80 {
+			cut--
+		}
+	}
+	if cut <= 0 {
+		return body[:int(max)]
+	}
+	return body[:cut]
+}
+
+func truncateStringForPreview(text string, max int64) string {
+	if max <= 0 {
+		return ""
+	}
+	if int64(len(text)) <= max {
+		return text
+	}
+	cut := int(max)
+	for cut > 0 && (text[cut]&0xC0) == 0x80 {
+		cut--
+	}
+	for cut > 0 && !utf8.ValidString(text[:cut]) {
+		cut--
+		for cut > 0 && (text[cut]&0xC0) == 0x80 {
+			cut--
+		}
+	}
+	if cut <= 0 {
+		return text[:int(max)]
+	}
+	return strings.Clone(text[:cut])
 }
 
 func sanitizeText(text string, trimLargeBase64 bool) string {

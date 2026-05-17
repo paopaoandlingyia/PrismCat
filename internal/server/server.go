@@ -23,6 +23,7 @@ import (
 	"github.com/paopaoandlingyia/PrismCat/internal/live"
 	"github.com/paopaoandlingyia/PrismCat/internal/proxy"
 	"github.com/paopaoandlingyia/PrismCat/internal/storage"
+	"github.com/paopaoandlingyia/PrismCat/internal/trace"
 )
 
 //go:embed all:ui
@@ -191,13 +192,14 @@ type Server struct {
 
 // New 创建服务器实例
 func New(cfg *config.Config, repo storage.Repository, blobs storage.BlobStore) *Server {
-	liveRegistry := live.NewRegistry(cfg.LoggingSnapshot().MaxResponseBody)
+	liveRegistry := live.NewRegistry(cfg.LoggingSnapshot().BodyPreviewBytes)
+	traceSeq := trace.NewSequencer()
 	return &Server{
 		cfg:   cfg,
 		repo:  repo,
 		blobs: blobs,
 		live:  liveRegistry,
-		proxy: proxy.New(cfg, repo, liveRegistry),
+		proxy: proxy.New(cfg, repo, liveRegistry, traceSeq),
 		api:   api.New(cfg, repo, blobs, liveRegistry),
 		auth:  auth.NewManager(cfg),
 	}

@@ -55,7 +55,7 @@ func TestProxyUsesUpstreamOutboundProxy(t *testing.T) {
 		},
 	}
 
-	p := New(cfg, newProxyTestRepo(), nil)
+	p := New(cfg, newProxyTestRepo(), nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "http://gemini.localhost:8080/v1/models", nil)
 	req.Host = "gemini.localhost:8080"
 	rr := httptest.NewRecorder()
@@ -98,7 +98,7 @@ func TestProxyDirectOutboundProxyBypassesProxy(t *testing.T) {
 		},
 	}
 
-	p := New(cfg, newProxyTestRepo(), nil)
+	p := New(cfg, newProxyTestRepo(), nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "http://local.localhost:8080/api", nil)
 	req.Host = "local.localhost:8080"
 	rr := httptest.NewRecorder()

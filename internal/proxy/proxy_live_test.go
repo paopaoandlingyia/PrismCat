@@ -61,6 +61,14 @@ func (r *proxyTestRepo) GetStats(since *time.Time) (*storage.LogStats, error) {
 	return &storage.LogStats{}, nil
 }
 
+func (r *proxyTestRepo) ListTraces(filter storage.TraceFilter) ([]storage.TraceSummary, int64, error) {
+	return nil, 0, errors.New("not implemented")
+}
+
+func (r *proxyTestRepo) GetTraceRequests(traceID string) ([]*storage.RequestLog, error) {
+	return nil, errors.New("not implemented")
+}
+
 func (r *proxyTestRepo) Close() error {
 	return nil
 }
@@ -107,14 +115,15 @@ func TestLiveRequestBodyUpdatesWithoutEarlySnapshot(t *testing.T) {
 		Logging: config.LoggingConfig{
 			MaxRequestBody:           1024,
 			MaxResponseBody:          1024,
+			BodyPreviewBytes:         1024,
 			SensitiveHeaders:         []string{"Authorization", "x-api-key", "api-key"},
 			StoreBase64:              true,
 			EarlyRequestBodySnapshot: false,
 		},
 	}
 	repo := newProxyTestRepo()
-	liveRegistry := live.NewRegistry(cfg.Logging.MaxResponseBody)
-	proxy := New(cfg, repo, liveRegistry)
+	liveRegistry := live.NewRegistry(cfg.Logging.BodyPreviewBytes)
+	proxy := New(cfg, repo, liveRegistry, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "http://openai.localhost/v1/chat/completions", strings.NewReader(requestBody))
 	req.Host = "openai.localhost"

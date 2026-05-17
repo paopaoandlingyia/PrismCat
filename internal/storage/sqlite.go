@@ -142,6 +142,30 @@ func (r *SQLiteRepository) migrate() error {
 	if err := r.ensureLogColumn("request_override_error", "request_override_error TEXT DEFAULT ''"); err != nil {
 		return err
 	}
+	if err := r.ensureLogColumn("trace_id", "trace_id TEXT DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := r.ensureLogColumn("parent_log_id", "parent_log_id TEXT DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := r.ensureLogColumn("trace_seq", "trace_seq INTEGER DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := r.ensureLogColumn("usage_input_tokens", "usage_input_tokens INTEGER"); err != nil {
+		return err
+	}
+	if err := r.ensureLogColumn("usage_output_tokens", "usage_output_tokens INTEGER"); err != nil {
+		return err
+	}
+	if err := r.ensureLogColumn("usage_total_tokens", "usage_total_tokens INTEGER"); err != nil {
+		return err
+	}
+	if err := r.ensureLogColumn("usage_raw", "usage_raw TEXT DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := r.ensureLogColumn("usage_source", "usage_source TEXT DEFAULT ''"); err != nil {
+		return err
+	}
 	// Index for unix timestamp based sort/filter.
 	if _, err := r.db.Exec("CREATE INDEX IF NOT EXISTS idx_logs_created_at_unix_ms ON request_logs(created_at_unix_ms DESC)"); err != nil {
 		return fmt.Errorf("create created_at_unix_ms index: %w", err)
@@ -152,6 +176,13 @@ func (r *SQLiteRepository) migrate() error {
 	// Index for tag filtering.
 	if _, err := r.db.Exec("CREATE INDEX IF NOT EXISTS idx_logs_tag ON request_logs(tag)"); err != nil {
 		return fmt.Errorf("create tag index: %w", err)
+	}
+	// Indexes for trace filtering and ordering.
+	if _, err := r.db.Exec("CREATE INDEX IF NOT EXISTS idx_logs_trace_id ON request_logs(trace_id)"); err != nil {
+		return fmt.Errorf("create trace_id index: %w", err)
+	}
+	if _, err := r.db.Exec("CREATE INDEX IF NOT EXISTS idx_logs_trace_id_seq ON request_logs(trace_id, trace_seq)"); err != nil {
+		return fmt.Errorf("create trace_id_seq index: %w", err)
 	}
 	return nil
 }
@@ -334,8 +365,10 @@ func (r *SQLiteRepository) SaveLog(log *RequestLog) error {
 		request_headers, request_body, request_body_original, request_body_final, request_body_ref, request_body_size,
 		status_code, response_headers, response_body, response_body_ref, response_body_size,
 		streaming, latency_ms, error, truncated, tag,
-		request_override_applied, request_override_rules, request_override_error
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		request_override_applied, request_override_rules, request_override_error,
+		trace_id, parent_log_id, trace_seq,
+		usage_input_tokens, usage_output_tokens, usage_total_tokens, usage_raw, usage_source
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(id) DO UPDATE SET
 		created_at = excluded.created_at,
 		created_at_unix_ms = excluded.created_at_unix_ms,
@@ -362,7 +395,15 @@ func (r *SQLiteRepository) SaveLog(log *RequestLog) error {
 		tag = excluded.tag,
 		request_override_applied = excluded.request_override_applied,
 		request_override_rules = excluded.request_override_rules,
-		request_override_error = excluded.request_override_error
+		request_override_error = excluded.request_override_error,
+		trace_id = excluded.trace_id,
+		parent_log_id = excluded.parent_log_id,
+		trace_seq = excluded.trace_seq,
+		usage_input_tokens = excluded.usage_input_tokens,
+		usage_output_tokens = excluded.usage_output_tokens,
+		usage_total_tokens = excluded.usage_total_tokens,
+		usage_raw = excluded.usage_raw,
+		usage_source = excluded.usage_source
 	`
 
 	_, err := r.db.Exec(query,
@@ -371,6 +412,8 @@ func (r *SQLiteRepository) SaveLog(log *RequestLog) error {
 		log.StatusCode, string(respHeaders), log.ResponseBody, log.ResponseBodyRef, log.ResponseBodySize,
 		log.Streaming, log.Latency, log.Error, log.Truncated, log.Tag,
 		log.RequestOverrideApplied, string(overrideRules), log.RequestOverrideError,
+		log.TraceID, log.ParentLogID, log.TraceSeq,
+		log.UsageInputTokens, log.UsageOutputTokens, log.UsageTotalTokens, log.UsageRaw, log.UsageSource,
 	)
 	return err
 }
@@ -381,7 +424,9 @@ func (r *SQLiteRepository) GetLog(id string) (*RequestLog, error) {
 		request_headers, request_body, request_body_original, request_body_final, request_body_ref, request_body_size,
 		status_code, response_headers, response_body, response_body_ref, response_body_size,
 		streaming, latency_ms, error, truncated, tag,
-		request_override_applied, request_override_rules, request_override_error
+		request_override_applied, request_override_rules, request_override_error,
+		trace_id, parent_log_id, trace_seq,
+		usage_input_tokens, usage_output_tokens, usage_total_tokens, usage_raw, usage_source
 	FROM request_logs WHERE id = ?
 	`
 	row := r.db.QueryRow(query, id)
@@ -440,6 +485,10 @@ func (r *SQLiteRepository) ListLogs(filter LogFilter) ([]*RequestLog, int64, err
 		conditions = append(conditions, "l.tag = ?")
 		args = append(args, filter.Tag)
 	}
+	if filter.TraceID != "" {
+		conditions = append(conditions, "l.trace_id = ?")
+		args = append(args, filter.TraceID)
+	}
 	if filter.Saved != nil {
 		if *filter.Saved {
 			conditions = append(conditions, "COALESCE(a.saved, 0) = 1")
@@ -481,7 +530,9 @@ func (r *SQLiteRepository) ListLogs(filter LogFilter) ([]*RequestLog, int64, err
 		l.request_body_size, l.status_code, l.response_body_size,
 		l.streaming, l.latency_ms, l.error, l.truncated, l.tag, l.request_override_applied,
 		COALESCE(a.saved, 0), COALESCE(a.status, 'none'), COALESCE(a.note, ''), COALESCE(a.labels, '[]'),
-		COALESCE(a.created_at_unix_ms, 0), COALESCE(a.updated_at_unix_ms, 0)
+		COALESCE(a.created_at_unix_ms, 0), COALESCE(a.updated_at_unix_ms, 0),
+		l.trace_id, l.parent_log_id, l.trace_seq,
+		l.usage_input_tokens, l.usage_output_tokens, l.usage_total_tokens
 	FROM request_logs l
 	LEFT JOIN log_annotations a ON a.log_id = l.id
 	%s
@@ -675,6 +726,158 @@ func (r *SQLiteRepository) GetStats(since *time.Time) (*LogStats, error) {
 	return stats, nil
 }
 
+func (r *SQLiteRepository) ListTraces(filter TraceFilter) ([]TraceSummary, int64, error) {
+	var havingConds []string
+	var havingArgs []interface{}
+	var whereConds []string
+	var whereArgs []interface{}
+
+	whereConds = append(whereConds, "trace_id != ''")
+
+	if filter.TraceID != "" {
+		whereConds = append(whereConds, "trace_id LIKE ?")
+		whereArgs = append(whereArgs, "%"+filter.TraceID+"%")
+	}
+	if filter.Upstream != "" {
+		whereConds = append(whereConds, "upstream = ?")
+		whereArgs = append(whereArgs, filter.Upstream)
+	}
+	if filter.Tag != "" {
+		whereConds = append(whereConds, "tag = ?")
+		whereArgs = append(whereArgs, filter.Tag)
+	}
+	if filter.StartTime != nil {
+		whereConds = append(whereConds, "created_at_unix_ms >= ?")
+		whereArgs = append(whereArgs, filter.StartTime.UTC().UnixMilli())
+	}
+	if filter.EndTime != nil {
+		whereConds = append(whereConds, "created_at_unix_ms <= ?")
+		whereArgs = append(whereArgs, filter.EndTime.UTC().UnixMilli())
+	}
+
+	if filter.HasError != nil {
+		if *filter.HasError {
+			havingConds = append(havingConds, "error_count > 0")
+		} else {
+			havingConds = append(havingConds, "error_count = 0")
+		}
+	}
+
+	where := "WHERE " + strings.Join(whereConds, " AND ")
+	having := ""
+	if len(havingConds) > 0 {
+		having = "HAVING " + strings.Join(havingConds, " AND ")
+	}
+
+	allArgs := append([]interface{}{}, whereArgs...)
+	allArgs = append(allArgs, havingArgs...)
+
+	countQuery := fmt.Sprintf(`
+		SELECT COUNT(*) FROM (
+			SELECT trace_id FROM request_logs %s GROUP BY trace_id %s
+		)
+	`, where, having)
+	var total int64
+	if err := r.db.QueryRow(countQuery, allArgs...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	if filter.Limit <= 0 {
+		filter.Limit = 50
+	}
+	if filter.Limit > 1000 {
+		filter.Limit = 1000
+	}
+
+	query := fmt.Sprintf(`
+		SELECT trace_id,
+			COUNT(*) as request_count,
+			MIN(created_at_unix_ms) as first_time,
+			MAX(created_at_unix_ms) as last_time,
+			SUM(latency_ms) as total_latency,
+			SUM(CASE WHEN (error IS NOT NULL AND error != '') OR status_code >= 400 THEN 1 ELSE 0 END) as error_count,
+			SUM(usage_input_tokens) as usage_input_tokens,
+			SUM(usage_output_tokens) as usage_output_tokens,
+			SUM(usage_total_tokens) as usage_total_tokens,
+			GROUP_CONCAT(DISTINCT upstream) as upstreams,
+			GROUP_CONCAT(DISTINCT CASE WHEN tag != '' THEN tag END) as tags
+		FROM request_logs
+		%s
+		GROUP BY trace_id
+		%s
+		ORDER BY MAX(created_at_unix_ms) DESC
+		LIMIT ? OFFSET ?
+	`, where, having)
+
+	pagArgs := append(allArgs, filter.Limit, filter.Offset)
+	rows, err := r.db.Query(query, pagArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var traces []TraceSummary
+	for rows.Next() {
+		var t TraceSummary
+		var upstreamsCSV, tagsCSV sql.NullString
+		var usageInput, usageOutput, usageTotal sql.NullInt64
+		if err := rows.Scan(&t.TraceID, &t.RequestCount, &t.FirstTime, &t.LastTime,
+			&t.TotalLatency, &t.ErrorCount, &usageInput, &usageOutput, &usageTotal, &upstreamsCSV, &tagsCSV); err != nil {
+			return nil, 0, err
+		}
+		t.UsageInputTokens = nullIntPtr(usageInput)
+		t.UsageOutputTokens = nullIntPtr(usageOutput)
+		t.UsageTotalTokens = nullIntPtr(usageTotal)
+		if upstreamsCSV.Valid && upstreamsCSV.String != "" {
+			t.Upstreams = strings.Split(upstreamsCSV.String, ",")
+		}
+		if tagsCSV.Valid && tagsCSV.String != "" {
+			t.Tags = strings.Split(tagsCSV.String, ",")
+		}
+		traces = append(traces, t)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	return traces, total, nil
+}
+
+func (r *SQLiteRepository) GetTraceRequests(traceID string) ([]*RequestLog, error) {
+	query := `
+	SELECT id, created_at, upstream, target_url, method, path, query,
+		request_headers, request_body, request_body_original, request_body_final, request_body_ref, request_body_size,
+		status_code, response_headers, response_body, response_body_ref, response_body_size,
+		streaming, latency_ms, error, truncated, tag,
+		request_override_applied, request_override_rules, request_override_error,
+		trace_id, parent_log_id, trace_seq,
+		usage_input_tokens, usage_output_tokens, usage_total_tokens, usage_raw, usage_source
+	FROM request_logs
+	WHERE trace_id = ?
+	ORDER BY trace_seq, created_at_unix_ms
+	`
+	rows, err := r.db.Query(query, traceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var logs []*RequestLog
+	for rows.Next() {
+		log, err := r.scanLog(rows)
+		if err != nil {
+			return nil, err
+		}
+		if annotation, aErr := r.GetLogAnnotation(log.ID); aErr == nil {
+			log.Annotation = annotation
+		}
+		logs = append(logs, log)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return logs, nil
+}
+
 func (r *SQLiteRepository) Close() error {
 	return r.db.Close()
 }
@@ -718,6 +921,7 @@ func (r *SQLiteRepository) scanLogSummary(scanner interface{ Scan(...interface{}
 	var annotationSaved int
 	var annotationLabels string
 	var annotationCreatedMS, annotationUpdatedMS int64
+	var usageInput, usageOutput, usageTotal sql.NullInt64
 
 	err := scanner.Scan(
 		&log.ID, &log.CreatedAt, &log.Upstream, &log.TargetURL, &log.Method, &log.Path, &log.Query,
@@ -725,6 +929,8 @@ func (r *SQLiteRepository) scanLogSummary(scanner interface{ Scan(...interface{}
 		&streaming, &log.Latency, &log.Error, &truncated, &log.Tag, &overrideApplied,
 		&annotationSaved, &log.Annotation.Status, &log.Annotation.Note, &annotationLabels,
 		&annotationCreatedMS, &annotationUpdatedMS,
+		&log.TraceID, &log.ParentLogID, &log.TraceSeq,
+		&usageInput, &usageOutput, &usageTotal,
 	)
 	if err != nil {
 		return nil, err
@@ -733,6 +939,9 @@ func (r *SQLiteRepository) scanLogSummary(scanner interface{ Scan(...interface{}
 	log.Streaming = streaming == 1
 	log.Truncated = truncated == 1
 	log.RequestOverrideApplied = overrideApplied == 1
+	log.UsageInputTokens = nullIntPtr(usageInput)
+	log.UsageOutputTokens = nullIntPtr(usageOutput)
+	log.UsageTotalTokens = nullIntPtr(usageTotal)
 	log.CreatedAt = log.CreatedAt.UTC()
 	log.Annotation.Saved = annotationSaved == 1
 	log.Annotation.Status = normalizeAnnotationStatus(log.Annotation.Status)
@@ -751,6 +960,8 @@ func (r *SQLiteRepository) scanLog(scanner interface{ Scan(...interface{}) error
 	var log RequestLog
 	var reqHeaders, respHeaders, overrideRules string
 	var streaming, truncated, overrideApplied int
+	var usageInput, usageOutput, usageTotal sql.NullInt64
+	var usageRaw, usageSource sql.NullString
 
 	err := scanner.Scan(
 		&log.ID, &log.CreatedAt, &log.Upstream, &log.TargetURL, &log.Method, &log.Path, &log.Query,
@@ -758,6 +969,8 @@ func (r *SQLiteRepository) scanLog(scanner interface{ Scan(...interface{}) error
 		&log.StatusCode, &respHeaders, &log.ResponseBody, &log.ResponseBodyRef, &log.ResponseBodySize,
 		&streaming, &log.Latency, &log.Error, &truncated, &log.Tag,
 		&overrideApplied, &overrideRules, &log.RequestOverrideError,
+		&log.TraceID, &log.ParentLogID, &log.TraceSeq,
+		&usageInput, &usageOutput, &usageTotal, &usageRaw, &usageSource,
 	)
 	if err != nil {
 		return nil, err
@@ -766,6 +979,15 @@ func (r *SQLiteRepository) scanLog(scanner interface{ Scan(...interface{}) error
 	log.Streaming = streaming == 1
 	log.Truncated = truncated == 1
 	log.RequestOverrideApplied = overrideApplied == 1
+	log.UsageInputTokens = nullIntPtr(usageInput)
+	log.UsageOutputTokens = nullIntPtr(usageOutput)
+	log.UsageTotalTokens = nullIntPtr(usageTotal)
+	if usageRaw.Valid {
+		log.UsageRaw = usageRaw.String
+	}
+	if usageSource.Valid {
+		log.UsageSource = usageSource.String
+	}
 	log.CreatedAt = log.CreatedAt.UTC()
 
 	if reqHeaders != "" && reqHeaders != "null" {
@@ -799,6 +1021,14 @@ func unmarshalHeaders(data string) map[string][]string {
 	}
 
 	return nil
+}
+
+func nullIntPtr(value sql.NullInt64) *int64 {
+	if !value.Valid {
+		return nil
+	}
+	v := value.Int64
+	return &v
 }
 
 func normalizeAnnotationStatus(status string) string {

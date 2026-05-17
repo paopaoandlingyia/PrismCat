@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"sync"
@@ -41,7 +42,33 @@ func (m *memRepo) SaveLogAnnotation(logID string, annotation LogAnnotation) (Log
 	return annotation, errors.New("not implemented")
 }
 func (m *memRepo) GetStats(since *time.Time) (*LogStats, error) { return &LogStats{}, nil }
-func (m *memRepo) Close() error                                 { m.mu.Lock(); m.closed = true; m.mu.Unlock(); return nil }
+func (m *memRepo) ListTraces(filter TraceFilter) ([]TraceSummary, int64, error) {
+	return nil, 0, errors.New("not implemented")
+}
+func (m *memRepo) GetTraceRequests(traceID string) ([]*RequestLog, error) {
+	return nil, errors.New("not implemented")
+}
+func (m *memRepo) Close() error { m.mu.Lock(); m.closed = true; m.mu.Unlock(); return nil }
+
+type memBlobStore struct {
+	puts int
+	data [][]byte
+}
+
+func (m *memBlobStore) Put(ctx context.Context, b []byte) (string, error) {
+	_ = ctx
+	m.puts++
+	m.data = append(m.data, append([]byte(nil), b...))
+	return "sha256:" + strings.Repeat("0", 64), nil
+}
+
+func (m *memBlobStore) Get(ctx context.Context, ref string) ([]byte, error) {
+	return nil, ErrBlobNotFound
+}
+
+func (m *memBlobStore) Exists(ctx context.Context, ref string) (bool, error) {
+	return false, nil
+}
 
 func TestAsyncRepositoryCloseDrainsQueue(t *testing.T) {
 	inner := &memRepo{}
@@ -163,6 +190,9 @@ func TestAsyncRepositoryStoresBinaryBodyBlob(t *testing.T) {
 	if saved.ResponseBodyRef == "" {
 		t.Fatalf("ResponseBodyRef is empty")
 	}
+	if saved.Truncated {
+		t.Fatalf("Truncated = true, want false for recoverable preview truncation")
+	}
 	if blobs.puts != 1 {
 		t.Fatalf("blob puts = %d, want 1", blobs.puts)
 	}
@@ -171,5 +201,138 @@ func TestAsyncRepositoryStoresBinaryBodyBlob(t *testing.T) {
 	}
 	if saved.ResponseBodyRaw != nil {
 		t.Fatalf("ResponseBodyRaw not cleared")
+	}
+}
+
+func TestAsyncRepositoryStoresPreviewAndRawBlob(t *testing.T) {
+	inner := &memRepo{}
+	blobs := &memBlobStore{}
+	cfg := &config.Config{}
+	cfg.Logging.MaxResponseBody = 1024
+	cfg.Logging.BodyPreviewBytes = 8
+	cfg.Logging.DetachBodyOverBytes = 1024
+	cfg.Logging.StoreBase64 = true
+
+	a := NewAsyncRepository(inner, cfg, 16, blobs)
+	body := []byte(`{"message":"hello world"}`)
+
+	err := a.SaveLog(&RequestLog{
+		ID:              "id",
+		ResponseHeaders: map[string][]string{"Content-Type": {"application/json"}},
+		ResponseBodyRaw: body,
+	})
+	if err != nil {
+		t.Fatalf("SaveLog failed: %v", err)
+	}
+	if err := a.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	inner.mu.Lock()
+	defer inner.mu.Unlock()
+	if len(inner.logs) != 1 {
+		t.Fatalf("inner logs = %d, want 1", len(inner.logs))
+	}
+	saved := inner.logs[0]
+	if saved.ResponseBody != `{"messag` {
+		t.Fatalf("ResponseBody preview = %q, want truncated preview", saved.ResponseBody)
+	}
+	if saved.ResponseBodyRef == "" {
+		t.Fatalf("ResponseBodyRef is empty")
+	}
+	if saved.Truncated {
+		t.Fatalf("Truncated = true, want false for recoverable preview truncation")
+	}
+	if blobs.puts != 1 {
+		t.Fatalf("blob puts = %d, want 1", blobs.puts)
+	}
+	if string(blobs.data[0]) != string(body) {
+		t.Fatalf("stored blob = %q, want raw body %q", string(blobs.data[0]), string(body))
+	}
+}
+
+func TestAsyncRepositoryMarksCaptureLimitAsTruncated(t *testing.T) {
+	inner := &memRepo{}
+	cfg := &config.Config{}
+	cfg.Logging.MaxRequestBody = 8
+	cfg.Logging.BodyPreviewBytes = 8
+	cfg.Logging.DetachBodyOverBytes = 1024
+	cfg.Logging.StoreBase64 = true
+
+	a := NewAsyncRepository(inner, cfg, 16)
+
+	err := a.SaveLog(&RequestLog{
+		ID:                          "id",
+		RequestHeaders:              map[string][]string{"Content-Type": {"application/json"}},
+		RequestBodyRaw:              []byte(`{"msg":`),
+		RequestBodySize:             int64(len(`{"msg":"hello world"}`)),
+		RequestBodyCaptureTruncated: true,
+	})
+	if err != nil {
+		t.Fatalf("SaveLog failed: %v", err)
+	}
+	if err := a.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	inner.mu.Lock()
+	defer inner.mu.Unlock()
+	if len(inner.logs) != 1 {
+		t.Fatalf("inner logs = %d, want 1", len(inner.logs))
+	}
+	saved := inner.logs[0]
+	if !saved.Truncated {
+		t.Fatalf("Truncated = false, want true for capture limit truncation")
+	}
+}
+
+func TestAsyncRepositoryExtractsUsageInWorker(t *testing.T) {
+	inner := &memRepo{}
+	cfg := &config.Config{}
+	cfg.Logging.MaxResponseBody = 1024
+	cfg.Logging.BodyPreviewBytes = 1024
+	cfg.Logging.StoreBase64 = true
+	cfg.Usage = config.UsageExtractionConfig{
+		Enabled: true,
+		Upstreams: map[string]config.UsageExtractionUpstreamBinding{
+			"openai": {Enabled: true, RuleNames: []string{"OpenAI compatible"}},
+		},
+		Rules: []config.UsageExtractionRule{
+			{
+				Name:    "OpenAI compatible",
+				Enabled: true,
+				Match:   config.UsageExtractionMatch{ContentTypes: []string{"application/json"}},
+				Paths: config.UsageExtractionPaths{
+					InputTokens:  []string{"/usage/prompt_tokens"},
+					OutputTokens: []string{"/usage/completion_tokens"},
+					TotalTokens:  []string{"/usage/total_tokens"},
+					RawUsage:     []string{"/usage"},
+				},
+			},
+		},
+	}
+
+	a := NewAsyncRepository(inner, cfg, 16)
+	err := a.SaveLog(&RequestLog{
+		ID:              "id",
+		Upstream:        "openai",
+		ResponseHeaders: map[string][]string{"Content-Type": {"application/json"}},
+		ResponseBodyRaw: []byte(`{"usage":{"prompt_tokens":3,"completion_tokens":5,"total_tokens":8}}`),
+	})
+	if err != nil {
+		t.Fatalf("SaveLog failed: %v", err)
+	}
+	if err := a.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	inner.mu.Lock()
+	defer inner.mu.Unlock()
+	saved := inner.logs[0]
+	if saved.UsageTotalTokens == nil || *saved.UsageTotalTokens != 8 {
+		t.Fatalf("UsageTotalTokens = %v, want 8", saved.UsageTotalTokens)
+	}
+	if saved.UsageRaw == "" {
+		t.Fatalf("UsageRaw is empty")
 	}
 }

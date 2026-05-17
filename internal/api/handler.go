@@ -61,6 +61,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/healthz", h.handleHealth)
 	mux.HandleFunc("/api/blobs/", h.handleBlob)
 	mux.HandleFunc("/api/replay", h.handleReplay)
+	mux.HandleFunc("/api/traces", h.handleTraces)
+	mux.HandleFunc("/api/traces/", h.handleTraceDetail)
 }
 
 // handleLogs 获取日志列表
@@ -76,6 +78,7 @@ func (h *Handler) handleLogs(w http.ResponseWriter, r *http.Request) {
 		Method:   query.Get("method"),
 		Path:     query.Get("path"),
 		Tag:      query.Get("tag"),
+		TraceID:  query.Get("trace_id"),
 		Status:   query.Get("annotation_status"),
 		Label:    query.Get("annotation_label"),
 	}
@@ -161,6 +164,15 @@ func (h *Handler) handleLogDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if id, ok := strings.CutSuffix(path, "/body"); ok {
+		if id == "" {
+			h.jsonError(w, "缺少日志 ID", http.StatusBadRequest)
+			return
+		}
+		h.handleLogBody(w, r, id)
+		return
+	}
+
 	id := path
 	log, err := h.repo.GetLog(id)
 	if err != nil {
@@ -169,6 +181,76 @@ func (h *Handler) handleLogDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.jsonResponse(w, log)
+}
+
+func (h *Handler) handleLogBody(w http.ResponseWriter, r *http.Request, id string) {
+	if r.Method != http.MethodGet {
+		h.jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	logEntry, err := h.repo.GetLog(id)
+	if err != nil {
+		h.jsonError(w, "日志不存在", http.StatusNotFound)
+		return
+	}
+
+	part := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("part")))
+	if part == "" {
+		part = "response"
+	}
+
+	var body string
+	var ref string
+	var contentType string
+	var contentEncoding string
+	var maxOutputBytes int64
+
+	logging := h.cfg.LoggingSnapshot()
+	switch part {
+	case "request":
+		body = logEntry.RequestBody
+		ref = logEntry.RequestBodyRef
+		contentType = firstHeaderValue(logEntry.RequestHeaders, "Content-Type")
+		contentEncoding = firstHeaderValue(logEntry.RequestHeaders, "Content-Encoding")
+		maxOutputBytes = logging.MaxRequestBody
+	case "response":
+		body = logEntry.ResponseBody
+		ref = logEntry.ResponseBodyRef
+		contentType = firstHeaderValue(logEntry.ResponseHeaders, "Content-Type")
+		contentEncoding = firstHeaderValue(logEntry.ResponseHeaders, "Content-Encoding")
+		maxOutputBytes = logging.MaxResponseBody
+	default:
+		h.jsonError(w, "不支持的 body part", http.StatusBadRequest)
+		return
+	}
+
+	if ref == "" || h.blobs == nil {
+		h.jsonResponse(w, map[string]interface{}{
+			"body":      body,
+			"truncated": logEntry.Truncated,
+		})
+		return
+	}
+
+	data, err := h.blobs.Get(r.Context(), ref)
+	if err != nil {
+		h.jsonError(w, "读取 Blob 失败: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	formatted := httpbody.FormatForDisplay(contentType, contentEncoding, data, httpbody.FormatOptions{
+		MaxOutputBytes:               maxOutputBytes,
+		TrimLargeBase64:              !logging.StoreBase64,
+		RequireContentEncodingDecode: true,
+	})
+	h.jsonResponse(w, map[string]interface{}{
+		"body":              formatted.Text,
+		"truncated":         logEntry.Truncated || formatted.Truncated,
+		"body_decoded":      formatted.Decoded,
+		"body_decoded_from": formatted.DecodedFrom,
+		"decode_failed":     formatted.DecodeFailed,
+	})
 }
 
 func (h *Handler) handleLogAnnotation(w http.ResponseWriter, r *http.Request, id string) {
@@ -302,6 +384,143 @@ func writeSSEEvent(w io.Writer, event string, payload interface{}) error {
 		return err
 	}
 	return nil
+}
+
+func (h *Handler) handleTraces(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	query := r.URL.Query()
+	filter := storage.TraceFilter{
+		TraceID:  query.Get("trace_id"),
+		Upstream: query.Get("upstream"),
+		Tag:      query.Get("tag"),
+	}
+
+	if hasError := query.Get("has_error"); hasError != "" {
+		if v, err := strconv.ParseBool(hasError); err == nil {
+			filter.HasError = &v
+		}
+	}
+	if offset := query.Get("offset"); offset != "" {
+		if o, err := strconv.Atoi(offset); err == nil {
+			filter.Offset = o
+		}
+	}
+	if limit := query.Get("limit"); limit != "" {
+		if l, err := strconv.Atoi(limit); err == nil {
+			filter.Limit = l
+		}
+	}
+	if startTime := query.Get("start_time"); startTime != "" {
+		if t, err := time.Parse(time.RFC3339, startTime); err == nil {
+			filter.StartTime = &t
+		}
+	}
+	if endTime := query.Get("end_time"); endTime != "" {
+		if t, err := time.Parse(time.RFC3339, endTime); err == nil {
+			filter.EndTime = &t
+		}
+	}
+
+	traces, total, err := h.repo.ListTraces(filter)
+	if err != nil {
+		h.jsonError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	h.jsonResponse(w, map[string]interface{}{
+		"traces": traces,
+		"total":  total,
+		"offset": filter.Offset,
+		"limit":  filter.Limit,
+	})
+}
+
+func (h *Handler) handleTraceDetail(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	traceID := strings.TrimPrefix(r.URL.Path, "/api/traces/")
+	if traceID == "" {
+		h.jsonError(w, "缺少 trace ID", http.StatusBadRequest)
+		return
+	}
+
+	requests, err := h.repo.GetTraceRequests(traceID)
+	if err != nil {
+		h.jsonError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if len(requests) == 0 {
+		h.jsonError(w, "trace 不存在", http.StatusNotFound)
+		return
+	}
+
+	var totalLatency int64
+	var errorCount int
+	var firstTime, lastTime int64
+	var usageInput, usageOutput, usageTotal int64
+	var hasUsageInput, hasUsageOutput, hasUsageTotal bool
+	upstreamSet := make(map[string]struct{})
+	for i, req := range requests {
+		totalLatency += req.Latency
+		if req.UsageInputTokens != nil {
+			usageInput += *req.UsageInputTokens
+			hasUsageInput = true
+		}
+		if req.UsageOutputTokens != nil {
+			usageOutput += *req.UsageOutputTokens
+			hasUsageOutput = true
+		}
+		if req.UsageTotalTokens != nil {
+			usageTotal += *req.UsageTotalTokens
+			hasUsageTotal = true
+		}
+		if req.Error != "" || req.StatusCode >= 400 {
+			errorCount++
+		}
+		ms := req.CreatedAt.UnixMilli()
+		if i == 0 || ms < firstTime {
+			firstTime = ms
+		}
+		if i == 0 || ms > lastTime {
+			lastTime = ms
+		}
+		upstreamSet[req.Upstream] = struct{}{}
+	}
+	upstreams := make([]string, 0, len(upstreamSet))
+	for u := range upstreamSet {
+		upstreams = append(upstreams, u)
+	}
+
+	summary := map[string]interface{}{
+		"request_count":    len(requests),
+		"total_latency_ms": totalLatency,
+		"error_count":      errorCount,
+		"first_time":       firstTime,
+		"last_time":        lastTime,
+		"upstreams":        upstreams,
+	}
+	if hasUsageInput {
+		summary["usage_input_tokens"] = usageInput
+	}
+	if hasUsageOutput {
+		summary["usage_output_tokens"] = usageOutput
+	}
+	if hasUsageTotal {
+		summary["usage_total_tokens"] = usageTotal
+	}
+
+	h.jsonResponse(w, map[string]interface{}{
+		"trace_id": traceID,
+		"requests": requests,
+		"summary":  summary,
+	})
 }
 
 // handleStats 获取统计信息
@@ -467,6 +686,7 @@ func (h *Handler) handleConfig(w http.ResponseWriter, r *http.Request) {
 		storageCfg := h.cfg.StorageSnapshot()
 		serverCfg := h.cfg.ServerSnapshot()
 		overrides := h.cfg.RequestOverridesSnapshot()
+		usageExtraction := h.cfg.UsageExtractionSnapshot()
 		h.jsonResponse(w, map[string]interface{}{
 			"version": config.Version,
 			"server": map[string]interface{}{
@@ -490,6 +710,7 @@ func (h *Handler) handleConfig(w http.ResponseWriter, r *http.Request) {
 				"blob_dir":       storageCfg.BlobDir,
 			},
 			"request_overrides": overrides,
+			"usage_extraction":  usageExtraction,
 		})
 		return
 	}
@@ -514,6 +735,7 @@ func (h *Handler) handleConfig(w http.ResponseWriter, r *http.Request) {
 				RetentionDays *int `json:"retention_days"`
 			} `json:"storage"`
 			RequestOverrides *config.RequestOverridesConfig `json:"request_overrides"`
+			UsageExtraction  *config.UsageExtractionConfig  `json:"usage_extraction"`
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -564,6 +786,9 @@ func (h *Handler) handleConfig(w http.ResponseWriter, r *http.Request) {
 
 			if req.RequestOverrides != nil {
 				c.Overrides = config.NormalizeRequestOverrides(*req.RequestOverrides)
+			}
+			if req.UsageExtraction != nil {
+				c.Usage = config.NormalizeUsageExtraction(*req.UsageExtraction)
 			}
 		})
 
@@ -639,6 +864,21 @@ func blobFilename(ref string, data []byte) string {
 		name = "blob"
 	}
 	return name + "." + suffix
+}
+
+func firstHeaderValue(headers map[string][]string, key string) string {
+	if headers == nil {
+		return ""
+	}
+	if vv, ok := headers[key]; ok && len(vv) > 0 {
+		return vv[0]
+	}
+	for k, vv := range headers {
+		if strings.EqualFold(k, key) && len(vv) > 0 {
+			return vv[0]
+		}
+	}
+	return ""
 }
 
 // handleReplay sends a request to the configured upstream and returns the response.

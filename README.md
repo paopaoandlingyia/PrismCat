@@ -269,6 +269,7 @@ logging:
     - api-key
     - x-api-key
   detach_body_over_bytes: 2097152 # Load bodies > 2MB on demand
+  body_preview_bytes: 524288      # Inline readable preview; lower for high-frequency long-running use
   early_request_body_snapshot: false
 
 storage:

@@ -242,6 +242,9 @@ func cloneRequestLog(in *storage.RequestLog) *storage.RequestLog {
 	out.ResponseHeaders = cloneHeaders(in.ResponseHeaders)
 	out.RequestBodyRaw = cloneBytes(in.RequestBodyRaw)
 	out.ResponseBodyRaw = cloneBytes(in.ResponseBodyRaw)
+	out.UsageInputTokens = cloneInt64Ptr(in.UsageInputTokens)
+	out.UsageOutputTokens = cloneInt64Ptr(in.UsageOutputTokens)
+	out.UsageTotalTokens = cloneInt64Ptr(in.UsageTotalTokens)
 	return &out
 }
 
@@ -271,4 +274,12 @@ func cloneBytes(in []byte) []byte {
 	out := make([]byte, len(in))
 	copy(out, in)
 	return out
+}
+
+func cloneInt64Ptr(in *int64) *int64 {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	return &out
 }

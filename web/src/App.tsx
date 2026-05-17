@@ -1,8 +1,9 @@
 import { BrowserRouter, Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Globe, LayoutDashboard, LogOut, Settings as SettingsIcon, Zap } from 'lucide-react'
+import { Globe, LayoutDashboard, LogOut, Network, Settings as SettingsIcon, Zap } from 'lucide-react'
 import { PrismCatLogo } from '@/components/PrismCatLogo'
 import { useTranslation } from 'react-i18next'
 import { Dashboard } from '@/pages/Dashboard'
+import { Traces } from '@/pages/Traces'
 import { cn } from '@/lib/utils'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -27,6 +28,11 @@ const LogDiffPage = lazy(async () => {
   return { default: module.LogDiff }
 })
 
+const TraceDetailPage = lazy(async () => {
+  const module = await import('@/pages/TraceDetail')
+  return { default: module.TraceDetail }
+})
+
 interface AppLayoutProps {
   onSignOut: () => void
 }
@@ -46,8 +52,13 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
       .catch(err => console.error('Failed to fetch version:', err))
   }, [])
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0 })
+  }, [location.pathname])
+
   const navItems = [
     { to: '/', labelKey: 'nav.dashboard', icon: LayoutDashboard },
+    { to: '/traces', labelKey: 'nav.traces', icon: Network },
     { to: '/playground', labelKey: 'nav.playground', icon: Zap },
     { to: '/settings', labelKey: 'nav.settings', icon: SettingsIcon },
   ]
@@ -62,7 +73,7 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
   )
 
   return (
-    <div className="min-h-screen relative isolate">
+    <div className="relative isolate flex min-h-screen flex-col bg-background">
       {/* Background Decorative Blur - Global */}
       <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
         <div className="absolute left-[4%] top-[10%] h-72 w-72 rounded-full bg-primary/[0.10] blur-[110px] dark:bg-primary/[0.15]" />
@@ -92,7 +103,9 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
               {/* 导航 */}
               <nav className="hidden md:flex items-center gap-2 ml-10">
                 {navItems.map((item) => {
-                  const isActive = location.pathname === item.to
+                  const isActive = item.to === '/'
+                    ? location.pathname === '/'
+                    : location.pathname.startsWith(item.to)
                   const Icon = item.icon
                   return (
                     <NavLink
@@ -137,7 +150,9 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
           {/* 移动端导航 */}
           <nav className="mt-3 flex items-center gap-1.5 md:hidden sm:mt-4 sm:-mx-2 sm:gap-2">
             {navItems.map((item) => {
-              const isActive = location.pathname === item.to
+              const isActive = item.to === '/'
+                ? location.pathname === '/'
+                : location.pathname.startsWith(item.to)
               const Icon = item.icon
               return (
                 <NavLink
@@ -160,11 +175,13 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
       </header>
 
       {/* 主内容 */}
-      <main className="w-full px-4 py-5 space-y-6 sm:px-6 sm:py-6">
+      <main className="relative z-0 w-full flex-1 bg-background px-4 py-5 space-y-6 sm:px-6 sm:py-6">
         <Suspense fallback={routeFallback}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path={logRequestDiffRoute} element={<LogDiffPage />} />
+            <Route path="/traces" element={<Traces />} />
+            <Route path="/traces/:traceId" element={<TraceDetailPage />} />
             <Route path="/playground" element={<PlaygroundPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
@@ -172,7 +189,7 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
       </main>
 
       {/* 页脚版本号 */}
-      <footer className="flex w-full items-center justify-center px-4 py-4 sm:px-6">
+      <footer className="relative z-0 flex w-full items-center justify-center bg-background px-4 py-4 sm:px-6">
         <p className="text-muted-foreground/20 text-[10px] font-bold tracking-[0.2em] uppercase select-none">
           PrismCat {version}
         </p>

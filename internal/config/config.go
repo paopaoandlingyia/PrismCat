@@ -21,6 +21,7 @@ type Config struct {
 	Logging   LoggingConfig             `yaml:"logging"`
 	Storage   StorageConfig             `yaml:"storage"`
 	Overrides RequestOverridesConfig    `yaml:"request_overrides"`
+	Usage     UsageExtractionConfig     `yaml:"usage_extraction"`
 
 	configPath     string // 配置文件路径
 	fileUIPassword string
@@ -110,6 +111,35 @@ type RequestOverridePatch struct {
 	Value interface{} `yaml:"value,omitempty" json:"value,omitempty"`
 }
 
+type UsageExtractionConfig struct {
+	Enabled   bool                                      `yaml:"enabled" json:"enabled"`
+	Upstreams map[string]UsageExtractionUpstreamBinding `yaml:"upstreams" json:"upstreams"`
+	Rules     []UsageExtractionRule                     `yaml:"rules" json:"rules"`
+}
+
+type UsageExtractionUpstreamBinding struct {
+	Enabled   bool     `yaml:"enabled" json:"enabled"`
+	RuleNames []string `yaml:"rule_names" json:"rule_names"`
+}
+
+type UsageExtractionRule struct {
+	Name    string               `yaml:"name" json:"name"`
+	Enabled bool                 `yaml:"enabled" json:"enabled"`
+	Match   UsageExtractionMatch `yaml:"match" json:"match"`
+	Paths   UsageExtractionPaths `yaml:"paths" json:"paths"`
+}
+
+type UsageExtractionMatch struct {
+	ContentTypes []string `yaml:"content_types" json:"content_types"`
+}
+
+type UsageExtractionPaths struct {
+	InputTokens  []string `yaml:"input_tokens" json:"input_tokens"`
+	OutputTokens []string `yaml:"output_tokens" json:"output_tokens"`
+	TotalTokens  []string `yaml:"total_tokens" json:"total_tokens"`
+	RawUsage     []string `yaml:"raw_usage,omitempty" json:"raw_usage,omitempty"`
+}
+
 // LoggingConfig 日志配置
 type LoggingConfig struct {
 	MaxRequestBody   int64    `yaml:"max_request_body"`
@@ -132,8 +162,9 @@ type LoggingConfig struct {
 	//
 	// 0: disable detaching. Omit the field to use the default.
 	DetachBodyOverBytes int64 `yaml:"detach_body_over_bytes"`
-	// BodyPreviewBytes controls how many bytes of a detached body are kept inline
-	// in request_logs.request_body/response_body for quick viewing.
+	// BodyPreviewBytes controls how many bytes of readable body preview are kept
+	// inline in request_logs.request_body/response_body while the full body is
+	// loaded on demand from the blob store when detached.
 	// 0: disable preview (store empty preview).
 	BodyPreviewBytes int64 `yaml:"body_preview_bytes"`
 }
@@ -194,6 +225,7 @@ func Load(path string) (*Config, error) {
 		Overrides: RequestOverridesConfig{
 			MaxBodyBytes: 1 << 20,
 		},
+		Usage:     defaultUsageExtractionConfig(),
 		Upstreams: make(map[string]UpstreamConfig),
 	}
 
@@ -261,6 +293,7 @@ func Load(path string) (*Config, error) {
 	}
 	c.Upstreams = normalizedUpstreams
 	c.Overrides = NormalizeRequestOverrides(c.Overrides)
+	c.Usage = NormalizeUsageExtraction(c.Usage)
 
 	// 确保目录存在
 	dbDir := filepath.Dir(c.Storage.Database)
@@ -414,6 +447,79 @@ func NormalizeRequestOverrides(in RequestOverridesConfig) RequestOverridesConfig
 	return in
 }
 
+func defaultUsageExtractionConfig() UsageExtractionConfig {
+	return UsageExtractionConfig{
+		Enabled:   false,
+		Upstreams: map[string]UsageExtractionUpstreamBinding{},
+		Rules: []UsageExtractionRule{
+			{
+				Name:    "OpenAI compatible",
+				Enabled: true,
+				Match: UsageExtractionMatch{
+					ContentTypes: []string{"application/json", "text/event-stream"},
+				},
+				Paths: UsageExtractionPaths{
+					InputTokens:  []string{"/usage/prompt_tokens", "/usage/input_tokens"},
+					OutputTokens: []string{"/usage/completion_tokens", "/usage/output_tokens"},
+					TotalTokens:  []string{"/usage/total_tokens"},
+					RawUsage:     []string{"/usage"},
+				},
+			},
+			{
+				Name:    "Anthropic",
+				Enabled: true,
+				Match: UsageExtractionMatch{
+					ContentTypes: []string{"application/json", "text/event-stream"},
+				},
+				Paths: UsageExtractionPaths{
+					InputTokens:  []string{"/usage/input_tokens", "/message/usage/input_tokens"},
+					OutputTokens: []string{"/usage/output_tokens", "/message/usage/output_tokens"},
+					RawUsage:     []string{"/usage", "/message/usage"},
+				},
+			},
+			{
+				Name:    "Gemini",
+				Enabled: true,
+				Match: UsageExtractionMatch{
+					ContentTypes: []string{"application/json", "text/event-stream"},
+				},
+				Paths: UsageExtractionPaths{
+					InputTokens:  []string{"/usageMetadata/promptTokenCount"},
+					OutputTokens: []string{"/usageMetadata/candidatesTokenCount"},
+					TotalTokens:  []string{"/usageMetadata/totalTokenCount"},
+					RawUsage:     []string{"/usageMetadata"},
+				},
+			},
+		},
+	}
+}
+
+func NormalizeUsageExtraction(in UsageExtractionConfig) UsageExtractionConfig {
+	if in.Upstreams == nil {
+		in.Upstreams = make(map[string]UsageExtractionUpstreamBinding)
+	} else {
+		normalized := make(map[string]UsageExtractionUpstreamBinding, len(in.Upstreams))
+		for name, binding := range in.Upstreams {
+			n := normalizeLower(name)
+			if n == "" {
+				continue
+			}
+			binding.RuleNames = normalizeNameList(binding.RuleNames)
+			normalized[n] = binding
+		}
+		in.Upstreams = normalized
+	}
+	for i := range in.Rules {
+		in.Rules[i].Name = strings.TrimSpace(in.Rules[i].Name)
+		in.Rules[i].Match.ContentTypes = normalizeContentTypeList(in.Rules[i].Match.ContentTypes)
+		in.Rules[i].Paths.InputTokens = normalizeNameList(in.Rules[i].Paths.InputTokens)
+		in.Rules[i].Paths.OutputTokens = normalizeNameList(in.Rules[i].Paths.OutputTokens)
+		in.Rules[i].Paths.TotalTokens = normalizeNameList(in.Rules[i].Paths.TotalTokens)
+		in.Rules[i].Paths.RawUsage = normalizeNameList(in.Rules[i].Paths.RawUsage)
+	}
+	return in
+}
+
 func normalizeNameList(in []string) []string {
 	if len(in) == 0 {
 		return nil
@@ -422,6 +528,26 @@ func normalizeNameList(in []string) []string {
 	seen := make(map[string]struct{}, len(in))
 	for _, v := range in {
 		n := strings.TrimSpace(v)
+		if n == "" {
+			continue
+		}
+		if _, ok := seen[n]; ok {
+			continue
+		}
+		seen[n] = struct{}{}
+		out = append(out, n)
+	}
+	return out
+}
+
+func normalizeContentTypeList(in []string) []string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(in))
+	seen := make(map[string]struct{}, len(in))
+	for _, v := range in {
+		n := strings.ToLower(strings.TrimSpace(strings.Split(v, ";")[0]))
 		if n == "" {
 			continue
 		}
@@ -512,6 +638,13 @@ func (c *Config) RequestOverridesSnapshot() RequestOverridesConfig {
 	return NormalizeRequestOverrides(cloneRequestOverridesConfig(c.Overrides))
 }
 
+func (c *Config) UsageExtractionSnapshot() UsageExtractionConfig {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return NormalizeUsageExtraction(cloneUsageExtractionConfig(c.Usage))
+}
+
 func cloneRequestOverridesConfig(in RequestOverridesConfig) RequestOverridesConfig {
 	out := in
 	if len(in.Upstreams) > 0 {
@@ -590,6 +723,47 @@ func cloneRequestOverrideValue(in interface{}) interface{} {
 	default:
 		return in
 	}
+}
+
+func cloneUsageExtractionConfig(in UsageExtractionConfig) UsageExtractionConfig {
+	out := in
+	if len(in.Upstreams) > 0 {
+		out.Upstreams = make(map[string]UsageExtractionUpstreamBinding, len(in.Upstreams))
+		for name, binding := range in.Upstreams {
+			next := binding
+			if len(binding.RuleNames) > 0 {
+				next.RuleNames = append([]string(nil), binding.RuleNames...)
+			}
+			out.Upstreams[name] = next
+		}
+	}
+	if len(in.Rules) > 0 {
+		out.Rules = make([]UsageExtractionRule, len(in.Rules))
+		for i, rule := range in.Rules {
+			out.Rules[i] = cloneUsageExtractionRule(rule)
+		}
+	}
+	return out
+}
+
+func cloneUsageExtractionRule(in UsageExtractionRule) UsageExtractionRule {
+	out := in
+	if len(in.Match.ContentTypes) > 0 {
+		out.Match.ContentTypes = append([]string(nil), in.Match.ContentTypes...)
+	}
+	if len(in.Paths.InputTokens) > 0 {
+		out.Paths.InputTokens = append([]string(nil), in.Paths.InputTokens...)
+	}
+	if len(in.Paths.OutputTokens) > 0 {
+		out.Paths.OutputTokens = append([]string(nil), in.Paths.OutputTokens...)
+	}
+	if len(in.Paths.TotalTokens) > 0 {
+		out.Paths.TotalTokens = append([]string(nil), in.Paths.TotalTokens...)
+	}
+	if len(in.Paths.RawUsage) > 0 {
+		out.Paths.RawUsage = append([]string(nil), in.Paths.RawUsage...)
+	}
+	return out
 }
 
 // ServerSnapshot returns a copy of the current server config safe for use
@@ -700,6 +874,9 @@ func (c *Config) RemoveUpstream(name string) error {
 	delete(c.Upstreams, name)
 	if c.Overrides.Upstreams != nil {
 		delete(c.Overrides.Upstreams, name)
+	}
+	if c.Usage.Upstreams != nil {
+		delete(c.Usage.Upstreams, name)
 	}
 	return nil
 }
