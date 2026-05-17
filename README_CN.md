@@ -330,6 +330,12 @@ PrismCat 使用异步日志写入，代理本身的延迟通常在 1ms 以内。
 
 ---
 
+## 💬 社区
+
+- [LinuxDo 讨论帖](https://linux.do/t/topic/1623556/33)
+
+---
+
 ## ❤️ 支持 PrismCat
 
 如果 PrismCat 帮你节省了调试 LLM 应用的时间，也欢迎请我喝杯咖啡：
