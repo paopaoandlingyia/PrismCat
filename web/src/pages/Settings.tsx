@@ -82,7 +82,7 @@ const requestOverrideExample = JSON.stringify([
             path_prefixes: ['/v1/chat/completions', '/v1/messages'],
         },
         patch: [
-            { op: 'replace', path: '/max_tokens', value: 2048 },
+            { op: 'set', path: 'max_tokens', value: 2048 },
         ],
     },
     {
@@ -91,22 +91,35 @@ const requestOverrideExample = JSON.stringify([
         match: {
             methods: ['POST'],
             json: [
-                { path: '/model', equals: 'gpt-4o' },
+                { path: 'model', equals: 'gpt-4o' },
             ],
         },
         patch: [
-            { op: 'replace', path: '/model', value: 'gpt-4o-mini' },
+            { op: 'set', path: 'model', value: 'gpt-4o-mini' },
         ],
     },
     {
-        name: 'Inject a global safety system prompt',
+        name: 'Inject device metadata for Claude requests',
         enabled: false,
         match: {
             methods: ['POST'],
             path_prefixes: ['/v1/messages'],
+            json: [
+                { path: 'model', starts_with: 'claude' },
+            ],
         },
         patch: [
-            { op: 'add', path: '/system', value: "Refuse anything outside the user's explicit request." },
+            { op: 'set', path: 'metadata.user_id', value: 'demo-user' },
+        ],
+    },
+    {
+        name: 'Default max_tokens only when missing',
+        enabled: false,
+        match: {
+            methods: ['POST'],
+        },
+        patch: [
+            { op: 'default', path: 'max_tokens', value: 4096 },
         ],
     },
     {
@@ -117,7 +130,7 @@ const requestOverrideExample = JSON.stringify([
             path_prefixes: ['/v1/chat/completions'],
         },
         patch: [
-            { op: 'remove', path: '/user' },
+            { op: 'remove', path: 'user' },
         ],
     },
 ], null, 2)
@@ -2107,7 +2120,7 @@ export function Settings() {
                                                     className="h-8 text-xs font-semibold"
                                                 >
                                                     <a
-                                                        href="https://jsonpatch.com/"
+                                                        href="https://github.com/tidwall/gjson/blob/master/SYNTAX.md"
                                                         target="_blank"
                                                         rel="noreferrer noopener"
                                                     >

@@ -1,15 +1,15 @@
 package requestoverride
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"mime"
 	"net/http"
-	"reflect"
-	"strconv"
 	"strings"
+
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 
 	"github.com/paopaoandlingyia/PrismCat/internal/config"
 )
@@ -69,45 +69,34 @@ func Apply(cfg config.RequestOverridesConfig, info RequestInfo, body []byte) (Re
 	if !isJSONContent(info.ContentType) {
 		return Result{Body: body}, ErrUnsupportedContent
 	}
-
-	var doc interface{}
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	decoder.UseNumber()
-	if err := decoder.Decode(&doc); err != nil {
-		return Result{Body: body}, fmt.Errorf("parse JSON request body: %w", err)
+	if !gjson.ValidBytes(body) {
+		return Result{Body: body}, fmt.Errorf("parse JSON request body: invalid JSON")
 	}
 
+	current := string(body)
 	applied := make([]string, 0)
 	for _, rule := range selectedRules(cfg, info.Upstream) {
 		if !baseMatches(rule, info) {
 			continue
 		}
-		if !jsonConditionsMatch(rule.Match.JSON, doc) {
+		if !jsonConditionsMatch(rule.Match.JSON, current) {
 			continue
 		}
-		next, err := ApplyPatch(doc, rule.Patch)
+		next, err := ApplyPatch(current, rule.Patch)
 		if err != nil {
 			return Result{Body: body, AppliedRuleNames: applied}, fmt.Errorf("apply request override %q: %w", ruleName(rule), err)
 		}
-		doc = next
+		current = next
 		applied = append(applied, ruleName(rule))
 	}
 
 	if len(applied) == 0 {
 		return Result{Body: body}, nil
 	}
-
-	out, err := json.Marshal(doc)
-	if err != nil {
-		return Result{Body: body, AppliedRuleNames: applied}, fmt.Errorf("marshal overridden JSON request body: %w", err)
-	}
-	return Result{AppliedRuleNames: applied, Body: out}, nil
+	return Result{AppliedRuleNames: applied, Body: []byte(current)}, nil
 }
 
 // ApplyHeaders applies header override operations from matching rules.
-// Header operations only require base matching (method/path); JSON body
-// conditions are intentionally ignored so headers can be modified even for
-// non-JSON or compressed requests.
 func ApplyHeaders(cfg config.RequestOverridesConfig, info RequestInfo, header http.Header) ([]HeaderChange, []string) {
 	if !cfg.Enabled {
 		return nil, nil
@@ -161,88 +150,92 @@ func baseMatchesForHeaders(rule config.RequestOverrideRule, info RequestInfo) bo
 	return true
 }
 
-// ApplyPatch applies a subset of JSON Patch operations to a decoded JSON value.
-func ApplyPatch(doc interface{}, ops []config.RequestOverridePatch) (interface{}, error) {
-	var current interface{}
-	if err := normalizeJSONValue(doc, &current); err != nil {
-		return nil, err
-	}
-
+// ApplyPatch applies a sequence of override operations to a JSON document.
+//
+// Supported ops:
+//   - set     : set value at path (auto-creates parent objects/arrays)
+//   - remove  : delete value at path
+//   - default : set value at path only if path does not exist
+//   - append  : append value to the array at path (creates array if missing)
+//   - prepend : prepend value to the array at path (creates array if missing)
+//
+// Paths use the gjson/sjson dot-notation: "metadata.user_id", "system.0.type".
+func ApplyPatch(jsonStr string, ops []config.RequestOverridePatch) (string, error) {
+	current := jsonStr
 	for _, op := range ops {
 		name := strings.ToLower(strings.TrimSpace(op.Op))
+		path := strings.TrimSpace(op.Path)
+		if path == "" {
+			return current, fmt.Errorf("%s requires path", name)
+		}
 		switch name {
-		case "add":
-			value, err := normalizedPatchValue(op.Value)
+		case "set":
+			next, err := sjson.Set(current, path, op.Value)
 			if err != nil {
-				return nil, err
-			}
-			next, err := addValue(current, op.Path, value)
-			if err != nil {
-				return nil, err
+				return current, fmt.Errorf("set %s: %w", path, err)
 			}
 			current = next
 		case "remove":
-			next, err := removeValue(current, op.Path)
+			next, err := sjson.Delete(current, path)
 			if err != nil {
-				return nil, err
+				return current, fmt.Errorf("remove %s: %w", path, err)
 			}
 			current = next
-		case "replace":
-			value, err := normalizedPatchValue(op.Value)
-			if err != nil {
-				return nil, err
+		case "default":
+			if gjson.Get(current, path).Exists() {
+				continue
 			}
-			next, err := replaceValue(current, op.Path, value)
+			next, err := sjson.Set(current, path, op.Value)
 			if err != nil {
-				return nil, err
+				return current, fmt.Errorf("default %s: %w", path, err)
 			}
 			current = next
-		case "move":
-			if strings.TrimSpace(op.From) == "" {
-				return nil, errors.New("move requires from")
-			}
-			value, err := getValue(current, op.From)
+		case "append":
+			next, err := arrayAppend(current, path, op.Value)
 			if err != nil {
-				return nil, err
+				return current, fmt.Errorf("append %s: %w", path, err)
 			}
-			current, err = removeValue(current, op.From)
+			current = next
+		case "prepend":
+			next, err := arrayPrepend(current, path, op.Value)
 			if err != nil {
-				return nil, err
+				return current, fmt.Errorf("prepend %s: %w", path, err)
 			}
-			current, err = addValue(current, op.Path, cloneJSONValue(value))
-			if err != nil {
-				return nil, err
-			}
-		case "copy":
-			if strings.TrimSpace(op.From) == "" {
-				return nil, errors.New("copy requires from")
-			}
-			value, err := getValue(current, op.From)
-			if err != nil {
-				return nil, err
-			}
-			current, err = addValue(current, op.Path, cloneJSONValue(value))
-			if err != nil {
-				return nil, err
-			}
-		case "test":
-			want, err := normalizedPatchValue(op.Value)
-			if err != nil {
-				return nil, err
-			}
-			got, err := getValue(current, op.Path)
-			if err != nil {
-				return nil, err
-			}
-			if !jsonEqual(got, want) {
-				return nil, fmt.Errorf("test failed at %s", pointerLabel(op.Path))
-			}
+			current = next
 		default:
-			return nil, fmt.Errorf("unsupported JSON Patch op %q", op.Op)
+			return current, fmt.Errorf("unsupported op %q (supported: set, remove, default, append, prepend)", op.Op)
 		}
 	}
-
 	return current, nil
+}
+
+func arrayAppend(jsonStr, path string, value interface{}) (string, error) {
+	existing := gjson.Get(jsonStr, path)
+	if !existing.Exists() {
+		return sjson.Set(jsonStr, path, []interface{}{value})
+	}
+	if !existing.IsArray() {
+		return jsonStr, fmt.Errorf("path %s is not an array", path)
+	}
+	// sjson uses -1 to append to an array.
+	return sjson.Set(jsonStr, path+".-1", value)
+}
+
+func arrayPrepend(jsonStr, path string, value interface{}) (string, error) {
+	existing := gjson.Get(jsonStr, path)
+	if !existing.Exists() {
+		return sjson.Set(jsonStr, path, []interface{}{value})
+	}
+	if !existing.IsArray() {
+		return jsonStr, fmt.Errorf("path %s is not an array", path)
+	}
+	current := existing.Array()
+	next := make([]interface{}, 0, len(current)+1)
+	next = append(next, value)
+	for _, item := range current {
+		next = append(next, item.Value())
+	}
+	return sjson.Set(jsonStr, path, next)
 }
 
 func baseMatches(rule config.RequestOverrideRule, info RequestInfo) bool {
@@ -295,10 +288,10 @@ func selectedRules(cfg config.RequestOverridesConfig, upstream string) []config.
 	return out
 }
 
-func jsonConditionsMatch(conditions []config.RequestOverrideJSONCondition, doc interface{}) bool {
+func jsonConditionsMatch(conditions []config.RequestOverrideJSONCondition, jsonStr string) bool {
 	for _, condition := range conditions {
-		value, err := getValue(doc, condition.Path)
-		exists := err == nil
+		result := gjson.Get(jsonStr, condition.Path)
+		exists := result.Exists()
 		if condition.Exists != nil && *condition.Exists != exists {
 			return false
 		}
@@ -306,22 +299,19 @@ func jsonConditionsMatch(conditions []config.RequestOverrideJSONCondition, doc i
 			return false
 		}
 		if condition.Equals != nil {
-			want, err := normalizedPatchValue(condition.Equals)
-			if err != nil || !jsonEqual(value, want) {
+			if !gjsonValueEquals(result, condition.Equals) {
 				return false
 			}
 		}
 		if condition.StartsWith != "" {
-			s, ok := value.(string)
-			if !ok || !strings.HasPrefix(s, condition.StartsWith) {
+			if result.Type != gjson.String || !strings.HasPrefix(result.String(), condition.StartsWith) {
 				return false
 			}
 		}
 		if len(condition.In) > 0 {
 			ok := false
-			for _, item := range condition.In {
-				want, err := normalizedPatchValue(item)
-				if err == nil && jsonEqual(value, want) {
+			for _, want := range condition.In {
+				if gjsonValueEquals(result, want) {
 					ok = true
 					break
 				}
@@ -334,227 +324,33 @@ func jsonConditionsMatch(conditions []config.RequestOverrideJSONCondition, doc i
 	return true
 }
 
-func addValue(doc interface{}, path string, value interface{}) (interface{}, error) {
-	tokens, err := parsePointer(path)
+func gjsonValueEquals(result gjson.Result, want interface{}) bool {
+	wantBytes, err := json.Marshal(want)
 	if err != nil {
-		return nil, err
+		return false
 	}
-	if len(tokens) == 0 {
-		return value, nil
+	gotBytes := []byte(result.Raw)
+	if !gjson.ValidBytes(gotBytes) {
+		return false
 	}
-	parent, token, err := parentAt(doc, tokens)
-	if err != nil {
-		return nil, err
+	// Normalize both sides through a round-trip to compare values semantically.
+	var gotVal, wantVal interface{}
+	if err := json.Unmarshal(gotBytes, &gotVal); err != nil {
+		return false
 	}
-	switch p := parent.(type) {
-	case map[string]interface{}:
-		p[token] = value
-		return doc, nil
-	case []interface{}:
-		idx, err := parseArrayAddIndex(token, len(p))
-		if err != nil {
-			return nil, err
-		}
-		p = append(p, nil)
-		copy(p[idx+1:], p[idx:])
-		p[idx] = value
-		return replaceAt(doc, tokens[:len(tokens)-1], p)
-	default:
-		return nil, fmt.Errorf("cannot add at %s", pointerLabel(path))
+	if err := json.Unmarshal(wantBytes, &wantVal); err != nil {
+		return false
 	}
+	return jsonDeepEqual(gotVal, wantVal)
 }
 
-func removeValue(doc interface{}, path string) (interface{}, error) {
-	tokens, err := parsePointer(path)
-	if err != nil {
-		return nil, err
+func jsonDeepEqual(a, b interface{}) bool {
+	ab, err1 := json.Marshal(a)
+	bb, err2 := json.Marshal(b)
+	if err1 != nil || err2 != nil {
+		return false
 	}
-	if len(tokens) == 0 {
-		return nil, nil
-	}
-	parent, token, err := parentAt(doc, tokens)
-	if err != nil {
-		return nil, err
-	}
-	switch p := parent.(type) {
-	case map[string]interface{}:
-		if _, ok := p[token]; !ok {
-			return nil, fmt.Errorf("path does not exist: %s", pointerLabel(path))
-		}
-		delete(p, token)
-		return doc, nil
-	case []interface{}:
-		idx, err := parseArrayIndex(token, len(p))
-		if err != nil {
-			return nil, err
-		}
-		p = append(p[:idx], p[idx+1:]...)
-		return replaceAt(doc, tokens[:len(tokens)-1], p)
-	default:
-		return nil, fmt.Errorf("cannot remove at %s", pointerLabel(path))
-	}
-}
-
-func replaceValue(doc interface{}, path string, value interface{}) (interface{}, error) {
-	tokens, err := parsePointer(path)
-	if err != nil {
-		return nil, err
-	}
-	if len(tokens) == 0 {
-		return value, nil
-	}
-	if _, err := getValue(doc, path); err != nil {
-		return nil, err
-	}
-	return replaceAt(doc, tokens, value)
-}
-
-func replaceAt(doc interface{}, tokens []string, value interface{}) (interface{}, error) {
-	if len(tokens) == 0 {
-		return value, nil
-	}
-	parent, token, err := parentAt(doc, tokens)
-	if err != nil {
-		return nil, err
-	}
-	switch p := parent.(type) {
-	case map[string]interface{}:
-		p[token] = value
-		return doc, nil
-	case []interface{}:
-		idx, err := parseArrayIndex(token, len(p))
-		if err != nil {
-			return nil, err
-		}
-		p[idx] = value
-		return replaceAt(doc, tokens[:len(tokens)-1], p)
-	default:
-		return nil, fmt.Errorf("cannot replace at %s", pointerLabel("/"+strings.Join(tokens, "/")))
-	}
-}
-
-func parentAt(doc interface{}, tokens []string) (interface{}, string, error) {
-	if len(tokens) == 0 {
-		return nil, "", errors.New("root has no parent")
-	}
-	current := doc
-	for _, token := range tokens[:len(tokens)-1] {
-		switch v := current.(type) {
-		case map[string]interface{}:
-			next, ok := v[token]
-			if !ok {
-				return nil, "", fmt.Errorf("path does not exist: %s", token)
-			}
-			current = next
-		case []interface{}:
-			idx, err := parseArrayIndex(token, len(v))
-			if err != nil {
-				return nil, "", err
-			}
-			current = v[idx]
-		default:
-			return nil, "", fmt.Errorf("cannot traverse through %s", token)
-		}
-	}
-	return current, tokens[len(tokens)-1], nil
-}
-
-func getValue(doc interface{}, path string) (interface{}, error) {
-	tokens, err := parsePointer(path)
-	if err != nil {
-		return nil, err
-	}
-	current := doc
-	for _, token := range tokens {
-		switch v := current.(type) {
-		case map[string]interface{}:
-			next, ok := v[token]
-			if !ok {
-				return nil, fmt.Errorf("path does not exist: %s", pointerLabel(path))
-			}
-			current = next
-		case []interface{}:
-			idx, err := parseArrayIndex(token, len(v))
-			if err != nil {
-				return nil, err
-			}
-			current = v[idx]
-		default:
-			return nil, fmt.Errorf("cannot read %s", pointerLabel(path))
-		}
-	}
-	return current, nil
-}
-
-func parsePointer(path string) ([]string, error) {
-	if path == "" {
-		return nil, nil
-	}
-	if !strings.HasPrefix(path, "/") {
-		return nil, fmt.Errorf("invalid JSON pointer %q", path)
-	}
-	raw := strings.Split(path[1:], "/")
-	out := make([]string, len(raw))
-	for i, token := range raw {
-		token = strings.ReplaceAll(token, "~1", "/")
-		token = strings.ReplaceAll(token, "~0", "~")
-		out[i] = token
-	}
-	return out, nil
-}
-
-func parseArrayIndex(token string, length int) (int, error) {
-	if token == "-" {
-		return 0, errors.New("'-' is only valid for add")
-	}
-	idx, err := strconv.Atoi(token)
-	if err != nil || idx < 0 || idx >= length {
-		return 0, fmt.Errorf("array index out of range: %s", token)
-	}
-	return idx, nil
-}
-
-func parseArrayAddIndex(token string, length int) (int, error) {
-	if token == "-" {
-		return length, nil
-	}
-	idx, err := strconv.Atoi(token)
-	if err != nil || idx < 0 || idx > length {
-		return 0, fmt.Errorf("array index out of range: %s", token)
-	}
-	return idx, nil
-}
-
-func normalizedPatchValue(value interface{}) (interface{}, error) {
-	var out interface{}
-	if err := normalizeJSONValue(value, &out); err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func normalizeJSONValue(in interface{}, out *interface{}) error {
-	data, err := json.Marshal(in)
-	if err != nil {
-		return err
-	}
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.UseNumber()
-	return decoder.Decode(out)
-}
-
-func cloneJSONValue(value interface{}) interface{} {
-	out, err := normalizedPatchValue(value)
-	if err != nil {
-		return value
-	}
-	return out
-}
-
-func jsonEqual(left, right interface{}) bool {
-	left, _ = normalizedPatchValue(left)
-	right, _ = normalizedPatchValue(right)
-	return reflect.DeepEqual(left, right)
+	return string(ab) == string(bb)
 }
 
 func isIdentityEncoding(contentEncoding string) bool {
@@ -602,11 +398,4 @@ func ruleName(rule config.RequestOverrideRule) string {
 		return strings.TrimSpace(rule.Name)
 	}
 	return "unnamed rule"
-}
-
-func pointerLabel(path string) string {
-	if path == "" {
-		return "/"
-	}
-	return path
 }

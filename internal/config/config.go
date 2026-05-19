@@ -114,7 +114,6 @@ type RequestOverrideJSONCondition struct {
 type RequestOverridePatch struct {
 	Op    string      `yaml:"op" json:"op"`
 	Path  string      `yaml:"path" json:"path"`
-	From  string      `yaml:"from,omitempty" json:"from,omitempty"`
 	Value interface{} `yaml:"value,omitempty" json:"value,omitempty"`
 }
 
@@ -450,6 +449,10 @@ func NormalizeRequestOverrides(in RequestOverridesConfig) RequestOverridesConfig
 		in.Rules[i].Match.Methods = normalizeUpperList(in.Rules[i].Match.Methods)
 		in.Rules[i].Match.PathPrefixes = normalizePathList(in.Rules[i].Match.PathPrefixes)
 		in.Rules[i].Match.Paths = normalizePathList(in.Rules[i].Match.Paths)
+		for j := range in.Rules[i].Patch {
+			in.Rules[i].Patch[j].Op = strings.ToLower(strings.TrimSpace(in.Rules[i].Patch[j].Op))
+			in.Rules[i].Patch[j].Path = strings.TrimSpace(in.Rules[i].Patch[j].Path)
+		}
 		for j := range in.Rules[i].Headers {
 			in.Rules[i].Headers[j].Op = strings.ToLower(strings.TrimSpace(in.Rules[i].Headers[j].Op))
 			in.Rules[i].Headers[j].Name = strings.TrimSpace(in.Rules[i].Headers[j].Name)

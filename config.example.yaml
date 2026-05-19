@@ -104,8 +104,9 @@ storage:
   # async_buffer: 4096
 
 # 请求参数覆盖（默认关闭）
-# 开启后 PrismCat 会在命中规则时修改最终发往上游的 JSON 请求体。
-# 这会让对应请求从透明流式转发变为先缓冲、再转发；请只对明确需要的路由启用。
+# 开启后 PrismCat 会在命中规则时修改最终发往上游的 JSON 请求体和/或请求头。
+# 修改请求体会让请求从透明流式转发变为先缓冲、再转发；请只对明确需要的路由启用。
+# 路径使用点号语法（如 metadata.user_id），支持的 op：set / remove / default / append / prepend。
 request_overrides:
   enabled: false
   max_body_bytes: 1048576
@@ -124,12 +125,15 @@ request_overrides:
   #       methods: ["POST"]
   #       path_prefixes: ["/v1/messages"]
   #       json:
-  #         - path: "/model"
+  #         - path: "model"
   #           starts_with: "claude"
   #     patch:
-  #       - op: add
-  #         path: "/metadata/user_id"
+  #       - op: set
+  #         path: "metadata.user_id"
   #         value: "demo-user"
+  #       - op: default
+  #         path: "max_tokens"
+  #         value: 4096
   #     headers:
   #       - op: set
   #         name: "X-Custom-Header"
