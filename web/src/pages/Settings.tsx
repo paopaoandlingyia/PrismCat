@@ -221,6 +221,58 @@ function getBindingRuleNames(binding?: OverrideBinding) {
     return Array.isArray(binding?.rule_names) ? binding.rule_names : []
 }
 
+type RuleRuntimeStatus =
+    | { kind: 'active'; enabledUpstreams: string[]; disabledUpstreams: string[] }
+    | { kind: 'blocked'; reason: 'global' | 'rule' | 'bindings'; enabledUpstreams: string[]; disabledUpstreams: string[] }
+    | { kind: 'unbound' }
+
+function getRuleRuntimeStatus(
+    rule: OverrideRuleObject,
+    bindings: Record<string, OverrideBinding>,
+    globalEnabled: boolean,
+): RuleRuntimeStatus {
+    const ruleName = getOverrideRuleName(rule, '')
+    if (!ruleName) return { kind: 'unbound' }
+
+    const enabledUpstreams: string[] = []
+    const disabledUpstreams: string[] = []
+    for (const [name, binding] of Object.entries(bindings)) {
+        if (getBindingRuleNames(binding).includes(ruleName)) {
+            if (binding.enabled) enabledUpstreams.push(name)
+            else disabledUpstreams.push(name)
+        }
+    }
+
+    if (enabledUpstreams.length + disabledUpstreams.length === 0) {
+        return { kind: 'unbound' }
+    }
+    if (!globalEnabled) {
+        return { kind: 'blocked', reason: 'global', enabledUpstreams, disabledUpstreams }
+    }
+    if (!getOverrideRuleEnabled(rule)) {
+        return { kind: 'blocked', reason: 'rule', enabledUpstreams, disabledUpstreams }
+    }
+    if (enabledUpstreams.length === 0) {
+        return { kind: 'blocked', reason: 'bindings', enabledUpstreams, disabledUpstreams }
+    }
+    return { kind: 'active', enabledUpstreams, disabledUpstreams }
+}
+
+function formatUpstreamList(
+    enabled: string[],
+    disabled: string[],
+    t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+    const summarize = (names: string[]) => {
+        if (names.length <= 2) return names.join(', ')
+        return `${names.slice(0, 2).join(', ')} +${names.length - 2}`
+    }
+    const parts: string[] = []
+    if (enabled.length > 0) parts.push(`→ ${summarize(enabled)}`)
+    if (disabled.length > 0) parts.push(t('settings.rule_status_disabled_upstreams', { list: summarize(disabled) }))
+    return parts.join('  ·  ')
+}
+
 function outboundProxyMode(value?: string): OutboundProxyMode {
     const normalized = (value || '').trim().toLowerCase()
     if (!normalized || normalized === 'env') return 'env'
@@ -2104,8 +2156,30 @@ export function Settings() {
                                                     <div className="max-h-[500px] divide-y divide-border/30 overflow-y-auto">
                                                         {overrideRuleObjects.map((rule, index) => {
                                                             const ruleName = getOverrideRuleName(rule, `rule-${index + 1}`)
-                                                            const boundCount = Object.values(overrideBindings).filter(binding => getBindingRuleNames(binding).includes(ruleName)).length
                                                             const selected = selectedOverrideRuleIndex === index
+                                                            const status = getRuleRuntimeStatus(rule, overrideBindings, requestOverridesEnabled)
+                                                            const statusBadgeClass = cn(
+                                                                "h-5 rounded-full px-2 text-[10px] font-semibold",
+                                                                status.kind === 'active' && "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+                                                                status.kind === 'blocked' && "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+                                                                status.kind === 'unbound' && "border-border/40 bg-muted/50 text-muted-foreground",
+                                                            )
+                                                            const statusText =
+                                                                status.kind === 'active'
+                                                                    ? t('settings.rule_status_active')
+                                                                    : status.kind === 'unbound'
+                                                                        ? t('settings.rule_status_unbound')
+                                                                        : status.reason === 'global'
+                                                                            ? t('settings.rule_status_blocked_global')
+                                                                            : status.reason === 'rule'
+                                                                                ? t('settings.rule_status_blocked_rule')
+                                                                                : t('settings.rule_status_blocked_bindings')
+                                                            const detail =
+                                                                status.kind === 'active'
+                                                                    ? formatUpstreamList(status.enabledUpstreams, status.disabledUpstreams, t)
+                                                                    : status.kind === 'blocked'
+                                                                        ? formatUpstreamList(status.enabledUpstreams, status.disabledUpstreams, t)
+                                                                        : ''
                                                             return (
                                                                 <button
                                                                     key={`${ruleName}-${index}`}
@@ -2122,21 +2196,13 @@ export function Settings() {
                                                                             {ruleName}
                                                                         </span>
                                                                         <span className="flex flex-wrap items-center gap-1.5">
-                                                                            <Badge
-                                                                                variant="outline"
-                                                                                className={cn(
-                                                                                    "h-5 rounded-full px-1.5 text-[10px]",
-                                                                                    getOverrideRuleEnabled(rule)
-                                                                                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                                                                                        : "border-border/40 bg-muted/50 text-muted-foreground"
-                                                                                )}
-                                                                            >
-                                                                                {getOverrideRuleEnabled(rule) ? t('settings.rule_enabled') : t('settings.rule_disabled')}
+                                                                            <Badge variant="outline" className={statusBadgeClass}>
+                                                                                {statusText}
                                                                             </Badge>
-                                                                            {boundCount > 0 && (
-                                                                                <Badge variant="outline" className="h-5 rounded-full border-border/40 bg-background/70 px-1.5 text-[10px] text-muted-foreground">
-                                                                                    {t('settings.rule_bound_count', { count: boundCount })}
-                                                                                </Badge>
+                                                                            {detail && (
+                                                                                <span className="min-w-0 truncate text-[10px] text-muted-foreground">
+                                                                                    {detail}
+                                                                                </span>
                                                                             )}
                                                                         </span>
                                                                     </span>
@@ -2163,10 +2229,15 @@ export function Settings() {
                                                         <div className="flex shrink-0 items-center gap-1">
                                                             <Button
                                                                 type="button"
-                                                                variant="ghost"
+                                                                variant={getOverrideRuleEnabled(overrideRuleObjects[selectedOverrideRuleIndex]) ? "ghost" : "outline"}
                                                                 size="sm"
                                                                 onClick={() => handleToggleOverrideRule(selectedOverrideRuleIndex, !getOverrideRuleEnabled(overrideRuleObjects[selectedOverrideRuleIndex]))}
-                                                                className="h-8 px-2 text-xs"
+                                                                className={cn(
+                                                                    "h-8 px-3 text-xs font-semibold",
+                                                                    getOverrideRuleEnabled(overrideRuleObjects[selectedOverrideRuleIndex])
+                                                                        ? "text-muted-foreground hover:text-foreground"
+                                                                        : "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300"
+                                                                )}
                                                             >
                                                                 {getOverrideRuleEnabled(overrideRuleObjects[selectedOverrideRuleIndex])
                                                                     ? t('settings.rule_disable')
