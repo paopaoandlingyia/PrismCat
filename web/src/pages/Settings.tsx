@@ -201,6 +201,7 @@ type OutboundProxyMode = 'env' | 'direct' | 'custom'
 type SettingsTab = 'routing' | 'logging' | 'overrides' | 'system'
 type RuleTab = 'request_overrides' | 'usage_extraction'
 type OverrideRuleObject = Record<string, unknown>
+type HeaderOp = { op: string; name: string; value?: string }
 
 const customProxyPlaceholder = 'http://127.0.0.1:7890'
 
@@ -830,6 +831,37 @@ export function Settings() {
         const nextRules = [...overrideRuleObjects]
         nextRules[index] = { ...nextRules[index], enabled }
         setOverrideRulesArray(nextRules, index)
+    }
+
+    const getSelectedRuleHeaders = (): HeaderOp[] => {
+        const rule = overrideRuleObjects[selectedOverrideRuleIndex]
+        if (!rule || !Array.isArray(rule.headers)) return []
+        return (rule.headers as HeaderOp[]).filter(
+            (h): h is HeaderOp => h && typeof h === 'object' && typeof h.op === 'string' && typeof h.name === 'string',
+        )
+    }
+
+    const updateSelectedRuleHeaders = (headers: HeaderOp[]) => {
+        const rule = overrideRuleObjects[selectedOverrideRuleIndex]
+        if (!rule) return
+        const nextRule = { ...rule, headers: headers.length > 0 ? headers : undefined }
+        const nextRules = [...overrideRuleObjects]
+        nextRules[selectedOverrideRuleIndex] = nextRule
+        setOverrideRulesArray(nextRules, selectedOverrideRuleIndex)
+    }
+
+    const handleAddHeaderOp = () => {
+        updateSelectedRuleHeaders([...getSelectedRuleHeaders(), { op: 'set', name: '', value: '' }])
+    }
+
+    const handleUpdateHeaderOp = (hIndex: number, field: keyof HeaderOp, value: string) => {
+        const headers = [...getSelectedRuleHeaders()]
+        headers[hIndex] = { ...headers[hIndex], [field]: value }
+        updateSelectedRuleHeaders(headers)
+    }
+
+    const handleRemoveHeaderOp = (hIndex: number) => {
+        updateSelectedRuleHeaders(getSelectedRuleHeaders().filter((_, i) => i !== hIndex))
     }
 
     const setUsageRulesArray = (rules: OverrideRuleObject[], nextIndex = 0) => {
@@ -2164,19 +2196,91 @@ export function Settings() {
                                                     )}
                                                 </div>
                                                 {overrideRuleObjects[selectedOverrideRuleIndex] ? (
-                                                    <div className="space-y-2 p-3">
-                                                        <Textarea
-                                                            value={selectedOverrideRuleText}
-                                                            onChange={e => handleOverrideRuleTextChange(e.target.value)}
-                                                            rows={18}
-                                                            spellCheck={false}
-                                                            className="min-h-[420px] w-full resize-y rounded-lg border-border/30 bg-muted/20 font-mono text-xs leading-relaxed shadow-sm transition-colors focus-visible:bg-background"
-                                                        />
-                                                        {selectedOverrideRuleError && (
-                                                            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-400">
-                                                                {selectedOverrideRuleError}
+                                                    <div className="space-y-4 p-3">
+                                                        <div className="space-y-2">
+                                                            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                                                {t('settings.request_override_body_patch')}
+                                                            </Label>
+                                                            <Textarea
+                                                                value={selectedOverrideRuleText}
+                                                                onChange={e => handleOverrideRuleTextChange(e.target.value)}
+                                                                rows={18}
+                                                                spellCheck={false}
+                                                                className="min-h-[420px] w-full resize-y rounded-lg border-border/30 bg-muted/20 font-mono text-xs leading-relaxed shadow-sm transition-colors focus-visible:bg-background"
+                                                            />
+                                                            {selectedOverrideRuleError && (
+                                                                <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-400">
+                                                                    {selectedOverrideRuleError}
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        <div className="space-y-2">
+                                                            <div className="flex items-center justify-between">
+                                                                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                                                    {t('settings.request_override_headers')}
+                                                                </Label>
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={handleAddHeaderOp}
+                                                                    className="h-7 px-2 text-xs"
+                                                                >
+                                                                    <Plus className="mr-1 h-3.5 w-3.5" />
+                                                                    {t('common.add')}
+                                                                </Button>
                                                             </div>
-                                                        )}
+                                                            <p className="text-[11px] leading-5 text-muted-foreground">
+                                                                {t('settings.request_override_headers_hint')}
+                                                            </p>
+                                                            {getSelectedRuleHeaders().length > 0 ? (
+                                                                <div className="space-y-2">
+                                                                    {getSelectedRuleHeaders().map((header, hIdx) => (
+                                                                        <div key={hIdx} className="flex items-center gap-2">
+                                                                            <Select
+                                                                                value={header.op}
+                                                                                onValueChange={v => handleUpdateHeaderOp(hIdx, 'op', v)}
+                                                                            >
+                                                                                <SelectTrigger className="h-9 w-[100px] shrink-0 rounded-lg border-border/30 bg-background/50 text-xs">
+                                                                                    <SelectValue />
+                                                                                </SelectTrigger>
+                                                                                <SelectContent>
+                                                                                    <SelectItem value="set">{t('settings.header_op_set')}</SelectItem>
+                                                                                    <SelectItem value="remove">{t('settings.header_op_remove')}</SelectItem>
+                                                                                </SelectContent>
+                                                                            </Select>
+                                                                            <Input
+                                                                                value={header.name}
+                                                                                onChange={e => handleUpdateHeaderOp(hIdx, 'name', e.target.value)}
+                                                                                placeholder={t('settings.header_name_placeholder')}
+                                                                                className="h-9 min-w-0 flex-1 rounded-lg border-border/30 bg-background/50 text-xs"
+                                                                            />
+                                                                            <Input
+                                                                                value={header.value ?? ''}
+                                                                                onChange={e => handleUpdateHeaderOp(hIdx, 'value', e.target.value)}
+                                                                                placeholder={header.op === 'remove' ? '—' : t('settings.header_value_placeholder')}
+                                                                                disabled={header.op === 'remove'}
+                                                                                className="h-9 min-w-0 flex-[2] rounded-lg border-border/30 bg-background/50 text-xs disabled:opacity-40"
+                                                                            />
+                                                                            <Button
+                                                                                type="button"
+                                                                                variant="ghost"
+                                                                                size="icon"
+                                                                                onClick={() => handleRemoveHeaderOp(hIdx)}
+                                                                                className="h-8 w-8 shrink-0 text-muted-foreground hover:text-red-500"
+                                                                            >
+                                                                                <Trash2 className="h-3.5 w-3.5" />
+                                                                            </Button>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            ) : (
+                                                                <div className="rounded-lg border border-dashed border-border/40 px-3 py-4 text-center text-xs text-muted-foreground">
+                                                                    {t('settings.request_override_no_headers')}
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 ) : (
                                                     <div className="px-4 py-16 text-center text-xs text-muted-foreground">

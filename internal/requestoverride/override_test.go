@@ -3,6 +3,7 @@ package requestoverride
 import (
 	"encoding/json"
 	"errors"
+	"net/http"
 	"testing"
 
 	"github.com/paopaoandlingyia/PrismCat/internal/config"
@@ -216,5 +217,117 @@ func TestApplyPatchHandlesPointerEscapes(t *testing.T) {
 	}
 	if m["c~d"] != "tilde" {
 		t.Fatalf("c~d = %v, want \"tilde\"", m["c~d"])
+	}
+}
+
+func TestApplyHeadersSetAndRemove(t *testing.T) {
+	cfg := config.RequestOverridesConfig{
+		Enabled: true,
+		Upstreams: map[string]config.RequestOverrideUpstreamBinding{
+			"openai": {Enabled: true, RuleNames: []string{"header rule"}},
+		},
+		Rules: []config.RequestOverrideRule{
+			{
+				Name:    "header rule",
+				Enabled: true,
+				Match: config.RequestOverrideMatch{
+					Methods: []string{"POST"},
+				},
+				Headers: []config.RequestOverrideHeader{
+					{Op: "set", Name: "Authorization", Value: "Bearer new-key"},
+					{Op: "set", Name: "X-Custom", Value: "hello"},
+					{Op: "remove", Name: "X-Unwanted"},
+				},
+			},
+		},
+	}
+
+	header := http.Header{
+		"Authorization": []string{"Bearer old-key"},
+		"X-Unwanted":    []string{"remove-me"},
+		"Content-Type":  []string{"application/json"},
+	}
+
+	changes, ruleNames := ApplyHeaders(cfg, RequestInfo{
+		Upstream: "openai",
+		Method:   "POST",
+		Path:     "/v1/chat/completions",
+	}, header)
+
+	if len(ruleNames) != 1 || ruleNames[0] != "header rule" {
+		t.Fatalf("rule names = %v", ruleNames)
+	}
+	if len(changes) != 3 {
+		t.Fatalf("changes count = %d, want 3", len(changes))
+	}
+	if header.Get("Authorization") != "Bearer new-key" {
+		t.Fatalf("Authorization = %q", header.Get("Authorization"))
+	}
+	if header.Get("X-Custom") != "hello" {
+		t.Fatalf("X-Custom = %q", header.Get("X-Custom"))
+	}
+	if header.Get("X-Unwanted") != "" {
+		t.Fatalf("X-Unwanted should be removed, got %q", header.Get("X-Unwanted"))
+	}
+	if header.Get("Content-Type") != "application/json" {
+		t.Fatalf("Content-Type should be unchanged, got %q", header.Get("Content-Type"))
+	}
+	if changes[0].OldValue != "Bearer old-key" {
+		t.Fatalf("changes[0].OldValue = %q, want Bearer old-key", changes[0].OldValue)
+	}
+	if changes[2].OldValue != "remove-me" {
+		t.Fatalf("changes[2].OldValue = %q, want remove-me", changes[2].OldValue)
+	}
+}
+
+func TestApplyHeadersSkipsNonMatchingMethod(t *testing.T) {
+	cfg := config.RequestOverridesConfig{
+		Enabled: true,
+		Upstreams: map[string]config.RequestOverrideUpstreamBinding{
+			"openai": {Enabled: true, RuleNames: []string{"post only"}},
+		},
+		Rules: []config.RequestOverrideRule{
+			{
+				Name:    "post only",
+				Enabled: true,
+				Match:   config.RequestOverrideMatch{Methods: []string{"POST"}},
+				Headers: []config.RequestOverrideHeader{{Op: "set", Name: "X-Test", Value: "v"}},
+			},
+		},
+	}
+
+	header := http.Header{}
+	changes, _ := ApplyHeaders(cfg, RequestInfo{Upstream: "openai", Method: "GET"}, header)
+	if len(changes) != 0 {
+		t.Fatalf("expected no changes for GET, got %d", len(changes))
+	}
+}
+
+func TestApplyHeadersOnlyRuleDoesNotTriggerBodyRead(t *testing.T) {
+	cfg := config.RequestOverridesConfig{
+		Enabled: true,
+		Upstreams: map[string]config.RequestOverrideUpstreamBinding{
+			"openai": {Enabled: true, RuleNames: []string{"headers only"}},
+		},
+		Rules: []config.RequestOverrideRule{
+			{
+				Name:    "headers only",
+				Enabled: true,
+				Headers: []config.RequestOverrideHeader{{Op: "set", Name: "X-Injected", Value: "yes"}},
+			},
+		},
+	}
+
+	if HasCandidate(cfg, RequestInfo{Upstream: "openai", Method: "POST", ContentType: "text/plain"}) {
+		t.Fatal("HasCandidate should return false for headers-only rule (no body read needed)")
+	}
+
+	header := http.Header{}
+	changes, ruleNames := ApplyHeaders(cfg, RequestInfo{Upstream: "openai", Method: "POST"}, header)
+	if len(changes) != 1 || header.Get("X-Injected") != "yes" {
+		t.Fatalf("expected header to be set, got changes=%v header=%v", changes, header)
+	}
+	if len(ruleNames) != 1 || ruleNames[0] != "headers only" {
+		t.Fatalf("rule names = %v", ruleNames)
 	}
 }

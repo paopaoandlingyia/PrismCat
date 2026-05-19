@@ -1,6 +1,9 @@
 package storage
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // RequestLog 请求日志记录
 type RequestLog struct {
@@ -38,9 +41,12 @@ type RequestLog struct {
 	TraceID                string        `json:"trace_id,omitempty"`
 	ParentLogID            string        `json:"parent_log_id,omitempty"`
 	TraceSeq               int           `json:"trace_seq,omitempty"`
-	RequestOverrideApplied bool          `json:"request_override_applied,omitempty"`
-	RequestOverrideRules   []string      `json:"request_override_rules,omitempty"`
-	RequestOverrideError   string        `json:"request_override_error,omitempty"`
+	RequestOverrideApplied        bool                `json:"request_override_applied,omitempty"`
+	RequestOverrideRules         []string            `json:"request_override_rules,omitempty"`
+	RequestOverrideError         string              `json:"request_override_error,omitempty"`
+	RequestHeaderOverrideApplied bool                `json:"request_header_override_applied,omitempty"`
+	RequestHeaderOverrideChanges json.RawMessage     `json:"request_header_override_changes,omitempty"`
+	RequestHeadersOriginal       map[string][]string `json:"request_headers_original,omitempty"`
 	UsageInputTokens       *int64        `json:"usage_input_tokens,omitempty"`
 	UsageOutputTokens      *int64        `json:"usage_output_tokens,omitempty"`
 	UsageTotalTokens       *int64        `json:"usage_total_tokens,omitempty"`

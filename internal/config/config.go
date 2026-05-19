@@ -83,10 +83,17 @@ type RequestOverrideUpstreamBinding struct {
 }
 
 type RequestOverrideRule struct {
-	Name    string                 `yaml:"name" json:"name"`
-	Enabled bool                   `yaml:"enabled" json:"enabled"`
-	Match   RequestOverrideMatch   `yaml:"match" json:"match"`
-	Patch   []RequestOverridePatch `yaml:"patch" json:"patch"`
+	Name    string                   `yaml:"name" json:"name"`
+	Enabled bool                     `yaml:"enabled" json:"enabled"`
+	Match   RequestOverrideMatch     `yaml:"match" json:"match"`
+	Patch   []RequestOverridePatch   `yaml:"patch" json:"patch"`
+	Headers []RequestOverrideHeader  `yaml:"headers,omitempty" json:"headers,omitempty"`
+}
+
+type RequestOverrideHeader struct {
+	Op    string `yaml:"op" json:"op"`
+	Name  string `yaml:"name" json:"name"`
+	Value string `yaml:"value,omitempty" json:"value,omitempty"`
 }
 
 type RequestOverrideMatch struct {
@@ -443,6 +450,10 @@ func NormalizeRequestOverrides(in RequestOverridesConfig) RequestOverridesConfig
 		in.Rules[i].Match.Methods = normalizeUpperList(in.Rules[i].Match.Methods)
 		in.Rules[i].Match.PathPrefixes = normalizePathList(in.Rules[i].Match.PathPrefixes)
 		in.Rules[i].Match.Paths = normalizePathList(in.Rules[i].Match.Paths)
+		for j := range in.Rules[i].Headers {
+			in.Rules[i].Headers[j].Op = strings.ToLower(strings.TrimSpace(in.Rules[i].Headers[j].Op))
+			in.Rules[i].Headers[j].Name = strings.TrimSpace(in.Rules[i].Headers[j].Name)
+		}
 	}
 	return in
 }
@@ -715,6 +726,9 @@ func cloneRequestOverrideRule(in RequestOverrideRule) RequestOverrideRule {
 			next.Value = cloneRequestOverrideValue(patch.Value)
 			out.Patch[i] = next
 		}
+	}
+	if len(in.Headers) > 0 {
+		out.Headers = append([]RequestOverrideHeader(nil), in.Headers...)
 	}
 	return out
 }

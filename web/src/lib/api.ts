@@ -29,12 +29,22 @@ export interface RequestLog {
     request_override_applied?: boolean
     request_override_rules?: string[]
     request_override_error?: string
+    request_header_override_applied?: boolean
+    request_header_override_changes?: HeaderOverrideChange[]
+    request_headers_original?: Record<string, string[]>
     usage_input_tokens?: number
     usage_output_tokens?: number
     usage_total_tokens?: number
     usage_raw?: string
     usage_source?: string
     annotation: LogAnnotation
+}
+
+export interface HeaderOverrideChange {
+    op: string
+    name: string
+    value?: string
+    old_value?: string
 }
 
 export type LogAnnotationStatus = 'none' | 'todo' | 'done'

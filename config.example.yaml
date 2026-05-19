@@ -130,6 +130,12 @@ request_overrides:
   #       - op: add
   #         path: "/metadata/user_id"
   #         value: "demo-user"
+  #     headers:
+  #       - op: set
+  #         name: "X-Custom-Header"
+  #         value: "my-value"
+  #       - op: remove
+  #         name: "X-Unwanted-Header"
 
 # Usage / token 用量提取（默认关闭）
 # 规则只做响应后的 best-effort 元数据提取，不影响代理转发或日志保存。

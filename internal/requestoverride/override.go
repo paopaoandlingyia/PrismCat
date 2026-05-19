@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"mime"
+	"net/http"
 	"reflect"
 	"strconv"
 	"strings"
@@ -28,10 +29,19 @@ type RequestInfo struct {
 	ContentEncoding string
 }
 
+// HeaderChange records a single header modification for logging.
+type HeaderChange struct {
+	Op       string `json:"op"`
+	Name     string `json:"name"`
+	Value    string `json:"value,omitempty"`
+	OldValue string `json:"old_value,omitempty"`
+}
+
 // Result contains the possibly rewritten body and the names of applied rules.
 type Result struct {
 	AppliedRuleNames []string
 	Body             []byte
+	HeaderChanges    []HeaderChange
 }
 
 // HasCandidate reports whether the config contains any enabled rule that can
@@ -92,6 +102,63 @@ func Apply(cfg config.RequestOverridesConfig, info RequestInfo, body []byte) (Re
 		return Result{Body: body, AppliedRuleNames: applied}, fmt.Errorf("marshal overridden JSON request body: %w", err)
 	}
 	return Result{AppliedRuleNames: applied, Body: out}, nil
+}
+
+// ApplyHeaders applies header override operations from matching rules.
+// Header operations only require base matching (method/path); JSON body
+// conditions are intentionally ignored so headers can be modified even for
+// non-JSON or compressed requests.
+func ApplyHeaders(cfg config.RequestOverridesConfig, info RequestInfo, header http.Header) ([]HeaderChange, []string) {
+	if !cfg.Enabled {
+		return nil, nil
+	}
+	var changes []HeaderChange
+	var ruleNames []string
+	for _, rule := range selectedRules(cfg, info.Upstream) {
+		if !rule.Enabled || len(rule.Headers) == 0 {
+			continue
+		}
+		if !baseMatchesForHeaders(rule, info) {
+			continue
+		}
+		for _, h := range rule.Headers {
+			switch h.Op {
+			case "set":
+				old := header.Get(h.Name)
+				header.Set(h.Name, h.Value)
+				changes = append(changes, HeaderChange{Op: "set", Name: h.Name, Value: h.Value, OldValue: old})
+			case "remove":
+				old := header.Get(h.Name)
+				header.Del(h.Name)
+				changes = append(changes, HeaderChange{Op: "remove", Name: h.Name, OldValue: old})
+			}
+		}
+		ruleNames = append(ruleNames, ruleName(rule))
+	}
+	return changes, ruleNames
+}
+
+func baseMatchesForHeaders(rule config.RequestOverrideRule, info RequestInfo) bool {
+	match := rule.Match
+	if len(match.Methods) > 0 && !containsFold(match.Methods, info.Method) {
+		return false
+	}
+	if len(match.Paths) > 0 && !contains(match.Paths, info.Path) {
+		return false
+	}
+	if len(match.PathPrefixes) > 0 {
+		ok := false
+		for _, prefix := range match.PathPrefixes {
+			if strings.HasPrefix(info.Path, prefix) {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // ApplyPatch applies a subset of JSON Patch operations to a decoded JSON value.

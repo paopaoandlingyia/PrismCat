@@ -957,6 +957,34 @@ export function LogDetail({ log, loading, onClose, onLogChange }: LogDetailProps
                             {displayLog.request_override_error && (
                                 <pre className="text-xs text-amber-700 dark:text-amber-300 font-mono whitespace-pre-wrap leading-relaxed">{displayLog.request_override_error}</pre>
                             )}
+                            {displayLog.request_header_override_applied && displayLog.request_header_override_changes?.length ? (
+                                <div className="mt-3 space-y-1.5">
+                                    <div className="text-[11px] font-bold tracking-wider text-amber-600 dark:text-amber-400">
+                                        {t('log_detail.header_changes', 'Header Changes')}
+                                    </div>
+                                    <div className="space-y-1 font-mono text-xs">
+                                        {displayLog.request_header_override_changes.map((change, idx) => (
+                                            <div key={idx} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 leading-relaxed">
+                                                <Badge variant="outline" className={cn(
+                                                    "h-5 shrink-0 rounded px-1.5 text-[10px] font-bold uppercase",
+                                                    change.op === 'set'
+                                                        ? "border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                                                        : "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400"
+                                                )}>
+                                                    {change.op}
+                                                </Badge>
+                                                <span className="font-semibold text-foreground">{change.name}</span>
+                                                {change.old_value && (
+                                                    <span className="text-muted-foreground line-through">{change.old_value}</span>
+                                                )}
+                                                {change.op === 'set' && (
+                                                    <span className="text-foreground">{change.value}</span>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ) : null}
                         </div>
                     )}
 

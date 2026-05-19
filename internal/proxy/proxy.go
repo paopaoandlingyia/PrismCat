@@ -3,6 +3,7 @@ package proxy
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -227,6 +228,25 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Preserve original length semantics if present.
 	upstreamReq.ContentLength = contentLength
 	upstreamReq.Header.Del("Content-Length")
+
+	if headerChanges, headerRuleNames := requestoverride.ApplyHeaders(overrideCfg, overrideInfo, upstreamReq.Header); len(headerChanges) > 0 {
+		logMu.Lock()
+		logEntry.RequestHeaderOverrideApplied = true
+		logEntry.RequestHeadersOriginal = logEntry.RequestHeaders
+		logEntry.RequestHeaders = p.sanitizeHeaders(upstreamReq.Header, loggingCfg.SensitiveHeaders)
+		if raw, err := json.Marshal(headerChanges); err == nil {
+			logEntry.RequestHeaderOverrideChanges = raw
+		}
+		if !logEntry.RequestOverrideApplied {
+			logEntry.RequestOverrideApplied = true
+		}
+		for _, name := range headerRuleNames {
+			if !containsString(logEntry.RequestOverrideRules, name) {
+				logEntry.RequestOverrideRules = append(logEntry.RequestOverrideRules, name)
+			}
+		}
+		logMu.Unlock()
+	}
 
 	resp, err := client.Do(upstreamReq)
 	if err != nil {
@@ -538,6 +558,15 @@ func parseConnectionHeader(values []string) map[string]bool {
 		}
 	}
 	return m
+}
+
+func containsString(ss []string, s string) bool {
+	for _, v := range ss {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }
 
 // isStreaming determines whether an HTTP response is a streaming response

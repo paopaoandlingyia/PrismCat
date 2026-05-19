@@ -89,7 +89,10 @@ func (r *SQLiteRepository) migrate() error {
 		truncated INTEGER DEFAULT 0,
 		request_override_applied INTEGER DEFAULT 0,
 		request_override_rules TEXT DEFAULT '[]',
-		request_override_error TEXT
+		request_override_error TEXT,
+		request_header_override_applied INTEGER DEFAULT 0,
+		request_header_override_changes TEXT DEFAULT '',
+		request_headers_original TEXT DEFAULT ''
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_logs_created_at ON request_logs(created_at DESC);
@@ -140,6 +143,15 @@ func (r *SQLiteRepository) migrate() error {
 		return err
 	}
 	if err := r.ensureLogColumn("request_override_error", "request_override_error TEXT DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := r.ensureLogColumn("request_header_override_applied", "request_header_override_applied INTEGER DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := r.ensureLogColumn("request_header_override_changes", "request_header_override_changes TEXT DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := r.ensureLogColumn("request_headers_original", "request_headers_original TEXT DEFAULT ''"); err != nil {
 		return err
 	}
 	if err := r.ensureLogColumn("trace_id", "trace_id TEXT DEFAULT ''"); err != nil {
@@ -358,6 +370,11 @@ func (r *SQLiteRepository) SaveLog(log *RequestLog) error {
 	reqHeaders, _ := json.Marshal(log.RequestHeaders)
 	respHeaders, _ := json.Marshal(log.ResponseHeaders)
 	overrideRules, _ := json.Marshal(log.RequestOverrideRules)
+	reqHeadersOriginal := ""
+	if len(log.RequestHeadersOriginal) > 0 {
+		b, _ := json.Marshal(log.RequestHeadersOriginal)
+		reqHeadersOriginal = string(b)
+	}
 
 	query := `
 	INSERT INTO request_logs (
@@ -366,9 +383,10 @@ func (r *SQLiteRepository) SaveLog(log *RequestLog) error {
 		status_code, response_headers, response_body, response_body_ref, response_body_size,
 		streaming, latency_ms, error, truncated, tag,
 		request_override_applied, request_override_rules, request_override_error,
+		request_header_override_applied, request_header_override_changes, request_headers_original,
 		trace_id, parent_log_id, trace_seq,
 		usage_input_tokens, usage_output_tokens, usage_total_tokens, usage_raw, usage_source
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(id) DO UPDATE SET
 		created_at = excluded.created_at,
 		created_at_unix_ms = excluded.created_at_unix_ms,
@@ -396,6 +414,9 @@ func (r *SQLiteRepository) SaveLog(log *RequestLog) error {
 		request_override_applied = excluded.request_override_applied,
 		request_override_rules = excluded.request_override_rules,
 		request_override_error = excluded.request_override_error,
+		request_header_override_applied = excluded.request_header_override_applied,
+		request_header_override_changes = excluded.request_header_override_changes,
+		request_headers_original = excluded.request_headers_original,
 		trace_id = excluded.trace_id,
 		parent_log_id = excluded.parent_log_id,
 		trace_seq = excluded.trace_seq,
@@ -412,6 +433,7 @@ func (r *SQLiteRepository) SaveLog(log *RequestLog) error {
 		log.StatusCode, string(respHeaders), log.ResponseBody, log.ResponseBodyRef, log.ResponseBodySize,
 		log.Streaming, log.Latency, log.Error, log.Truncated, log.Tag,
 		log.RequestOverrideApplied, string(overrideRules), log.RequestOverrideError,
+		log.RequestHeaderOverrideApplied, string(log.RequestHeaderOverrideChanges), reqHeadersOriginal,
 		log.TraceID, log.ParentLogID, log.TraceSeq,
 		log.UsageInputTokens, log.UsageOutputTokens, log.UsageTotalTokens, log.UsageRaw, log.UsageSource,
 	)
@@ -425,6 +447,7 @@ func (r *SQLiteRepository) GetLog(id string) (*RequestLog, error) {
 		status_code, response_headers, response_body, response_body_ref, response_body_size,
 		streaming, latency_ms, error, truncated, tag,
 		request_override_applied, request_override_rules, request_override_error,
+		request_header_override_applied, request_header_override_changes, request_headers_original,
 		trace_id, parent_log_id, trace_seq,
 		usage_input_tokens, usage_output_tokens, usage_total_tokens, usage_raw, usage_source
 	FROM request_logs WHERE id = ?
@@ -849,6 +872,7 @@ func (r *SQLiteRepository) GetTraceRequests(traceID string) ([]*RequestLog, erro
 		status_code, response_headers, response_body, response_body_ref, response_body_size,
 		streaming, latency_ms, error, truncated, tag,
 		request_override_applied, request_override_rules, request_override_error,
+		request_header_override_applied, request_header_override_changes, request_headers_original,
 		trace_id, parent_log_id, trace_seq,
 		usage_input_tokens, usage_output_tokens, usage_total_tokens, usage_raw, usage_source
 	FROM request_logs
@@ -960,6 +984,8 @@ func (r *SQLiteRepository) scanLog(scanner interface{ Scan(...interface{}) error
 	var log RequestLog
 	var reqHeaders, respHeaders, overrideRules string
 	var streaming, truncated, overrideApplied int
+	var headerOverrideApplied int
+	var headerOverrideChanges, reqHeadersOriginal string
 	var usageInput, usageOutput, usageTotal sql.NullInt64
 	var usageRaw, usageSource sql.NullString
 
@@ -969,6 +995,7 @@ func (r *SQLiteRepository) scanLog(scanner interface{ Scan(...interface{}) error
 		&log.StatusCode, &respHeaders, &log.ResponseBody, &log.ResponseBodyRef, &log.ResponseBodySize,
 		&streaming, &log.Latency, &log.Error, &truncated, &log.Tag,
 		&overrideApplied, &overrideRules, &log.RequestOverrideError,
+		&headerOverrideApplied, &headerOverrideChanges, &reqHeadersOriginal,
 		&log.TraceID, &log.ParentLogID, &log.TraceSeq,
 		&usageInput, &usageOutput, &usageTotal, &usageRaw, &usageSource,
 	)
@@ -979,6 +1006,7 @@ func (r *SQLiteRepository) scanLog(scanner interface{ Scan(...interface{}) error
 	log.Streaming = streaming == 1
 	log.Truncated = truncated == 1
 	log.RequestOverrideApplied = overrideApplied == 1
+	log.RequestHeaderOverrideApplied = headerOverrideApplied == 1
 	log.UsageInputTokens = nullIntPtr(usageInput)
 	log.UsageOutputTokens = nullIntPtr(usageOutput)
 	log.UsageTotalTokens = nullIntPtr(usageTotal)
@@ -998,6 +1026,12 @@ func (r *SQLiteRepository) scanLog(scanner interface{ Scan(...interface{}) error
 	}
 	if overrideRules != "" && overrideRules != "null" {
 		_ = json.Unmarshal([]byte(overrideRules), &log.RequestOverrideRules)
+	}
+	if headerOverrideChanges != "" && headerOverrideChanges != "null" {
+		log.RequestHeaderOverrideChanges = json.RawMessage(headerOverrideChanges)
+	}
+	if reqHeadersOriginal != "" && reqHeadersOriginal != "null" {
+		log.RequestHeadersOriginal = unmarshalHeaders(reqHeadersOriginal)
 	}
 
 	return &log, nil
