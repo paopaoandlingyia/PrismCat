@@ -3,7 +3,6 @@ package storage
 import (
 	"context"
 	"log"
-	"strings"
 
 	"github.com/paopaoandlingyia/PrismCat/internal/config"
 	"github.com/paopaoandlingyia/PrismCat/internal/httpbody"
@@ -24,8 +23,8 @@ func PrepareLogForPersistence(logEntry *RequestLog, cfg *config.Config, blobs ..
 		usageResult := usage.Extract(
 			cfg.UsageExtractionSnapshot(),
 			logEntry.Upstream,
-			firstHeaderValue(logEntry.ResponseHeaders, "Content-Type"),
-			firstHeaderValue(logEntry.ResponseHeaders, "Content-Encoding"),
+			FirstHeaderValue(logEntry.ResponseHeaders, "Content-Type"),
+			FirstHeaderValue(logEntry.ResponseHeaders, "Content-Encoding"),
 			logEntry.ResponseBodyRaw,
 		)
 		if usageResult.Source != "" {
@@ -41,8 +40,8 @@ func PrepareLogForPersistence(logEntry *RequestLog, cfg *config.Config, blobs ..
 	if len(logEntry.RequestBodyRaw) > 0 {
 		formatted := formatCapturedBodyForPersistence(
 			logEntry.RequestBodyRaw,
-			firstHeaderValue(logEntry.RequestHeaders, "Content-Type"),
-			firstHeaderValue(logEntry.RequestHeaders, "Content-Encoding"),
+			FirstHeaderValue(logEntry.RequestHeaders, "Content-Type"),
+			FirstHeaderValue(logEntry.RequestHeaders, "Content-Encoding"),
 			loggingCfg.MaxRequestBody,
 			loggingCfg.BodyPreviewBytes,
 			loggingCfg.DetachBodyOverBytes,
@@ -60,8 +59,8 @@ func PrepareLogForPersistence(logEntry *RequestLog, cfg *config.Config, blobs ..
 	if len(logEntry.RequestBodyOriginalRaw) > 0 {
 		formatted := formatCapturedBodyForPersistence(
 			logEntry.RequestBodyOriginalRaw,
-			firstHeaderValue(logEntry.RequestHeaders, "Content-Type"),
-			firstHeaderValue(logEntry.RequestHeaders, "Content-Encoding"),
+			FirstHeaderValue(logEntry.RequestHeaders, "Content-Type"),
+			FirstHeaderValue(logEntry.RequestHeaders, "Content-Encoding"),
 			loggingCfg.MaxRequestBody,
 			loggingCfg.BodyPreviewBytes,
 			loggingCfg.DetachBodyOverBytes,
@@ -73,8 +72,8 @@ func PrepareLogForPersistence(logEntry *RequestLog, cfg *config.Config, blobs ..
 	if len(logEntry.RequestBodyFinalRaw) > 0 {
 		formatted := formatCapturedBodyForPersistence(
 			logEntry.RequestBodyFinalRaw,
-			firstHeaderValue(logEntry.RequestHeaders, "Content-Type"),
-			firstHeaderValue(logEntry.RequestHeaders, "Content-Encoding"),
+			FirstHeaderValue(logEntry.RequestHeaders, "Content-Type"),
+			FirstHeaderValue(logEntry.RequestHeaders, "Content-Encoding"),
 			loggingCfg.MaxRequestBody,
 			loggingCfg.BodyPreviewBytes,
 			loggingCfg.DetachBodyOverBytes,
@@ -90,8 +89,8 @@ func PrepareLogForPersistence(logEntry *RequestLog, cfg *config.Config, blobs ..
 	if len(logEntry.ResponseBodyRaw) > 0 {
 		formatted := formatCapturedBodyForPersistence(
 			logEntry.ResponseBodyRaw,
-			firstHeaderValue(logEntry.ResponseHeaders, "Content-Type"),
-			firstHeaderValue(logEntry.ResponseHeaders, "Content-Encoding"),
+			FirstHeaderValue(logEntry.ResponseHeaders, "Content-Type"),
+			FirstHeaderValue(logEntry.ResponseHeaders, "Content-Encoding"),
 			loggingCfg.MaxResponseBody,
 			loggingCfg.BodyPreviewBytes,
 			loggingCfg.DetachBodyOverBytes,
@@ -169,19 +168,4 @@ func putBodyBlob(blobs BlobStore, kind string, body []byte) string {
 		return ""
 	}
 	return ref
-}
-
-func firstHeaderValue(headers map[string][]string, key string) string {
-	if headers == nil {
-		return ""
-	}
-	if vv, ok := headers[key]; ok && len(vv) > 0 {
-		return vv[0]
-	}
-	for k, vv := range headers {
-		if strings.EqualFold(k, key) && len(vv) > 0 {
-			return vv[0]
-		}
-	}
-	return ""
 }

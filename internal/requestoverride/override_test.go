@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/tidwall/gjson"
+
 	"github.com/paopaoandlingyia/PrismCat/internal/config"
 )
 
@@ -343,5 +345,51 @@ func TestApplyHeadersOnlyRuleDoesNotTriggerBodyRead(t *testing.T) {
 	}
 	if len(ruleNames) != 1 || ruleNames[0] != "headers only" {
 		t.Fatalf("rule names = %v", ruleNames)
+	}
+}
+
+func TestGjsonValueEquals(t *testing.T) {
+	cases := []struct {
+		jsonStr string
+		path    string
+		want    interface{}
+		equals  bool
+	}{
+		// Strings
+		{`{"name":"claude"}`, "name", "claude", true},
+		{`{"name":"claude"}`, "name", "gpt", false},
+		// Numbers
+		{`{"count":10}`, "count", float64(10), true},
+		{`{"count":10}`, "count", 10, true},
+		{`{"count":10}`, "count", int64(10), true},
+		{`{"count":10.5}`, "count", float64(10.5), true},
+		{`{"count":10.5}`, "count", 10, false},
+		{`{"count":10}`, "count", 5, false},
+		// Booleans
+		{`{"ok":true}`, "ok", true, true},
+		{`{"ok":true}`, "ok", false, false},
+		{`{"ok":false}`, "ok", false, true},
+		// Nulls
+		{`{"none":null}`, "none", nil, true},
+		// Slices (Slow path)
+		{`{"arr":[1,2,3]}`, "arr", []interface{}{1.0, 2.0, 3.0}, true},
+		{`{"arr":[1,2,3]}`, "arr", []interface{}{1, 2, 3}, true},
+		{`{"arr":[1,2,3]}`, "arr", []interface{}{1, 2}, false},
+		// Maps (Slow path)
+		{`{"obj":{"a":1,"b":true}}`, "obj", map[string]interface{}{"a": 1, "b": true}, true},
+		{`{"obj":{"a":1,"b":true}}`, "obj", map[string]interface{}{"a": 2, "b": true}, false},
+	}
+
+	for i, tc := range cases {
+		importResult := gjson.Result{}
+		if tc.path != "" {
+			importResult = gjson.Get(tc.jsonStr, tc.path)
+		} else {
+			importResult = gjson.Parse(tc.jsonStr)
+		}
+		got := gjsonValueEquals(importResult, tc.want)
+		if got != tc.equals {
+			t.Errorf("case %d: gjsonValueEquals(%s, %#v) = %t; want %t", i, tc.jsonStr, tc.want, got, tc.equals)
+		}
 	}
 }

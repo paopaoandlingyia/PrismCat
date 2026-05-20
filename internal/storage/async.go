@@ -97,7 +97,7 @@ func (a *AsyncRepository) SaveLog(log *RequestLog) error {
 		a.inflightMu.Unlock()
 	}()
 
-	c := cloneRequestLog(log)
+	c := log.Clone()
 	select {
 	case a.ch <- c:
 		return nil
@@ -155,58 +155,4 @@ func (a *AsyncRepository) Close() error {
 	})
 	a.wg.Wait()
 	return a.inner.Close()
-}
-
-func cloneRequestLog(in *RequestLog) *RequestLog {
-	if in == nil {
-		return nil
-	}
-	out := *in
-	out.RequestHeaders = cloneHeaders(in.RequestHeaders)
-	out.ResponseHeaders = cloneHeaders(in.ResponseHeaders)
-	if len(in.RequestOverrideRules) > 0 {
-		out.RequestOverrideRules = append([]string(nil), in.RequestOverrideRules...)
-	}
-	out.RequestBodyRaw = cloneBytes(in.RequestBodyRaw)
-	out.RequestBodyOriginalRaw = cloneBytes(in.RequestBodyOriginalRaw)
-	out.RequestBodyFinalRaw = cloneBytes(in.RequestBodyFinalRaw)
-	out.ResponseBodyRaw = cloneBytes(in.ResponseBodyRaw)
-	out.UsageInputTokens = cloneInt64Ptr(in.UsageInputTokens)
-	out.UsageOutputTokens = cloneInt64Ptr(in.UsageOutputTokens)
-	out.UsageTotalTokens = cloneInt64Ptr(in.UsageTotalTokens)
-	return &out
-}
-
-func cloneHeaders(in map[string][]string) map[string][]string {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make(map[string][]string, len(in))
-	for k, vv := range in {
-		if vv == nil {
-			out[k] = nil
-			continue
-		}
-		newVv := make([]string, len(vv))
-		copy(newVv, vv)
-		out[k] = newVv
-	}
-	return out
-}
-
-func cloneBytes(in []byte) []byte {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make([]byte, len(in))
-	copy(out, in)
-	return out
-}
-
-func cloneInt64Ptr(in *int64) *int64 {
-	if in == nil {
-		return nil
-	}
-	out := *in
-	return &out
 }

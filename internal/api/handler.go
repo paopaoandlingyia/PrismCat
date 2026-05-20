@@ -211,14 +211,14 @@ func (h *Handler) handleLogBody(w http.ResponseWriter, r *http.Request, id strin
 	case "request":
 		body = logEntry.RequestBody
 		ref = logEntry.RequestBodyRef
-		contentType = firstHeaderValue(logEntry.RequestHeaders, "Content-Type")
-		contentEncoding = firstHeaderValue(logEntry.RequestHeaders, "Content-Encoding")
+		contentType = storage.FirstHeaderValue(logEntry.RequestHeaders, "Content-Type")
+		contentEncoding = storage.FirstHeaderValue(logEntry.RequestHeaders, "Content-Encoding")
 		maxOutputBytes = logging.MaxRequestBody
 	case "response":
 		body = logEntry.ResponseBody
 		ref = logEntry.ResponseBodyRef
-		contentType = firstHeaderValue(logEntry.ResponseHeaders, "Content-Type")
-		contentEncoding = firstHeaderValue(logEntry.ResponseHeaders, "Content-Encoding")
+		contentType = storage.FirstHeaderValue(logEntry.ResponseHeaders, "Content-Type")
+		contentEncoding = storage.FirstHeaderValue(logEntry.ResponseHeaders, "Content-Encoding")
 		maxOutputBytes = logging.MaxResponseBody
 	default:
 		h.jsonError(w, "不支持的 body part", http.StatusBadRequest)
@@ -864,21 +864,6 @@ func blobFilename(ref string, data []byte) string {
 		name = "blob"
 	}
 	return name + "." + suffix
-}
-
-func firstHeaderValue(headers map[string][]string, key string) string {
-	if headers == nil {
-		return ""
-	}
-	if vv, ok := headers[key]; ok && len(vv) > 0 {
-		return vv[0]
-	}
-	for k, vv := range headers {
-		if strings.EqualFold(k, key) && len(vv) > 0 {
-			return vv[0]
-		}
-	}
-	return ""
 }
 
 // handleReplay sends a request to the configured upstream and returns the response.

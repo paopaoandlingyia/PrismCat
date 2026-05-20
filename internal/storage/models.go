@@ -2,6 +2,7 @@ package storage
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 )
 
@@ -33,26 +34,26 @@ type RequestLog struct {
 	ResponseBodySize int64               `json:"response_body_size"`
 
 	// 元数据
-	Streaming              bool          `json:"streaming"`       // 是否为流式响应
-	Latency                int64         `json:"latency_ms"`      // 响应延迟(毫秒)
-	Error                  string        `json:"error,omitempty"` // 错误信息
-	Truncated              bool          `json:"truncated"`       // 请求或响应内容是否无法完整恢复
-	Tag                    string        `json:"tag,omitempty"`   // 来自 X-PrismCat-Tag 请求头
-	TraceID                string        `json:"trace_id,omitempty"`
-	ParentLogID            string        `json:"parent_log_id,omitempty"`
-	TraceSeq               int           `json:"trace_seq,omitempty"`
-	RequestOverrideApplied        bool                `json:"request_override_applied,omitempty"`
+	Streaming                    bool                `json:"streaming"`       // 是否为流式响应
+	Latency                      int64               `json:"latency_ms"`      // 响应延迟(毫秒)
+	Error                        string              `json:"error,omitempty"` // 错误信息
+	Truncated                    bool                `json:"truncated"`       // 请求或响应内容是否无法完整恢复
+	Tag                          string              `json:"tag,omitempty"`   // 来自 X-PrismCat-Tag 请求头
+	TraceID                      string              `json:"trace_id,omitempty"`
+	ParentLogID                  string              `json:"parent_log_id,omitempty"`
+	TraceSeq                     int                 `json:"trace_seq,omitempty"`
+	RequestOverrideApplied       bool                `json:"request_override_applied,omitempty"`
 	RequestOverrideRules         []string            `json:"request_override_rules,omitempty"`
 	RequestOverrideError         string              `json:"request_override_error,omitempty"`
 	RequestHeaderOverrideApplied bool                `json:"request_header_override_applied,omitempty"`
 	RequestHeaderOverrideChanges json.RawMessage     `json:"request_header_override_changes,omitempty"`
 	RequestHeadersOriginal       map[string][]string `json:"request_headers_original,omitempty"`
-	UsageInputTokens       *int64        `json:"usage_input_tokens,omitempty"`
-	UsageOutputTokens      *int64        `json:"usage_output_tokens,omitempty"`
-	UsageTotalTokens       *int64        `json:"usage_total_tokens,omitempty"`
-	UsageRaw               string        `json:"usage_raw,omitempty"`
-	UsageSource            string        `json:"usage_source,omitempty"`
-	Annotation             LogAnnotation `json:"annotation"`
+	UsageInputTokens             *int64              `json:"usage_input_tokens,omitempty"`
+	UsageOutputTokens            *int64              `json:"usage_output_tokens,omitempty"`
+	UsageTotalTokens             *int64              `json:"usage_total_tokens,omitempty"`
+	UsageRaw                     string              `json:"usage_raw,omitempty"`
+	UsageSource                  string              `json:"usage_source,omitempty"`
+	Annotation                   LogAnnotation       `json:"annotation"`
 
 	// Transient capture state used only before async persistence.
 	RequestBodyRaw               []byte `json:"-"`
@@ -151,4 +152,86 @@ type Repository interface {
 
 	// 生命周期
 	Close() error
+}
+
+// Clone returns a deep copy of the RequestLog.
+func (l *RequestLog) Clone() *RequestLog {
+	if l == nil {
+		return nil
+	}
+	out := *l
+	out.RequestHeaders = CloneHeaders(l.RequestHeaders)
+	out.ResponseHeaders = CloneHeaders(l.ResponseHeaders)
+	out.RequestHeadersOriginal = CloneHeaders(l.RequestHeadersOriginal)
+	out.RequestBodyRaw = cloneBytes(l.RequestBodyRaw)
+	out.RequestBodyOriginalRaw = cloneBytes(l.RequestBodyOriginalRaw)
+	out.RequestBodyFinalRaw = cloneBytes(l.RequestBodyFinalRaw)
+	out.ResponseBodyRaw = cloneBytes(l.ResponseBodyRaw)
+	if len(l.RequestOverrideRules) > 0 {
+		out.RequestOverrideRules = append([]string(nil), l.RequestOverrideRules...)
+	}
+	if len(l.RequestHeaderOverrideChanges) > 0 {
+		out.RequestHeaderOverrideChanges = append(json.RawMessage(nil), l.RequestHeaderOverrideChanges...)
+	}
+	out.UsageInputTokens = cloneInt64Ptr(l.UsageInputTokens)
+	out.UsageOutputTokens = cloneInt64Ptr(l.UsageOutputTokens)
+	out.UsageTotalTokens = cloneInt64Ptr(l.UsageTotalTokens)
+
+	if len(l.Annotation.Labels) > 0 {
+		out.Annotation.Labels = append([]string(nil), l.Annotation.Labels...)
+	}
+	return &out
+}
+
+// CloneHeaders deep copies headers map.
+func CloneHeaders(in map[string][]string) map[string][]string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string][]string, len(in))
+	for k, vv := range in {
+		if vv == nil {
+			out[k] = nil
+			continue
+		}
+		newVv := make([]string, len(vv))
+		copy(newVv, vv)
+		out[k] = newVv
+	}
+	return out
+}
+
+func cloneBytes(in []byte) []byte {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]byte, len(in))
+	copy(out, in)
+	return out
+}
+
+func cloneInt64Ptr(in *int64) *int64 {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	return &out
+}
+
+// FirstHeaderValue returns the first value of a header key in a case-insensitive manner.
+func FirstHeaderValue(headers map[string][]string, key string) string {
+	if headers == nil {
+		return ""
+	}
+	// Direct lookup (usually matches canonical format)
+	if vv, ok := headers[key]; ok && len(vv) > 0 {
+		return vv[0]
+	}
+	// Case-insensitive fallback
+	for k, vv := range headers {
+		if strings.EqualFold(k, key) && len(vv) > 0 {
+			return vv[0]
+		}
+	}
+	return ""
 }

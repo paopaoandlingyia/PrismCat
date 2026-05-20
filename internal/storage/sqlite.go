@@ -534,7 +534,12 @@ func (r *SQLiteRepository) ListLogs(filter LogFilter) ([]*RequestLog, int64, err
 	}
 
 	// Total count (for pagination).
-	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM request_logs l LEFT JOIN log_annotations a ON a.log_id = l.id %s", where)
+	var countQuery string
+	if filter.Saved == nil && filter.Status == "" && filter.Label == "" {
+		countQuery = fmt.Sprintf("SELECT COUNT(*) FROM request_logs l %s", where)
+	} else {
+		countQuery = fmt.Sprintf("SELECT COUNT(*) FROM request_logs l LEFT JOIN log_annotations a ON a.log_id = l.id %s", where)
+	}
 	var total int64
 	if err := r.db.QueryRow(countQuery, args...).Scan(&total); err != nil {
 		return nil, 0, err
@@ -795,13 +800,21 @@ func (r *SQLiteRepository) ListTraces(filter TraceFilter) ([]TraceSummary, int64
 	allArgs := append([]interface{}{}, whereArgs...)
 	allArgs = append(allArgs, havingArgs...)
 
-	countQuery := fmt.Sprintf(`
-		SELECT COUNT(*) FROM (
-			SELECT trace_id FROM request_logs %s GROUP BY trace_id %s
-		)
-	`, where, having)
+	var countQuery string
+	var countArgs []interface{}
+	if having == "" {
+		countQuery = fmt.Sprintf("SELECT COUNT(DISTINCT trace_id) FROM request_logs %s", where)
+		countArgs = whereArgs
+	} else {
+		countQuery = fmt.Sprintf(`
+			SELECT COUNT(*) FROM (
+				SELECT trace_id FROM request_logs %s GROUP BY trace_id %s
+			)
+		`, where, having)
+		countArgs = allArgs
+	}
 	var total int64
-	if err := r.db.QueryRow(countQuery, allArgs...).Scan(&total); err != nil {
+	if err := r.db.QueryRow(countQuery, countArgs...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 

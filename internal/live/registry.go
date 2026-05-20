@@ -39,7 +39,6 @@ func NewRegistry(responsePreviewLimit int64) *Registry {
 		entries:              make(map[string]*entry),
 	}
 }
-
 func (r *Registry) Register(logEntry *storage.RequestLog) {
 	if logEntry == nil || logEntry.ID == "" {
 		return
@@ -51,16 +50,16 @@ func (r *Registry) Register(logEntry *storage.RequestLog) {
 	current, ok := r.entries[logEntry.ID]
 	if !ok {
 		r.entries[logEntry.ID] = &entry{
-			log:  cloneRequestLog(logEntry),
+			log:  logEntry.Clone(),
 			subs: make(map[int]chan Event),
 		}
 		return
 	}
 
-	current.log = cloneRequestLog(logEntry)
+	current.log = logEntry.Clone()
 	r.broadcastLocked(current, Event{
 		Type: EventSnapshot,
-		Log:  cloneRequestLog(current.log),
+		Log:  current.log.Clone(),
 	})
 }
 
@@ -77,13 +76,13 @@ func (r *Registry) UpdateSnapshot(id string, fn func(*storage.RequestLog)) {
 		return
 	}
 
-	next := cloneRequestLog(current.log)
+	next := current.log.Clone()
 	fn(next)
 	current.log = next
 
 	r.broadcastLocked(current, Event{
 		Type: EventSnapshot,
-		Log:  cloneRequestLog(next),
+		Log:  next.Clone(),
 	})
 }
 
@@ -100,7 +99,7 @@ func (r *Registry) AppendResponseChunk(id string, chunk string, sizeDelta int64)
 		return
 	}
 
-	next := cloneRequestLog(current.log)
+	next := current.log.Clone()
 	next.ResponseBodySize += sizeDelta
 
 	previewChunk := chunk
@@ -142,10 +141,10 @@ func (r *Registry) Complete(logEntry *storage.RequestLog) {
 		return
 	}
 
-	finalLog := cloneRequestLog(logEntry)
+	finalLog := logEntry.Clone()
 	r.broadcastLocked(current, Event{
 		Type: EventCompleted,
-		Log:  cloneRequestLog(finalLog),
+		Log:  finalLog.Clone(),
 	})
 
 	for _, ch := range current.subs {
@@ -180,7 +179,7 @@ func (r *Registry) Snapshot(id string) (*storage.RequestLog, bool) {
 	if !ok || current.log == nil {
 		return nil, false
 	}
-	return cloneRequestLog(current.log), true
+	return current.log.Clone(), true
 }
 
 func (r *Registry) Subscribe(id string) (<-chan Event, func(), bool) {
@@ -200,7 +199,7 @@ func (r *Registry) Subscribe(id string) (<-chan Event, func(), bool) {
 	if current.log != nil {
 		ch <- Event{
 			Type: EventSnapshot,
-			Log:  cloneRequestLog(current.log),
+			Log:  current.log.Clone(),
 		}
 	}
 
@@ -230,56 +229,4 @@ func (r *Registry) broadcastLocked(current *entry, event Event) {
 		default:
 		}
 	}
-}
-
-func cloneRequestLog(in *storage.RequestLog) *storage.RequestLog {
-	if in == nil {
-		return nil
-	}
-
-	out := *in
-	out.RequestHeaders = cloneHeaders(in.RequestHeaders)
-	out.ResponseHeaders = cloneHeaders(in.ResponseHeaders)
-	out.RequestBodyRaw = cloneBytes(in.RequestBodyRaw)
-	out.ResponseBodyRaw = cloneBytes(in.ResponseBodyRaw)
-	out.UsageInputTokens = cloneInt64Ptr(in.UsageInputTokens)
-	out.UsageOutputTokens = cloneInt64Ptr(in.UsageOutputTokens)
-	out.UsageTotalTokens = cloneInt64Ptr(in.UsageTotalTokens)
-	return &out
-}
-
-func cloneHeaders(in map[string][]string) map[string][]string {
-	if len(in) == 0 {
-		return nil
-	}
-
-	out := make(map[string][]string, len(in))
-	for k, vv := range in {
-		if vv == nil {
-			out[k] = nil
-			continue
-		}
-		next := make([]string, len(vv))
-		copy(next, vv)
-		out[k] = next
-	}
-	return out
-}
-
-func cloneBytes(in []byte) []byte {
-	if len(in) == 0 {
-		return nil
-	}
-
-	out := make([]byte, len(in))
-	copy(out, in)
-	return out
-}
-
-func cloneInt64Ptr(in *int64) *int64 {
-	if in == nil {
-		return nil
-	}
-	out := *in
-	return &out
 }

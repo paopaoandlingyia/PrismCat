@@ -31,7 +31,7 @@ func (r *proxyTestRepo) SaveLog(log *storage.RequestLog) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	next := cloneLog(log)
+	next := log.Clone()
 	r.logs = append(r.logs, next)
 	r.saved <- next
 	return nil

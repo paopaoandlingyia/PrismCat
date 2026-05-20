@@ -351,8 +351,8 @@ func (p *Proxy) publishRequestReady(logEntry *storage.RequestLog) {
 		return
 	}
 
-	contentType := firstHeaderValue(logEntry.RequestHeaders, "Content-Type")
-	contentEncoding := firstHeaderValue(logEntry.RequestHeaders, "Content-Encoding")
+	contentType := storage.FirstHeaderValue(logEntry.RequestHeaders, "Content-Type")
+	contentEncoding := storage.FirstHeaderValue(logEntry.RequestHeaders, "Content-Encoding")
 	body, _ := p.formatLiveBody(contentType, contentEncoding, logEntry.RequestBodyRaw, p.cfg.LoggingSnapshot().BodyPreviewBytes)
 
 	p.live.UpdateSnapshot(logEntry.ID, func(snapshot *storage.RequestLog) {
@@ -369,7 +369,7 @@ func (p *Proxy) publishHeaders(logEntry *storage.RequestLog) {
 
 	p.live.UpdateSnapshot(logEntry.ID, func(snapshot *storage.RequestLog) {
 		snapshot.StatusCode = logEntry.StatusCode
-		snapshot.ResponseHeaders = cloneHeaders(logEntry.ResponseHeaders)
+		snapshot.ResponseHeaders = storage.CloneHeaders(logEntry.ResponseHeaders)
 		snapshot.Streaming = logEntry.Streaming
 	})
 }
@@ -414,30 +414,30 @@ func (p *Proxy) completeLive(logEntry *storage.RequestLog) {
 		return
 	}
 
-	finalLog := cloneLog(logEntry)
+	finalLog := logEntry.Clone()
 	loggingCfg := p.cfg.LoggingSnapshot()
 
 	requestBody, _ := p.formatLiveBody(
-		firstHeaderValue(finalLog.RequestHeaders, "Content-Type"),
-		firstHeaderValue(finalLog.RequestHeaders, "Content-Encoding"),
+		storage.FirstHeaderValue(finalLog.RequestHeaders, "Content-Type"),
+		storage.FirstHeaderValue(finalLog.RequestHeaders, "Content-Encoding"),
 		finalLog.RequestBodyRaw,
 		loggingCfg.BodyPreviewBytes,
 	)
 	responseBody, _ := p.formatLiveBody(
-		firstHeaderValue(finalLog.ResponseHeaders, "Content-Type"),
-		firstHeaderValue(finalLog.ResponseHeaders, "Content-Encoding"),
+		storage.FirstHeaderValue(finalLog.ResponseHeaders, "Content-Type"),
+		storage.FirstHeaderValue(finalLog.ResponseHeaders, "Content-Encoding"),
 		finalLog.ResponseBodyRaw,
 		loggingCfg.BodyPreviewBytes,
 	)
 	requestBodyOriginal, _ := p.formatLiveBody(
-		firstHeaderValue(finalLog.RequestHeaders, "Content-Type"),
-		firstHeaderValue(finalLog.RequestHeaders, "Content-Encoding"),
+		storage.FirstHeaderValue(finalLog.RequestHeaders, "Content-Type"),
+		storage.FirstHeaderValue(finalLog.RequestHeaders, "Content-Encoding"),
 		finalLog.RequestBodyOriginalRaw,
 		loggingCfg.BodyPreviewBytes,
 	)
 	requestBodyFinal, _ := p.formatLiveBody(
-		firstHeaderValue(finalLog.RequestHeaders, "Content-Type"),
-		firstHeaderValue(finalLog.RequestHeaders, "Content-Encoding"),
+		storage.FirstHeaderValue(finalLog.RequestHeaders, "Content-Type"),
+		storage.FirstHeaderValue(finalLog.RequestHeaders, "Content-Encoding"),
 		finalLog.RequestBodyFinalRaw,
 		loggingCfg.BodyPreviewBytes,
 	)
@@ -725,76 +725,6 @@ func (c *limitedCapture) Snapshot() ([]byte, int64, bool) {
 	buf := make([]byte, len(c.buf))
 	copy(buf, c.buf)
 	return buf, c.total, c.truncated
-}
-
-func cloneLog(in *storage.RequestLog) *storage.RequestLog {
-	if in == nil {
-		return nil
-	}
-
-	out := *in
-	out.RequestHeaders = cloneHeaders(in.RequestHeaders)
-	out.ResponseHeaders = cloneHeaders(in.ResponseHeaders)
-	if len(in.RequestBodyRaw) > 0 {
-		out.RequestBodyRaw = append([]byte(nil), in.RequestBodyRaw...)
-	}
-	if len(in.RequestBodyOriginalRaw) > 0 {
-		out.RequestBodyOriginalRaw = append([]byte(nil), in.RequestBodyOriginalRaw...)
-	}
-	if len(in.RequestBodyFinalRaw) > 0 {
-		out.RequestBodyFinalRaw = append([]byte(nil), in.RequestBodyFinalRaw...)
-	}
-	if len(in.ResponseBodyRaw) > 0 {
-		out.ResponseBodyRaw = append([]byte(nil), in.ResponseBodyRaw...)
-	}
-	if len(in.RequestOverrideRules) > 0 {
-		out.RequestOverrideRules = append([]string(nil), in.RequestOverrideRules...)
-	}
-	out.UsageInputTokens = cloneInt64Ptr(in.UsageInputTokens)
-	out.UsageOutputTokens = cloneInt64Ptr(in.UsageOutputTokens)
-	out.UsageTotalTokens = cloneInt64Ptr(in.UsageTotalTokens)
-	return &out
-}
-
-func cloneHeaders(in map[string][]string) map[string][]string {
-	if len(in) == 0 {
-		return nil
-	}
-
-	out := make(map[string][]string, len(in))
-	for k, vv := range in {
-		if vv == nil {
-			out[k] = nil
-			continue
-		}
-		next := make([]string, len(vv))
-		copy(next, vv)
-		out[k] = next
-	}
-	return out
-}
-
-func firstHeaderValue(headers map[string][]string, key string) string {
-	if headers == nil {
-		return ""
-	}
-	if vv, ok := headers[key]; ok && len(vv) > 0 {
-		return vv[0]
-	}
-	for k, vv := range headers {
-		if strings.EqualFold(k, key) && len(vv) > 0 {
-			return vv[0]
-		}
-	}
-	return ""
-}
-
-func cloneInt64Ptr(in *int64) *int64 {
-	if in == nil {
-		return nil
-	}
-	out := *in
-	return &out
 }
 
 func isLiveTextResponse(contentType string) bool {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"mime"
 	"net/http"
+	"reflect"
 	"strings"
 
 	"github.com/tidwall/gjson"
@@ -325,32 +326,25 @@ func jsonConditionsMatch(conditions []config.RequestOverrideJSONCondition, jsonS
 }
 
 func gjsonValueEquals(result gjson.Result, want interface{}) bool {
-	wantBytes, err := json.Marshal(want)
-	if err != nil {
-		return false
-	}
 	gotBytes := []byte(result.Raw)
 	if !gjson.ValidBytes(gotBytes) {
 		return false
 	}
-	// Normalize both sides through a round-trip to compare values semantically.
-	var gotVal, wantVal interface{}
+	var gotVal interface{}
 	if err := json.Unmarshal(gotBytes, &gotVal); err != nil {
 		return false
 	}
+
+	wantBytes, err := json.Marshal(want)
+	if err != nil {
+		return false
+	}
+	var wantVal interface{}
 	if err := json.Unmarshal(wantBytes, &wantVal); err != nil {
 		return false
 	}
-	return jsonDeepEqual(gotVal, wantVal)
-}
 
-func jsonDeepEqual(a, b interface{}) bool {
-	ab, err1 := json.Marshal(a)
-	bb, err2 := json.Marshal(b)
-	if err1 != nil || err2 != nil {
-		return false
-	}
-	return string(ab) == string(bb)
+	return reflect.DeepEqual(gotVal, wantVal)
 }
 
 func isIdentityEncoding(contentEncoding string) bool {
