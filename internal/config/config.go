@@ -12,7 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var Version = "1.7.0"
+var Version = "1.8.0"
 
 // Config 应用配置
 type Config struct {
