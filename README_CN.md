@@ -83,9 +83,10 @@ PrismCat 使用**子域名路由**实现透明代理。当你在 Settings 里添
 ## ✨ 核心特性
 
 ### 📊 完整的流量观测
-- 记录完整的请求头、请求体、响应头、响应体
+- 记录完整的请求头、请求体、响应头、响应体，支持关键字搜索与高亮
 - **SSE 流式响应**完整捕获，支持查看原始流或合并后的完整文本
 - JSON 自动格式化美化，大段 Base64（如内嵌图片）智能折叠并支持一键预览，告别刷屏
+- 任意请求一键复制为可执行的 **cURL 命令**
 
 ![Image Preview](assets/image_preview.png)
 
@@ -93,8 +94,11 @@ PrismCat 使用**子域名路由**实现透明代理。当你在 Settings 里添
 ### 🎮 一键重放 (Playground)
 看到一条失败的请求？点击 **Replay**，在浏览器里直接修改 Prompt、参数，一键重发，秒级定位问题。不用重新跑你的 Python/Node 脚本。
 
+### 📈 Trace 关联 & 用量追踪
+自动将相关请求关联为 Trace 链路，并从响应中提取 Token 用量。内置 OpenAI、Anthropic、Gemini 提取规则，也支持自定义。
+
 ### 🛠️ 参数覆盖（需手动启用）
-用 [JSON Patch](https://jsonpatch.com/) 规则改写外发请求体——全局封顶 `max_tokens`、替换模型、剔除框架偷塞的字段，全程不动业务代码。每条规则按 method / path / JSON 内容匹配命中，日志详情页可看到原始请求 vs. 最终请求的逐字段 diff。
+无需改动业务代码即可改写外发请求——对 JSON Body 执行 set / remove / default / append / prepend，还可 set 或 remove 请求头。每条规则按 method / path / JSON 内容匹配命中，日志详情页可看到原始请求 vs. 最终请求的逐字段 diff。
 
 > **🔒 严格 opt-in，PrismCat 不会自作主张。** 默认就是透明转发——必须 (1) 手动打开总开关、(2) 定义规则、(3) 把规则绑定到具体上游，三步全做完请求才会被改写。任何一步没配置，请求都按字节原样透传。
 
@@ -123,7 +127,8 @@ PrismCat 设计为 **7×24 小时静默运行的 LLM 黑匣子**。你不需要�
 | "我用 Ollama 跑本地模型，想看看实际通信" | 添加一个上游指向 `http://localhost:11434`，完全通用 |
 | "多人共用一个 API Key，谁的请求出了问题？" | 用 `X-PrismCat-Tag` 按用户打标签，一目了然 |
 | "Agent 跑着跑着就失控了，不知道它中间干了什么" | PrismCat 常驻记录每一次 API 调用，随时回溯 Agent 的完整行为链路 |
-| "我想全局封顶 `max_tokens` / 剔除 LangChain 偷塞的某个字段" | 在 **参数覆盖** 里写一条 [JSON Patch](https://jsonpatch.com/) 规则（需手动启用，默认透明转发） |
+| "每个上游到底消耗了多少 Token？" | 内置 **用量追踪** 自动从 OpenAI / Claude / Gemini 响应中提取 Token 数 |
+| "我想全局封顶 `max_tokens` / 剔除 LangChain 偷塞的某个字段" | 在 **参数覆盖** 里写一条规则，set / remove / default 任意 JSON 字段（需手动启用，默认透明转发） |
 
 ---
 
@@ -284,6 +289,21 @@ upstreams:
     target: "https://generativelanguage.googleapis.com"
     timeout: 120
     outbound_proxy: "http://127.0.0.1:7890"
+
+# 请求参数覆盖（默认关闭）
+# 支持的操作：JSON Body set / remove / default / append / prepend；Header set / remove
+request_overrides:
+  enabled: false
+  max_body_bytes: 1048576
+  upstreams: {}
+  rules: []
+
+# Token 用量提取（默认关闭）
+# 内置 OpenAI、Anthropic、Gemini 规则，也可自定义 paths
+usage_extraction:
+  enabled: false
+  upstreams: {}
+  rules: []   # 完整内置规则见 config.example.yaml
 ```
 
 </details>

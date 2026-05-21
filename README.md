@@ -83,9 +83,10 @@ Your App                     PrismCat                      OpenAI
 ## ✨ Key Features
 
 ### 📊 Full Traffic Observability
-- Complete request/response headers and bodies
+- Complete request/response headers and bodies with keyword search and highlighting
 - **SSE streaming** captured in full — view raw chunks or the merged result
 - Auto-formatted JSON, smart Base64 folding (no more drowning in image data) with one-click image preview
+- Copy any request as a ready-to-run **cURL command**
 
 ![Image Preview](assets/image_preview.png)
 
@@ -93,8 +94,11 @@ Your App                     PrismCat                      OpenAI
 ### 🎮 One-Click Replay (Playground)
 See a failed request? Hit **Replay**, tweak the prompt or parameters right in your browser, and resend instantly. No need to re-run your Python/Node script.
 
+### 📈 Trace & Usage Tracking
+Automatically correlate related requests into traces, and extract token usage from responses. Built-in extraction rules for OpenAI, Anthropic, and Gemini — or define your own.
+
 ### 🛠️ Request Override (Opt-In)
-Mutate outbound JSON request bodies with [JSON Patch](https://jsonpatch.com/) rules — cap `max_tokens` globally, swap models, strip fields a framework auto-injected, all without touching your code. Each rule is matched by method / path / JSON content; the log detail page shows a side-by-side diff of the original vs. final request.
+Rewrite outbound requests without touching your code — set, remove, or conditionally default JSON body fields, append/prepend to arrays, and set or strip HTTP headers. Each rule is matched by method / path / JSON content; the log detail page shows a side-by-side diff of the original vs. final request.
 
 > **🔒 Strictly opt-in.** PrismCat is a transparent proxy by default and **never** touches your requests unless you (1) flip the master switch, (2) define rules, and (3) bind them to specific upstreams. Skip any of those steps and every byte is forwarded untouched.
 
@@ -123,7 +127,8 @@ PrismCat is designed to run as a **silent, 24/7 LLM black box**. You don't need 
 | "I run local models with Ollama, want to inspect the traffic" | Add an upstream pointing to `http://localhost:11434` — it's a universal HTTP proxy |
 | "Multiple people share one API key — whose request failed?" | Use `X-PrismCat-Tag` to tag by user, find the culprit in seconds |
 | "My Agent went rogue and I have no idea what it did" | PrismCat silently logs every API call — review the full behavior chain anytime |
-| "I want to cap `max_tokens` globally / strip a field LangChain auto-injects" | Write a [JSON Patch](https://jsonpatch.com/) rule in **Request Override** (opt-in; transparent by default) |
+| "How many tokens is each upstream actually using?" | Built-in **Usage Tracking** extracts token counts from OpenAI / Claude / Gemini responses automatically |
+| "I want to cap `max_tokens` globally / strip a field LangChain auto-injects" | Write a rule in **Request Override** to set, remove, or default any JSON field (opt-in; transparent by default) |
 
 ---
 
@@ -284,6 +289,21 @@ upstreams:
     target: "https://generativelanguage.googleapis.com"
     timeout: 120
     outbound_proxy: "http://127.0.0.1:7890"
+
+# Request override (opt-in, off by default)
+# Supports ops: set, remove, default, append, prepend for JSON body; set, remove for headers.
+request_overrides:
+  enabled: false
+  max_body_bytes: 1048576
+  upstreams: {}
+  rules: []
+
+# Token usage extraction (off by default)
+# Built-in rules for OpenAI, Anthropic, Gemini; define your own via paths.
+usage_extraction:
+  enabled: false
+  upstreams: {}
+  rules: []   # see config.example.yaml for built-in rule definitions
 ```
 
 </details>
