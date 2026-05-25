@@ -166,6 +166,7 @@ export interface TraceDetail {
 
 // API 调用函数
 const API_BASE = '/api'
+export const DEFAULT_UPSTREAM_TIMEOUT_SECONDS = 120
 
 export interface AuthStatus {
     authenticated: boolean
@@ -269,7 +270,7 @@ export async function fetchTraceDetail(traceId: string): Promise<TraceDetail> {
 export async function addUpstream(
     name: string,
     target: string,
-    timeout: number = 30,
+    timeout: number = DEFAULT_UPSTREAM_TIMEOUT_SECONDS,
     order: number = 0,
     outbound_proxy: string = 'env',
 ): Promise<void> {

@@ -907,7 +907,7 @@ func (h *Handler) handleReplay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if timeout <= 0 {
-		timeout = 120
+		timeout = config.DefaultUpstreamTimeoutSeconds
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), time.Duration(timeout)*time.Second)
 	defer cancel()

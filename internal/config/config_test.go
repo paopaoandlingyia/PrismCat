@@ -192,6 +192,18 @@ func TestNormalizeOutboundProxy(t *testing.T) {
 	}
 }
 
+func TestNormalizeUpstreamsDefaultsTimeout(t *testing.T) {
+	got, err := normalizeUpstreams(map[string]UpstreamConfig{
+		"openai": {Target: "https://api.openai.com"},
+	})
+	if err != nil {
+		t.Fatalf("normalizeUpstreams returned error: %v", err)
+	}
+	if got["openai"].Timeout != DefaultUpstreamTimeoutSeconds {
+		t.Fatalf("Timeout = %d, want %d", got["openai"].Timeout, DefaultUpstreamTimeoutSeconds)
+	}
+}
+
 func TestNormalizeRequestOverridesNormalizesBindingsAndRules(t *testing.T) {
 	cfg := NormalizeRequestOverrides(RequestOverridesConfig{
 		Enabled: true,

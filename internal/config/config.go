@@ -14,6 +14,8 @@ import (
 
 var Version = "1.8.0"
 
+const DefaultUpstreamTimeoutSeconds = 120
+
 // Config 应用配置
 type Config struct {
 	Server    ServerConfig              `yaml:"server"`
@@ -83,11 +85,11 @@ type RequestOverrideUpstreamBinding struct {
 }
 
 type RequestOverrideRule struct {
-	Name    string                   `yaml:"name" json:"name"`
-	Enabled bool                     `yaml:"enabled" json:"enabled"`
-	Match   RequestOverrideMatch     `yaml:"match" json:"match"`
-	Patch   []RequestOverridePatch   `yaml:"patch" json:"patch"`
-	Headers []RequestOverrideHeader  `yaml:"headers,omitempty" json:"headers,omitempty"`
+	Name    string                  `yaml:"name" json:"name"`
+	Enabled bool                    `yaml:"enabled" json:"enabled"`
+	Match   RequestOverrideMatch    `yaml:"match" json:"match"`
+	Patch   []RequestOverridePatch  `yaml:"patch" json:"patch"`
+	Headers []RequestOverrideHeader `yaml:"headers,omitempty" json:"headers,omitempty"`
 }
 
 type RequestOverrideHeader struct {
@@ -398,6 +400,9 @@ func normalizeUpstreams(in map[string]UpstreamConfig) (map[string]UpstreamConfig
 				return nil, fmt.Errorf("upstream %q: %w", n, err)
 			}
 			v.OutboundProxy = outboundProxy
+		}
+		if v.Timeout <= 0 {
+			v.Timeout = DefaultUpstreamTimeoutSeconds
 		}
 		out[n] = v
 	}
@@ -887,6 +892,9 @@ func (c *Config) AddUpstream(name string, config UpstreamConfig) error {
 			return err
 		}
 		config.OutboundProxy = outboundProxy
+	}
+	if config.Timeout <= 0 {
+		config.Timeout = DefaultUpstreamTimeoutSeconds
 	}
 	c.Upstreams[name] = config
 	return nil // 实际上应该由调用者决定是否立即 Save

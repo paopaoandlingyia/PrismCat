@@ -137,7 +137,9 @@
         "header_changes": "Header 变更",
         "open_diff": "打开 Diff",
         "copy_as_curl": "复制为 cURL",
-        "copy_id": "复制日志 ID"
+        "copy_id": "复制日志 ID",
+        "previous_log": "上一条",
+        "next_log": "下一条"
     },
     "log_annotation": {
         "save": "保存",

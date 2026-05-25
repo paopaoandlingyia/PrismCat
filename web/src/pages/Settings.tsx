@@ -52,7 +52,7 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { fetchUpstreams, addUpstream, removeUpstream, fetchConfig, updateConfig, fetchSystemMetrics, fetchUpdateInfo, fetchStorageUsage } from '@/lib/api'
+import { DEFAULT_UPSTREAM_TIMEOUT_SECONDS, fetchUpstreams, addUpstream, removeUpstream, fetchConfig, updateConfig, fetchSystemMetrics, fetchUpdateInfo, fetchStorageUsage } from '@/lib/api'
 import type { Upstream, AppConfig, SystemMetrics, UpdateInfo, StorageUsage } from '@/lib/api'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -493,7 +493,7 @@ export function Settings() {
 
     const [newName, setNewName] = useState('')
     const [newTarget, setNewTarget] = useState('')
-    const [newTimeout, setNewTimeout] = useState(30)
+    const [newTimeout, setNewTimeout] = useState(DEFAULT_UPSTREAM_TIMEOUT_SECONDS)
     const [newOrder, setNewOrder] = useState(100)
     const [newOutboundProxy, setNewOutboundProxy] = useState('env')
     const [editingUpstream, setEditingUpstream] = useState<EditingUpstream | null>(null)
@@ -768,7 +768,7 @@ export function Settings() {
             await addUpstream(newName, newTarget, newTimeout, newOrder, normalizedOutboundProxy(newOutboundProxy))
             setNewName('')
             setNewTarget('')
-            setNewTimeout(30)
+            setNewTimeout(DEFAULT_UPSTREAM_TIMEOUT_SECONDS)
             setNewOrder(prev => prev + 10)
             setNewOutboundProxy('env')
             setShowAddForm(false)

@@ -118,7 +118,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Per-request timeout: do NOT mutate a shared http.Client timeout.
 	timeoutSeconds := upstream.Timeout
 	if timeoutSeconds <= 0 {
-		timeoutSeconds = 120
+		timeoutSeconds = config.DefaultUpstreamTimeoutSeconds
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), time.Duration(timeoutSeconds)*time.Second)
 	defer cancel()

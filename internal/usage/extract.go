@@ -135,10 +135,32 @@ func extractFromSSE(rules []config.UsageExtractionRule, data []byte) Result {
 		}
 		next := extractFromJSONDocument(rules, eventData)
 		if next.Source != "" {
-			best = next
+			best = mergeResults(best, next)
 		}
 	}
 	return best
+}
+
+func mergeResults(previous Result, next Result) Result {
+	if previous.Source == "" {
+		return next
+	}
+
+	merged := next
+	if merged.InputTokens == nil {
+		merged.InputTokens = previous.InputTokens
+	}
+	if merged.OutputTokens == nil {
+		merged.OutputTokens = previous.OutputTokens
+	}
+	if merged.TotalTokens == nil {
+		merged.TotalTokens = previous.TotalTokens
+	}
+	if merged.InputTokens != nil && merged.OutputTokens != nil {
+		total := *merged.InputTokens + *merged.OutputTokens
+		merged.TotalTokens = &total
+	}
+	return merged
 }
 
 func extractFromJSONDocument(rules []config.UsageExtractionRule, data []byte) Result {

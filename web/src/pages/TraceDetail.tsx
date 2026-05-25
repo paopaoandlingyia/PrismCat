@@ -45,6 +45,19 @@ export function TraceDetail() {
     [requests],
   )
 
+  const selectedLogIndex = useMemo(() => {
+    if (!selectedLog) return -1
+    return requests.findIndex(req => req.id === selectedLog.id)
+  }, [requests, selectedLog])
+
+  const handleNavigateLog = useCallback((direction: 'previous' | 'next') => {
+    if (selectedLogIndex < 0) return
+    const nextIndex = direction === 'previous' ? selectedLogIndex - 1 : selectedLogIndex + 1
+    const nextLog = requests[nextIndex]
+    if (!nextLog) return
+    setSelectedLog(nextLog)
+  }, [requests, selectedLogIndex])
+
   const traceSpanMs = useMemo(() => {
     if (!summary) return 1
     return Math.max(summary.last_time - summary.first_time, 1)
@@ -251,6 +264,9 @@ export function TraceDetail() {
       <LogDetail
         log={selectedLog}
         onClose={() => setSelectedLog(null)}
+        onNavigateLog={handleNavigateLog}
+        canNavigatePreviousLog={selectedLogIndex > 0}
+        canNavigateNextLog={selectedLogIndex >= 0 && selectedLogIndex < requests.length - 1}
         onLogChange={(updated) => {
           setSelectedLog(updated)
           setDetail(prev => {

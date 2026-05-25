@@ -1,5 +1,5 @@
 import { cn, formatDate, formatLatency, formatSize, getStatusColor, getMethodColor } from '@/lib/utils'
-import { Copy, Check, Zap, AlertTriangle, ChevronDown, ChevronUp, ChevronsDownUp, ChevronsUpDown, FileCode, ListTree, Globe, Layers, RotateCcw, Maximize2, Minimize2, ExternalLink, Terminal, Bookmark, BookmarkCheck, CheckCircle2, CircleDot, Tags, Search, X } from 'lucide-react'
+import { Copy, Check, Zap, AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsDownUp, ChevronsUpDown, FileCode, ListTree, Globe, Layers, RotateCcw, Maximize2, Minimize2, ExternalLink, Terminal, Bookmark, BookmarkCheck, CheckCircle2, CircleDot, Tags, Search, X } from 'lucide-react'
 import { fetchBlob, fetchLogBody, updateLogAnnotation } from '@/lib/api'
 import type { LiveLogEvent, RequestLog } from '@/lib/api'
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react'
@@ -26,8 +26,12 @@ interface LogDetailProps {
     loading?: boolean
     onClose: () => void
     onLogChange?: (log: RequestLog) => void
+    onNavigateLog?: (direction: LogNavigationDirection) => void
+    canNavigatePreviousLog?: boolean
+    canNavigateNextLog?: boolean
 }
 
+type LogNavigationDirection = 'previous' | 'next'
 type BodyViewMode = 'pretty' | 'raw'
 type RequestViewMode = BodyViewMode | 'diff'
 type ResponseViewMode = BodyViewMode | 'merged'
@@ -184,7 +188,15 @@ function BodySearchBar({
     );
 }
 
-export function LogDetail({ log, loading, onClose, onLogChange }: LogDetailProps) {
+export function LogDetail({
+    log,
+    loading,
+    onClose,
+    onLogChange,
+    onNavigateLog,
+    canNavigatePreviousLog = false,
+    canNavigateNextLog = false,
+}: LogDetailProps) {
     const { t, i18n } = useTranslation()
     const navigate = useNavigate()
     const [liveLog, setLiveLog] = useState<RequestLog | null>(null)
@@ -708,6 +720,46 @@ export function LogDetail({ log, loading, onClose, onLogChange }: LogDetailProps
                         )}
                         {!loading && (
                             <div className="ml-auto mr-10 flex flex-wrap items-center justify-end gap-2">
+                                {onNavigateLog && (
+                                    <div className="flex items-center gap-1 rounded-lg border border-border/50 bg-background/60 p-0.5 shadow-sm">
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    disabled={!canNavigatePreviousLog}
+                                                    onClick={() => onNavigateLog('previous')}
+                                                    className="h-7 w-7 rounded-md text-muted-foreground hover:bg-primary/10 hover:text-primary disabled:opacity-35"
+                                                    aria-label={t('log_detail.previous_log', 'Previous log')}
+                                                >
+                                                    <ChevronLeft className="h-3.5 w-3.5" />
+                                                </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="top" sideOffset={4}>
+                                                {t('log_detail.previous_log', 'Previous log')}
+                                            </TooltipContent>
+                                        </Tooltip>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    disabled={!canNavigateNextLog}
+                                                    onClick={() => onNavigateLog('next')}
+                                                    className="h-7 w-7 rounded-md text-muted-foreground hover:bg-primary/10 hover:text-primary disabled:opacity-35"
+                                                    aria-label={t('log_detail.next_log', 'Next log')}
+                                                >
+                                                    <ChevronRight className="h-3.5 w-3.5" />
+                                                </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="top" sideOffset={4}>
+                                                {t('log_detail.next_log', 'Next log')}
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </div>
+                                )}
                                 <Tooltip>
                                     <TooltipTrigger asChild>
                                         <Button

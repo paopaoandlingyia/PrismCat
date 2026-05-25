@@ -1,4 +1,4 @@
-import { Suspense, lazy, startTransition, useEffect, useState, useCallback, useRef } from 'react'
+import { Suspense, lazy, startTransition, useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { fetchLogs, fetchLog, fetchStats, fetchUpstreams } from '@/lib/api'
 import type { RequestLog, LogStats, Upstream, LogFilter, LogListResponse } from '@/lib/api'
 import { StatsCards } from '@/components/StatsCards'
@@ -96,6 +96,19 @@ export function Dashboard() {
         setSelectedLogLoading(false)
     }, [])
 
+    const selectedLogIndex = useMemo(() => {
+        if (!selectedLog) return -1
+        return logs.findIndex(item => item.id === selectedLog.id)
+    }, [logs, selectedLog])
+
+    const handleNavigateLog = useCallback((direction: 'previous' | 'next') => {
+        if (selectedLogIndex < 0) return
+        const nextIndex = direction === 'previous' ? selectedLogIndex - 1 : selectedLogIndex + 1
+        const nextLog = logs[nextIndex]
+        if (!nextLog) return
+        void handleSelectLog(nextLog)
+    }, [handleSelectLog, logs, selectedLogIndex])
+
     const handleLogChange = useCallback((nextLog: RequestLog) => {
         setSelectedLog(nextLog)
         setLogs(current => current
@@ -152,6 +165,9 @@ export function Dashboard() {
                     loading={selectedLogLoading}
                     onClose={handleCloseLog}
                     onLogChange={handleLogChange}
+                    onNavigateLog={handleNavigateLog}
+                    canNavigatePreviousLog={selectedLogIndex > 0}
+                    canNavigateNextLog={selectedLogIndex >= 0 && selectedLogIndex < logs.length - 1}
                 />
             </Suspense>
         </div>

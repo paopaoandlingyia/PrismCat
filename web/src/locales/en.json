@@ -137,7 +137,9 @@
         "header_changes": "Header Changes",
         "open_diff": "Open Diff",
         "copy_as_curl": "Copy as cURL",
-        "copy_id": "Copy log ID"
+        "copy_id": "Copy log ID",
+        "previous_log": "Previous log",
+        "next_log": "Next log"
     },
     "log_annotation": {
         "save": "Save",
