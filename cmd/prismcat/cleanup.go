@@ -14,6 +14,7 @@ const (
 	storageLimitCleanupMaxRounds = 5
 	storageLimitDeleteMaxBatch   = 2000
 	storageLimitDeleteOvershoot  = 1.15
+	storageLimitTargetRatio      = 0.9
 	storageLimitBlobGCMinAge     = time.Hour
 )
 
@@ -66,6 +67,7 @@ func cleanupStorageLimit(
 	if usage.TotalBytes <= storageCfg.MaxStorageBytes {
 		return result, nil
 	}
+	targetBytes := storageLimitCleanupTarget(storageCfg.MaxStorageBytes)
 
 	reclaimedBlobGC, reclaimErr := reclaimStorageSpace(ctx, repo, refLister, blobGC, logf)
 	result.RanBlobGC = result.RanBlobGC || reclaimedBlobGC
@@ -77,16 +79,16 @@ func cleanupStorageLimit(
 	if err != nil {
 		return result, err
 	}
-	if usage.TotalBytes <= storageCfg.MaxStorageBytes {
-		logf("storage cleanup reclaimed space without deleting logs (%d MB / %d MB)",
-			usage.TotalBytes>>20, storageCfg.MaxStorageBytes>>20)
+	if usage.TotalBytes <= targetBytes {
+		logf("storage cleanup reclaimed space without deleting logs (%d MB / %d MB target, %d MB limit)",
+			usage.TotalBytes>>20, targetBytes>>20, storageCfg.MaxStorageBytes>>20)
 		return result, nil
 	}
-	if reclaimErr != nil && usage.BlobBytes > 0 && usage.DatabaseBytes <= storageCfg.MaxStorageBytes {
+	if reclaimErr != nil && usage.BlobBytes > 0 && usage.DatabaseBytes <= targetBytes {
 		return result, fmt.Errorf("blob reclaim failed while blob files keep storage over limit: %w", reclaimErr)
 	}
 
-	for round := 1; round <= storageLimitCleanupMaxRounds && usage.TotalBytes > storageCfg.MaxStorageBytes; round++ {
+	for round := 1; round <= storageLimitCleanupMaxRounds && usage.TotalBytes > targetBytes; round++ {
 		deletableCount, err := repo.CountDeletableLogs()
 		if err != nil {
 			return result, err
@@ -96,9 +98,9 @@ func cleanupStorageLimit(
 			return result, nil
 		}
 
-		toDelete := storageLimitDeleteBatch(usage.TotalBytes, storageCfg.MaxStorageBytes, deletableCount)
-		logf("storage over limit (%d MB / %d MB), deleting %d oldest unsaved logs...",
-			usage.TotalBytes>>20, storageCfg.MaxStorageBytes>>20, toDelete)
+		toDelete := storageLimitDeleteBatch(usage.TotalBytes, targetBytes, deletableCount)
+		logf("storage above cleanup target (%d MB / %d MB target, %d MB limit), deleting %d oldest unsaved logs...",
+			usage.TotalBytes>>20, targetBytes>>20, storageCfg.MaxStorageBytes>>20, toDelete)
 
 		deleted, err := repo.DeleteOldestLogs(toDelete)
 		if err != nil {
@@ -120,14 +122,14 @@ func cleanupStorageLimit(
 		if err != nil {
 			return result, err
 		}
-		logf("size-based cleanup round %d done: deleted %d logs (%d MB -> %d MB, limit %d MB)",
-			round, deleted, usage.TotalBytes>>20, nextUsage.TotalBytes>>20, storageCfg.MaxStorageBytes>>20)
+		logf("size-based cleanup round %d done: deleted %d logs (%d MB -> %d MB, target %d MB, limit %d MB)",
+			round, deleted, usage.TotalBytes>>20, nextUsage.TotalBytes>>20, targetBytes>>20, storageCfg.MaxStorageBytes>>20)
 		usage = nextUsage
 	}
 
-	if usage.TotalBytes > storageCfg.MaxStorageBytes {
-		logf("size-based cleanup stopped after %d rounds (%d MB / %d MB)",
-			storageLimitCleanupMaxRounds, usage.TotalBytes>>20, storageCfg.MaxStorageBytes>>20)
+	if usage.TotalBytes > targetBytes {
+		logf("size-based cleanup stopped after %d rounds (%d MB / %d MB target, %d MB limit)",
+			storageLimitCleanupMaxRounds, usage.TotalBytes>>20, targetBytes>>20, storageCfg.MaxStorageBytes>>20)
 	}
 	return result, nil
 }
@@ -172,12 +174,12 @@ func reclaimStorageSpace(
 	return ranBlobGC, firstErr
 }
 
-func storageLimitDeleteBatch(totalBytes, maxBytes, deletableCount int64) int {
-	if totalBytes <= 0 || maxBytes <= 0 || totalBytes <= maxBytes || deletableCount <= 0 {
+func storageLimitDeleteBatch(totalBytes, targetBytes, deletableCount int64) int {
+	if totalBytes <= 0 || targetBytes <= 0 || totalBytes <= targetBytes || deletableCount <= 0 {
 		return 0
 	}
 
-	excessRatio := float64(totalBytes-maxBytes) / float64(totalBytes)
+	excessRatio := float64(totalBytes-targetBytes) / float64(totalBytes)
 	estimated := math.Ceil(float64(deletableCount) * excessRatio * storageLimitDeleteOvershoot)
 	if estimated < 1 {
 		estimated = 1
@@ -189,4 +191,15 @@ func storageLimitDeleteBatch(totalBytes, maxBytes, deletableCount int64) int {
 		estimated = float64(deletableCount)
 	}
 	return int(estimated)
+}
+
+func storageLimitCleanupTarget(maxBytes int64) int64 {
+	if maxBytes <= 0 {
+		return 0
+	}
+	target := int64(math.Floor(float64(maxBytes) * storageLimitTargetRatio))
+	if target < 1 {
+		return 1
+	}
+	return target
 }

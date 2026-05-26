@@ -47,12 +47,12 @@ func TestCleanupStorageLimitReclaimsBeforeDeletingLogs(t *testing.T) {
 	}
 }
 
-func TestCleanupStorageLimitSmallExcessDoesNotDeleteMinimumHundred(t *testing.T) {
+func TestCleanupStorageLimitDeletesTowardLowWatermark(t *testing.T) {
 	usageBytes := int64(1010)
 	repo := &fakeCleanupRepo{
 		deletable: 1000,
 		onDelete: func(int) {
-			usageBytes = 990
+			usageBytes = 890
 		},
 	}
 
@@ -70,11 +70,11 @@ func TestCleanupStorageLimitSmallExcessDoesNotDeleteMinimumHundred(t *testing.T)
 	if err != nil {
 		t.Fatalf("cleanupStorageLimit returned error: %v", err)
 	}
-	if result.DeletedLogs != 12 {
-		t.Fatalf("DeletedLogs = %d, want 12", result.DeletedLogs)
+	if result.DeletedLogs != 126 {
+		t.Fatalf("DeletedLogs = %d, want 126", result.DeletedLogs)
 	}
-	if got := repo.deleteBatches; len(got) != 1 || got[0] != 12 {
-		t.Fatalf("delete batches = %v, want [12]", got)
+	if got := repo.deleteBatches; len(got) != 1 || got[0] != 126 {
+		t.Fatalf("delete batches = %v, want [126]", got)
 	}
 }
 
@@ -110,6 +110,15 @@ func TestStorageLimitDeleteBatchIsCapped(t *testing.T) {
 	}
 	if got := storageLimitDeleteBatch(1000, 1000, 100); got != 0 {
 		t.Fatalf("batch = %d, want 0 when already under limit", got)
+	}
+	if got := storageLimitDeleteBatch(1001, 1000, 10); got != 1 {
+		t.Fatalf("batch = %d, want 1 for tiny excess", got)
+	}
+}
+
+func TestStorageLimitCleanupTargetUsesLowWatermark(t *testing.T) {
+	if got := storageLimitCleanupTarget(1000); got != 900 {
+		t.Fatalf("target = %d, want 900", got)
 	}
 }
 
