@@ -317,6 +317,7 @@ export interface AppConfig {
     storage: {
         database: string
         retention_days: number
+        max_storage_bytes: number
     }
     request_overrides: {
         enabled: boolean
@@ -369,6 +370,7 @@ export interface ConfigUpdate {
     }
     storage?: {
         retention_days?: number
+        max_storage_bytes?: number
     }
     request_overrides?: {
         enabled?: boolean

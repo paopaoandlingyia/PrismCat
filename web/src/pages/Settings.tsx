@@ -510,6 +510,7 @@ export function Settings() {
     const [earlyRequestBodySnapshot, setEarlyRequestBodySnapshot] = useState(false)
 
     const [retentionDays, setRetentionDays] = useState(30)
+    const [maxStorageGB, setMaxStorageGB] = useState(0)
     const [requestOverridesEnabled, setRequestOverridesEnabled] = useState(false)
     const [overrideMaxBodyKB, setOverrideMaxBodyKB] = useState(1024)
     const [overrideRulesText, setOverrideRulesText] = useState('')
@@ -677,6 +678,7 @@ export function Settings() {
             setStoreBase64(configData.logging.store_base64)
             setEarlyRequestBodySnapshot(configData.logging.early_request_body_snapshot)
             setRetentionDays(configData.storage.retention_days)
+            setMaxStorageGB(parseFloat((configData.storage.max_storage_bytes / (1024 * 1024 * 1024)).toFixed(2)))
             setEnablePathRouting(configData.server.enable_path_routing)
             setPathRoutingPrefix(configData.server.path_routing_prefix || '/_proxy')
             setRequestOverridesEnabled(configData.request_overrides?.enabled ?? false)
@@ -1102,6 +1104,7 @@ export function Settings() {
                 },
                 storage: {
                     retention_days: retentionDays,
+                    max_storage_bytes: Math.round(maxStorageGB * 1024 * 1024 * 1024),
                 },
                 request_overrides: buildOverridesPayload(overrideBindings, overrideRules),
                 usage_extraction: buildUsageExtractionPayload(usageBindings, usageRules),
@@ -1733,6 +1736,23 @@ export function Settings() {
                                                 min="0"
                                                 value={retentionDays}
                                                 onChange={e => setRetentionDays(Number(e.target.value))}
+                                                className="h-11 rounded-xl border-border/30 bg-background/50 text-sm shadow-sm transition-colors focus-visible:bg-background"
+                                            />
+                                        </FieldBlock>
+
+                                        <FieldBlock
+                                            label={t('settings.max_storage_bytes')}
+                                            hint={t('settings.max_storage_bytes_hint')}
+                                            htmlFor="max-storage"
+                                            unit="GB"
+                                        >
+                                            <Input
+                                                id="max-storage"
+                                                type="number"
+                                                min="0"
+                                                step="0.1"
+                                                value={maxStorageGB}
+                                                onChange={e => setMaxStorageGB(Number(e.target.value))}
                                                 className="h-11 rounded-xl border-border/30 bg-background/50 text-sm shadow-sm transition-colors focus-visible:bg-background"
                                             />
                                         </FieldBlock>

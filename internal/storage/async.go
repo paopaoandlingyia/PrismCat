@@ -119,6 +119,22 @@ func (a *AsyncRepository) DeleteLogsBefore(beforeTime time.Time) (int64, error) 
 	return a.inner.DeleteLogsBefore(beforeTime)
 }
 
+func (a *AsyncRepository) DeleteOldestLogs(count int) (int64, error) {
+	return a.inner.DeleteOldestLogs(count)
+}
+
+func (a *AsyncRepository) CountDeletableLogs() (int64, error) {
+	return a.inner.CountDeletableLogs()
+}
+
+func (a *AsyncRepository) WALCheckpoint() error {
+	return a.inner.WALCheckpoint()
+}
+
+func (a *AsyncRepository) Vacuum() error {
+	return a.inner.Vacuum()
+}
+
 func (a *AsyncRepository) GetLogAnnotation(logID string) (LogAnnotation, error) {
 	return a.inner.GetLogAnnotation(logID)
 }

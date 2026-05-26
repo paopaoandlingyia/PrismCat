@@ -181,11 +181,13 @@ type LoggingConfig struct {
 type StorageConfig struct {
 	Database      string `yaml:"database"`
 	RetentionDays int    `yaml:"retention_days"`
+	// MaxStorageBytes caps total storage (database + blobs). When exceeded the
+	// oldest unsaved logs are deleted until usage drops below the limit. 0 disables.
+	MaxStorageBytes int64 `yaml:"max_storage_bytes"`
 
 	// BlobStore defines where detached bodies are stored.
 	// Supported values: "fs" (filesystem). (Others can be added later, e.g. "sqlite", "s3".)
 	BlobStore string `yaml:"blob_store"`
-	// BlobDir is used when BlobStore == "fs".
 	// BlobDir is used when BlobStore == "fs".
 	BlobDir string `yaml:"blob_dir"`
 	// AsyncBuffer controls the capacity of the async log queue.
@@ -276,6 +278,11 @@ func Load(path string) (*Config, error) {
 	if envRetention := os.Getenv("PRISMCAT_RETENTION_DAYS"); envRetention != "" {
 		if d, err := parsePort(envRetention); err == nil { // reuse parsePort for int
 			c.Storage.RetentionDays = d
+		}
+	}
+	if envMaxStorage := os.Getenv("PRISMCAT_MAX_STORAGE_BYTES"); envMaxStorage != "" {
+		if n, err := strconv.ParseInt(envMaxStorage, 10, 64); err == nil && n >= 0 {
+			c.Storage.MaxStorageBytes = n
 		}
 	}
 	if envAsyncBuffer := os.Getenv("PRISMCAT_ASYNC_BUFFER"); envAsyncBuffer != "" {

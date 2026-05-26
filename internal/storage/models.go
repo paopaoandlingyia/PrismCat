@@ -140,6 +140,10 @@ type Repository interface {
 	GetLog(id string) (*RequestLog, error)
 	ListLogs(filter LogFilter) ([]*RequestLog, int64, error) // 返回日志列表和总数
 	DeleteLogsBefore(before time.Time) (int64, error)        // 返回删除数量
+	DeleteOldestLogs(count int) (int64, error)               // 按时间正序删除最老的 count 条
+	CountDeletableLogs() (int64, error)                      // 统计可删除的日志数量
+	WALCheckpoint() error                                    // 截断 WAL 回收磁盘空间
+	Vacuum() error                                           // 重建数据库文件回收空间
 	GetLogAnnotation(logID string) (LogAnnotation, error)
 	SaveLogAnnotation(logID string, annotation LogAnnotation) (LogAnnotation, error)
 

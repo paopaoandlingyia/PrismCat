@@ -590,33 +590,117 @@ func (r *SQLiteRepository) ListLogs(filter LogFilter) ([]*RequestLog, int64, err
 	return logs, total, nil
 }
 
-func (r *SQLiteRepository) DeleteLogsBefore(before time.Time) (int64, error) {
-	tx, err := r.db.Begin()
-	if err != nil {
-		return 0, err
-	}
-	defer tx.Rollback()
+const deleteBatchSize = 2000
 
-	result, err := tx.Exec(`
-		DELETE FROM request_logs
-		WHERE created_at_unix_ms < ?
-		  AND id NOT IN (
-			SELECT log_id FROM log_annotations WHERE saved = 1
-		  )
-	`, before.UTC().UnixMilli())
-	if err != nil {
-		return 0, err
+func (r *SQLiteRepository) DeleteLogsBefore(before time.Time) (int64, error) {
+	cutoffMS := before.UTC().UnixMilli()
+	var totalDeleted int64
+	for {
+		tx, err := r.db.Begin()
+		if err != nil {
+			return totalDeleted, err
+		}
+
+		result, err := tx.Exec(`
+			DELETE FROM request_logs
+			WHERE id IN (
+				SELECT id FROM request_logs
+				WHERE created_at_unix_ms < ?
+				  AND id NOT IN (SELECT log_id FROM log_annotations WHERE saved = 1)
+				LIMIT ?
+			)
+		`, cutoffMS, deleteBatchSize)
+		if err != nil {
+			_ = tx.Rollback()
+			return totalDeleted, err
+		}
+		if _, err := tx.Exec(`
+			DELETE FROM log_annotations
+			WHERE log_id NOT IN (SELECT id FROM request_logs)
+		`); err != nil {
+			_ = tx.Rollback()
+			return totalDeleted, err
+		}
+		if err := tx.Commit(); err != nil {
+			return totalDeleted, err
+		}
+		n, _ := result.RowsAffected()
+		totalDeleted += n
+		if n < deleteBatchSize {
+			break
+		}
 	}
-	if _, err := tx.Exec(`
-		DELETE FROM log_annotations
-		WHERE log_id NOT IN (SELECT id FROM request_logs)
-	`); err != nil {
-		return 0, err
+	return totalDeleted, nil
+}
+
+// DeleteOldestLogs removes the oldest unsaved logs, up to count records.
+func (r *SQLiteRepository) DeleteOldestLogs(count int) (int64, error) {
+	if count <= 0 {
+		return 0, nil
 	}
-	if err := tx.Commit(); err != nil {
-		return 0, err
+	var totalDeleted int64
+	for count > 0 {
+		batch := count
+		if batch > deleteBatchSize {
+			batch = deleteBatchSize
+		}
+		tx, err := r.db.Begin()
+		if err != nil {
+			return totalDeleted, err
+		}
+		result, err := tx.Exec(`
+			DELETE FROM request_logs
+			WHERE id IN (
+				SELECT id FROM request_logs
+				WHERE id NOT IN (SELECT log_id FROM log_annotations WHERE saved = 1)
+				ORDER BY created_at_unix_ms ASC
+				LIMIT ?
+			)
+		`, batch)
+		if err != nil {
+			_ = tx.Rollback()
+			return totalDeleted, err
+		}
+		if _, err := tx.Exec(`
+			DELETE FROM log_annotations
+			WHERE log_id NOT IN (SELECT id FROM request_logs)
+		`); err != nil {
+			_ = tx.Rollback()
+			return totalDeleted, err
+		}
+		if err := tx.Commit(); err != nil {
+			return totalDeleted, err
+		}
+		n, _ := result.RowsAffected()
+		totalDeleted += n
+		count -= batch
+		if n < int64(batch) {
+			break
+		}
 	}
-	return result.RowsAffected()
+	return totalDeleted, nil
+}
+
+// WALCheckpoint truncates the WAL file to reclaim disk space.
+func (r *SQLiteRepository) WALCheckpoint() error {
+	_, err := r.db.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
+	return err
+}
+
+// CountDeletableLogs returns the number of logs not marked as saved.
+func (r *SQLiteRepository) CountDeletableLogs() (int64, error) {
+	var count int64
+	err := r.db.QueryRow(`
+		SELECT COUNT(*) FROM request_logs
+		WHERE id NOT IN (SELECT log_id FROM log_annotations WHERE saved = 1)
+	`).Scan(&count)
+	return count, err
+}
+
+// Vacuum rebuilds the database file to reclaim unused pages.
+func (r *SQLiteRepository) Vacuum() error {
+	_, err := r.db.Exec("VACUUM")
+	return err
 }
 
 func (r *SQLiteRepository) GetLogAnnotation(logID string) (LogAnnotation, error) {

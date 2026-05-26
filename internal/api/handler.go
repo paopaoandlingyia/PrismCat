@@ -704,10 +704,11 @@ func (h *Handler) handleConfig(w http.ResponseWriter, r *http.Request) {
 				"store_base64":                logging.StoreBase64,
 			},
 			"storage": map[string]interface{}{
-				"database":       storageCfg.Database,
-				"retention_days": storageCfg.RetentionDays,
-				"blob_store":     storageCfg.BlobStore,
-				"blob_dir":       storageCfg.BlobDir,
+				"database":          storageCfg.Database,
+				"retention_days":    storageCfg.RetentionDays,
+				"max_storage_bytes": storageCfg.MaxStorageBytes,
+				"blob_store":        storageCfg.BlobStore,
+				"blob_dir":          storageCfg.BlobDir,
 			},
 			"request_overrides": overrides,
 			"usage_extraction":  usageExtraction,
@@ -732,7 +733,8 @@ func (h *Handler) handleConfig(w http.ResponseWriter, r *http.Request) {
 				StoreBase64      *bool     `json:"store_base64"`
 			} `json:"logging"`
 			Storage *struct {
-				RetentionDays *int `json:"retention_days"`
+				RetentionDays   *int   `json:"retention_days"`
+				MaxStorageBytes *int64 `json:"max_storage_bytes"`
 			} `json:"storage"`
 			RequestOverrides *config.RequestOverridesConfig `json:"request_overrides"`
 			UsageExtraction  *config.UsageExtractionConfig  `json:"usage_extraction"`
@@ -781,6 +783,9 @@ func (h *Handler) handleConfig(w http.ResponseWriter, r *http.Request) {
 			if req.Storage != nil {
 				if req.Storage.RetentionDays != nil {
 					c.Storage.RetentionDays = *req.Storage.RetentionDays
+				}
+				if req.Storage.MaxStorageBytes != nil {
+					c.Storage.MaxStorageBytes = *req.Storage.MaxStorageBytes
 				}
 			}
 

@@ -95,3 +95,45 @@ func TestDeleteLogsBeforeKeepsSavedLogs(t *testing.T) {
 		t.Fatalf("new unsaved log should remain: %v", err)
 	}
 }
+
+func TestDeleteOldestLogsKeepsSavedLogsAndDeletesOldestUnsaved(t *testing.T) {
+	repo, err := NewSQLiteRepository(filepath.Join(t.TempDir(), "logs.db"))
+	if err != nil {
+		t.Fatalf("NewSQLiteRepository returned error: %v", err)
+	}
+	defer repo.Close()
+
+	baseTime := time.Date(2026, 5, 1, 10, 0, 0, 0, time.UTC)
+	for _, log := range []*RequestLog{
+		{ID: "old-saved", CreatedAt: baseTime, Upstream: "openai", TargetURL: "https://example.test", Method: "POST", Path: "/v1"},
+		{ID: "old-unsaved", CreatedAt: baseTime.Add(time.Minute), Upstream: "openai", TargetURL: "https://example.test", Method: "POST", Path: "/v1"},
+		{ID: "middle-unsaved", CreatedAt: baseTime.Add(2 * time.Minute), Upstream: "openai", TargetURL: "https://example.test", Method: "POST", Path: "/v1"},
+		{ID: "new-unsaved", CreatedAt: baseTime.Add(3 * time.Minute), Upstream: "openai", TargetURL: "https://example.test", Method: "POST", Path: "/v1"},
+	} {
+		if err := repo.SaveLog(log); err != nil {
+			t.Fatalf("SaveLog(%s) returned error: %v", log.ID, err)
+		}
+	}
+	if _, err := repo.SaveLogAnnotation("old-saved", LogAnnotation{Saved: true}); err != nil {
+		t.Fatalf("SaveLogAnnotation returned error: %v", err)
+	}
+
+	deleted, err := repo.DeleteOldestLogs(2)
+	if err != nil {
+		t.Fatalf("DeleteOldestLogs returned error: %v", err)
+	}
+	if deleted != 2 {
+		t.Fatalf("deleted = %d, want 2", deleted)
+	}
+
+	for _, id := range []string{"old-saved", "new-unsaved"} {
+		if _, err := repo.GetLog(id); err != nil {
+			t.Fatalf("%s should remain: %v", id, err)
+		}
+	}
+	for _, id := range []string{"old-unsaved", "middle-unsaved"} {
+		if _, err := repo.GetLog(id); err == nil {
+			t.Fatalf("%s should have been deleted", id)
+		}
+	}
+}

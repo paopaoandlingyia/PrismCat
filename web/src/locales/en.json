@@ -283,6 +283,8 @@
         "body_preview_bytes_hint": "Controls how much readable Body preview is kept when writing logs. Lower it for long-running high-frequency use to reduce write and storage cost; raise it for low-frequency debugging to preview more content immediately.",
         "retention_days": "Log Retention Days",
         "retention_days_hint": "Set to 0 for permanent retention",
+        "max_storage_bytes": "Max Storage",
+        "max_storage_bytes_hint": "When total storage (database + blob files) exceeds this limit, oldest unsaved logs are automatically cleaned up. Set to 0 for unlimited.",
         "retention_forever": "Permanent retention",
         "days": "days",
         "database_path": "Database Path",

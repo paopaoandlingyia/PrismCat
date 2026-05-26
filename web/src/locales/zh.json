@@ -283,6 +283,8 @@
         "body_preview_bytes_hint": "控制写入日志时保留的 Body 预览大小。长期高频运行可适当调小，降低日志写入和存储成本；低频调试可调大，便于详情页直接预览更多内容。",
         "retention_days": "日志保留天数",
         "retention_days_hint": "设为 0 表示永久保留",
+        "max_storage_bytes": "最大存储空间",
+        "max_storage_bytes_hint": "总存储（数据库 + Blob 文件）超过此上限时，自动从最旧日志开始清理。设为 0 表示不限制。",
         "retention_forever": "永久保留",
         "days": "天",
         "database_path": "数据库路径",

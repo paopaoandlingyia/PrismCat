@@ -49,6 +49,11 @@ func (r *proxyTestRepo) DeleteLogsBefore(before time.Time) (int64, error) {
 	return 0, nil
 }
 
+func (r *proxyTestRepo) DeleteOldestLogs(count int) (int64, error) { return 0, nil }
+func (r *proxyTestRepo) CountDeletableLogs() (int64, error)       { return 0, nil }
+func (r *proxyTestRepo) WALCheckpoint() error                     { return nil }
+func (r *proxyTestRepo) Vacuum() error                            { return nil }
+
 func (r *proxyTestRepo) GetLogAnnotation(logID string) (storage.LogAnnotation, error) {
 	return storage.LogAnnotation{}, errors.New("not implemented")
 }

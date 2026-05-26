@@ -39,6 +39,7 @@ logging:
 storage:
   database: "data/prismcat.db"
   retention_days: 7
+  max_storage_bytes: 0            # 0 = no limit
   blob_store: "fs"
   blob_dir: "data/blobs"
 
@@ -169,33 +170,65 @@ func main() {
 		ticker := time.NewTicker(1 * time.Minute)
 		defer ticker.Stop()
 
-		var lastCleanup time.Time
+		var lastRetention time.Time
 		var lastBlobGC time.Time
+		var lastSizeCheck time.Time
 		for {
-			retentionDays := cfg.StorageSnapshot().RetentionDays
-			if retentionDays > 0 && (lastCleanup.IsZero() || time.Since(lastCleanup) >= 6*time.Hour) {
-				before := time.Now().Add(-time.Duration(retentionDays) * 24 * time.Hour)
-				deleted, err := asyncRepo.DeleteLogsBefore(before)
+			storageCfg := cfg.StorageSnapshot()
+			var totalDeleted int64
+
+			// 1. Time-based retention.
+			if storageCfg.RetentionDays > 0 && (lastRetention.IsZero() || time.Since(lastRetention) >= 6*time.Hour) {
+				before := time.Now().Add(-time.Duration(storageCfg.RetentionDays) * 24 * time.Hour)
+				n, err := asyncRepo.DeleteLogsBefore(before)
 				if err != nil {
 					log.Printf("log retention cleanup failed: %v", err)
-				} else if deleted > 0 {
-					log.Printf("deleted %d logs older than %d days", deleted, retentionDays)
+				} else if n > 0 {
+					log.Printf("deleted %d logs older than %d days", n, storageCfg.RetentionDays)
 				}
-
-				if fsStore, ok := blobStore.(*storage.FileBlobStore); ok {
-					if lastBlobGC.IsZero() || time.Since(lastBlobGC) >= 24*time.Hour {
-						if refs, err := sqliteRepo.ListBlobRefs(); err != nil {
-							log.Printf("blob GC list refs failed: %v", err)
-						} else if n, err := fsStore.GarbageCollect(context.Background(), refs, time.Hour); err != nil {
-							log.Printf("blob GC failed: %v", err)
-						} else if n > 0 {
-							log.Printf("deleted %d unreferenced blobs", n)
-						}
-						lastBlobGC = time.Now()
-					}
-				}
-				lastCleanup = time.Now()
+				totalDeleted += n
+				lastRetention = time.Now()
 			}
+
+			// 2. Size-based cleanup. Reclaim orphaned blobs/free DB pages first;
+			// delete logs only if the storage limit is still exceeded.
+			if storageCfg.MaxStorageBytes > 0 && (lastSizeCheck.IsZero() || time.Since(lastSizeCheck) >= 6*time.Hour) {
+				var fsStore *storage.FileBlobStore
+				if s, ok := blobStore.(*storage.FileBlobStore); ok {
+					fsStore = s
+				}
+				result, err := cleanupStorageLimit(context.Background(), storageCfg, asyncRepo, sqliteRepo, fsStore, nil, log.Printf)
+				if err != nil {
+					log.Printf("size-based cleanup failed: %v", err)
+				}
+				totalDeleted += result.DeletedLogs
+				if result.RanBlobGC {
+					lastBlobGC = time.Now()
+				}
+				lastSizeCheck = time.Now()
+			}
+
+			// 3. Blob GC (independent of retention setting).
+			if fsStore, ok := blobStore.(*storage.FileBlobStore); ok {
+				if lastBlobGC.IsZero() || time.Since(lastBlobGC) >= 24*time.Hour {
+					if refs, err := sqliteRepo.ListBlobRefs(); err != nil {
+						log.Printf("blob GC list refs failed: %v", err)
+					} else if n, err := fsStore.GarbageCollect(context.Background(), refs, time.Hour); err != nil {
+						log.Printf("blob GC failed: %v", err)
+					} else if n > 0 {
+						log.Printf("deleted %d unreferenced blobs", n)
+					}
+					lastBlobGC = time.Now()
+				}
+			}
+
+			// 4. WAL checkpoint after significant deletions.
+			if totalDeleted >= 500 {
+				if err := asyncRepo.WALCheckpoint(); err != nil {
+					log.Printf("WAL checkpoint failed: %v", err)
+				}
+			}
+
 			select {
 			case <-ticker.C:
 			case <-stopRetention:
