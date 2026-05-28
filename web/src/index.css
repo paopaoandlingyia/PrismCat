@@ -93,13 +93,8 @@
 
 
 @layer base {
-  html {
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
-
   body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Roboto, sans-serif;
     min-height: 100vh;
   }
 
@@ -148,7 +143,7 @@
 /* 代码块样式 */
 pre,
 code {
-  font-family: 'Fira Code', 'JetBrains Mono', Consolas, Monaco, monospace;
+  font-family: 'Fira Code', 'JetBrains Mono', Consolas, Monaco, 'PingFang SC', 'Microsoft YaHei', monospace;
 }
 
 /* 动画 */

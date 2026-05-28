@@ -167,7 +167,7 @@ export function JsonViewer({ data, initialExpanded = true, expandMode = 'default
     });
 
     return (
-        <div className="font-mono text-[11px] leading-relaxed select-text">
+        <div className="font-mono text-[13px] leading-relaxed select-text">
             <CollapsibleNode data={rootData} label="" isRoot initialExpanded={rootInitialExpanded} depth={0} expandMode={expandMode} searchTerm={searchTerm} />
         </div>
     );
@@ -348,11 +348,6 @@ function createExpansionSnapshot({
     };
 }
 
-/** Produce a CSS indent string for the given depth (2 spaces per level). */
-function indent(depth: number): string {
-    return '\u00A0\u00A0'.repeat(depth); // Non-breaking spaces × 2 per level
-}
-
 function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, initialExpanded = true, forceExpanded = false, suffix = null, depth = 0, expandMode = 'default', searchTerm }: {
     data: JsonContainer;
     label: string;
@@ -405,7 +400,6 @@ function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, ini
     const isEmpty = entries.length === 0;
     const [open, close] = isArray ? ['[', ']'] : ['{', '}'];
     const showLabel = !isRoot && !isArrayItem;
-    const pad = indent(depth);
     const sampledArrayShapes = useMemo(() => {
         if (!Array.isArray(data)) return null;
 
@@ -440,7 +434,6 @@ function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, ini
     if (isEmpty) {
         return (
             <div>
-                <span className="text-muted-foreground/30 select-none">{pad}</span>
                 {showLabel && <span className="text-violet-600 dark:text-violet-400 font-semibold mr-1">"<HighlightText text={label} searchTerm={searchTerm} />": </span>}
                 <span className="text-muted-foreground/60">{open}{close}</span>{suffix}
             </div>
@@ -454,7 +447,6 @@ function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, ini
                 className="cursor-pointer hover:bg-muted/30 rounded-sm transition-colors flex items-center w-fit"
                 onClick={() => setExpanded(!expanded)}
             >
-                <span className="text-muted-foreground/30 select-none">{pad}</span>
                 {showLabel && <span className="text-violet-600 dark:text-violet-400 font-semibold mr-1">"<HighlightText text={label} searchTerm={searchTerm} />": </span>}
                 <span className="text-muted-foreground/60">{open}</span>
                 {!expanded && (
@@ -467,41 +459,43 @@ function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, ini
                 )}
             </div>
 
-            {/* Children - each indented one level deeper */}
-            {expanded && entries.map(([key, value], idx) => {
-                const comma = idx < entries.length - 1 ? <span className="text-muted-foreground/40">,</span> : null;
-                if (typeof value === 'object' && value !== null) {
-                    const forceExpandChild = shouldForceExpandArrayChild(idx, value);
-                    return (
-                        <CollapsibleNode
-                            key={key}
-                            data={Array.isArray(value) || isRecord(value) ? value : {}}
-                            label={key}
-                            isArrayItem={isArray}
-                            initialExpanded={forceExpandChild || (depth === 0 && idx < 3)}
-                            forceExpanded={forceExpandChild}
-                            suffix={comma}
-                            depth={depth + 1}
-                            expandMode={expandMode}
-                            searchTerm={searchTerm}
-                        />
-                    );
-                }
-                return (
-                    <div key={key} className="flex items-start">
-                        <span className="text-muted-foreground/30 select-none shrink-0">{indent(depth + 1)}</span>
-                        {!isArray && <span className="text-violet-600 dark:text-violet-400 font-semibold mr-1 shrink-0">"<HighlightText text={key} searchTerm={searchTerm} />": </span>}
-                        <span className="flex-1 min-w-0 break-all">
-                            <ValueNode value={value} searchTerm={searchTerm} />{comma}
-                        </span>
-                    </div>
-                );
-            })}
+            {/* Children - wrapped in a container that draws the indent guide */}
+            {expanded && (
+                <div className="ml-[1ch] border-l border-muted-foreground/15 pl-[1ch]">
+                    {entries.map(([key, value], idx) => {
+                        const comma = idx < entries.length - 1 ? <span className="text-muted-foreground/40">,</span> : null;
+                        if (typeof value === 'object' && value !== null) {
+                            const forceExpandChild = shouldForceExpandArrayChild(idx, value);
+                            return (
+                                <CollapsibleNode
+                                    key={key}
+                                    data={Array.isArray(value) || isRecord(value) ? value : {}}
+                                    label={key}
+                                    isArrayItem={isArray}
+                                    initialExpanded={forceExpandChild || (depth === 0 && idx < 3)}
+                                    forceExpanded={forceExpandChild}
+                                    suffix={comma}
+                                    depth={depth + 1}
+                                    expandMode={expandMode}
+                                    searchTerm={searchTerm}
+                                />
+                            );
+                        }
+                        return (
+                            <div key={key} className="flex items-start">
+                                {!isArray && <span className="text-violet-600 dark:text-violet-400 font-semibold mr-1 shrink-0">"<HighlightText text={key} searchTerm={searchTerm} />": </span>}
+                                <span className="flex-1 min-w-0 break-all">
+                                    <ValueNode value={value} searchTerm={searchTerm} />{comma}
+                                </span>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
 
             {/* Footer: } or ] */}
             {expanded && (
                 <div>
-                    <span className="text-muted-foreground/30 select-none">{pad}</span>
                     <span className="text-muted-foreground/60">{close}</span>{suffix}
                 </div>
             )}
