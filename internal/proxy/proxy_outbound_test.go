@@ -115,3 +115,86 @@ func TestProxyDirectOutboundProxyBypassesProxy(t *testing.T) {
 		t.Fatalf("proxy hits = %d, want 0", got)
 	}
 }
+
+func TestProxyFiltersUpstreamAccessControlResponseHeaders(t *testing.T) {
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "http://upstream.example")
+		w.Header().Set("Access-Control-Allow-Headers", "X-Upstream")
+		w.Header().Set("Access-Control-Expose-Headers", "X-Upstream-Expose")
+		w.Header().Set("X-Upstream", "ok")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("cors-ok"))
+	}))
+	defer target.Close()
+
+	cfg := &config.Config{
+		Server: config.ServerConfig{ProxyDomains: []string{"localhost"}},
+		Upstreams: map[string]config.UpstreamConfig{
+			"cors": {
+				Target: target.URL,
+			},
+		},
+	}
+
+	p := New(cfg, newProxyTestRepo(), nil, nil)
+	req := httptest.NewRequest(http.MethodGet, "http://cors.localhost:8080/api", nil)
+	req.Host = "cors.localhost:8080"
+	rr := httptest.NewRecorder()
+	rr.Header().Set("Access-Control-Allow-Origin", "*")
+	rr.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+
+	p.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	if got := rr.Header().Values("Access-Control-Allow-Origin"); len(got) != 1 || got[0] != "*" {
+		t.Fatalf("Access-Control-Allow-Origin = %q, want only [*]", got)
+	}
+	if got := rr.Header().Values("Access-Control-Allow-Headers"); len(got) != 0 {
+		t.Fatalf("Access-Control-Allow-Headers = %q, want filtered", got)
+	}
+	if got := rr.Header().Values("Access-Control-Expose-Headers"); len(got) != 0 {
+		t.Fatalf("Access-Control-Expose-Headers = %q, want filtered", got)
+	}
+	if got := rr.Header().Get("Access-Control-Allow-Methods"); got != "GET, POST, OPTIONS" {
+		t.Fatalf("Access-Control-Allow-Methods = %q, want PrismCat value", got)
+	}
+	if got := rr.Header().Get("X-Upstream"); got != "ok" {
+		t.Fatalf("X-Upstream = %q, want ok", got)
+	}
+}
+
+func TestProxyStillCopiesAccessControlRequestHeaders(t *testing.T) {
+	seen := make(chan string, 1)
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen <- r.Header.Get("Access-Control-Request-Headers")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("request-header-ok"))
+	}))
+	defer target.Close()
+
+	cfg := &config.Config{
+		Server: config.ServerConfig{ProxyDomains: []string{"localhost"}},
+		Upstreams: map[string]config.UpstreamConfig{
+			"corsreq": {
+				Target: target.URL,
+			},
+		},
+	}
+
+	p := New(cfg, newProxyTestRepo(), nil, nil)
+	req := httptest.NewRequest(http.MethodGet, "http://corsreq.localhost:8080/api", nil)
+	req.Host = "corsreq.localhost:8080"
+	req.Header.Set("Access-Control-Request-Headers", "X-Debug")
+	rr := httptest.NewRecorder()
+
+	p.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	if got := <-seen; got != "X-Debug" {
+		t.Fatalf("upstream Access-Control-Request-Headers = %q, want X-Debug", got)
+	}
+}

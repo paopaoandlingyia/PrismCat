@@ -268,7 +268,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	logMu.Unlock()
 
 	// Forward response headers and status code.
-	p.copyHeaders(w.Header(), resp.Header)
+	p.copyResponseHeaders(w.Header(), resp.Header)
 	w.WriteHeader(resp.StatusCode)
 
 	// Forward response body while capturing a bounded preview for logging.
@@ -478,6 +478,28 @@ func (p *Proxy) copyHeaders(dst, src http.Header) {
 			dst.Add(k, v)
 		}
 	}
+}
+
+// copyResponseHeaders copies upstream response headers while keeping CORS policy
+// under PrismCat's control.
+func (p *Proxy) copyResponseHeaders(dst, src http.Header) {
+	// RFC 7230 section 6.1: headers listed in "Connection" are hop-by-hop too.
+	connectionTokens := parseConnectionHeader(src.Values("Connection"))
+
+	for k, vv := range src {
+		if isHopByHopHeader(k) ||
+			connectionTokens[textproto.CanonicalMIMEHeaderKey(k)] ||
+			isAccessControlHeader(k) {
+			continue
+		}
+		for _, v := range vv {
+			dst.Add(k, v)
+		}
+	}
+}
+
+func isAccessControlHeader(header string) bool {
+	return strings.HasPrefix(strings.ToLower(header), "access-control-")
 }
 
 // sanitizeHeaders masks configured sensitive headers.
