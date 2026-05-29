@@ -12,7 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var Version = "1.8.0"
+var Version = "1.9.0"
 
 const DefaultUpstreamTimeoutSeconds = 120
 
