@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Network, AlertCircle, Search, X, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -25,19 +25,26 @@ export function Traces() {
   })
   const [draftFilter, setDraftFilter] = useState<TraceFilter>({ ...filter })
 
-  const loadTraces = useCallback(async (f: TraceFilter) => {
-    try {
-      const res = await fetchTraces(f)
-      setTraces(res.traces || [])
-      setTotal(res.total)
-    } catch {
-      toast.error(t('traces.load_failed'))
-    }
-  }, [t])
-
   useEffect(() => {
-    loadTraces(filter)
-  }, [filter, loadTraces])
+    let cancelled = false
+
+    async function load() {
+      try {
+        const res = await fetchTraces(filter)
+        if (cancelled) return
+        setTraces(res.traces || [])
+        setTotal(res.total)
+      } catch {
+        if (!cancelled) toast.error(t('traces.load_failed'))
+      }
+    }
+
+    void load()
+
+    return () => {
+      cancelled = true
+    }
+  }, [filter, t])
 
   useEffect(() => {
     fetchUpstreams().then(setUpstreams).catch(() => {})

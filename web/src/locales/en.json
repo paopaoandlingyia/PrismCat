@@ -134,6 +134,7 @@
         "usage_output": "Output",
         "usage_total": "Total",
         "request_override": "Request Override",
+        "request_body_original_fallback": "Original body before failed override",
         "header_changes": "Header Changes",
         "open_diff": "Open Diff",
         "copy_as_curl": "Copy as cURL",

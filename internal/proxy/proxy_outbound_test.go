@@ -4,11 +4,24 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/paopaoandlingyia/PrismCat/internal/config"
+	"github.com/paopaoandlingyia/PrismCat/internal/storage"
 )
+
+type preparingProxyTestRepo struct {
+	*proxyTestRepo
+	cfg *config.Config
+}
+
+func (r *preparingProxyTestRepo) SaveLog(log *storage.RequestLog) error {
+	entry := log.Clone()
+	storage.PrepareLogForPersistence(entry, r.cfg)
+	return r.proxyTestRepo.SaveLog(entry)
+}
 
 func TestProxyUsesUpstreamOutboundProxy(t *testing.T) {
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -196,5 +209,99 @@ func TestProxyStillCopiesAccessControlRequestHeaders(t *testing.T) {
 	}
 	if got := <-seen; got != "X-Debug" {
 		t.Fatalf("upstream Access-Control-Request-Headers = %q, want X-Debug", got)
+	}
+}
+
+func TestProxyPersistsOriginalBodyWhenRequestOverrideFails(t *testing.T) {
+	const requestBody = `{"system":"not-array","messages":[]}`
+
+	var targetHits int32
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&targetHits, 1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer target.Close()
+
+	cfg := &config.Config{
+		Server: config.ServerConfig{ProxyDomains: []string{"localhost"}},
+		Upstreams: map[string]config.UpstreamConfig{
+			"claude": {
+				Target: target.URL,
+			},
+		},
+		Logging: config.LoggingConfig{
+			MaxRequestBody:   1024,
+			MaxResponseBody:  1024,
+			BodyPreviewBytes: 1024,
+			SensitiveHeaders: []string{"Authorization", "x-api-key", "api-key"},
+			StoreBase64:      true,
+		},
+		Overrides: config.RequestOverridesConfig{
+			Enabled:      true,
+			MaxBodyBytes: 1024,
+			Upstreams: map[string]config.RequestOverrideUpstreamBinding{
+				"claude": {
+					Enabled:   true,
+					RuleNames: []string{"prepend system"},
+				},
+			},
+			Rules: []config.RequestOverrideRule{
+				{
+					Name:    "prepend system",
+					Enabled: true,
+					Match: config.RequestOverrideMatch{
+						Methods: []string{http.MethodPost},
+					},
+					Patch: []config.RequestOverridePatch{
+						{
+							Op:    "prepend",
+							Path:  "system",
+							Value: map[string]interface{}{"type": "text", "text": "injected"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	baseRepo := newProxyTestRepo()
+	repo := &preparingProxyTestRepo{proxyTestRepo: baseRepo, cfg: cfg}
+	p := New(cfg, repo, nil, nil)
+	req := httptest.NewRequest(http.MethodPost, "http://claude.localhost:8080/v1/messages", strings.NewReader(requestBody))
+	req.Host = "claude.localhost:8080"
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	p.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	if got := atomic.LoadInt32(&targetHits); got != 0 {
+		t.Fatalf("target hits = %d, want 0", got)
+	}
+
+	var finalLog *storage.RequestLog
+	for {
+		select {
+		case saved := <-baseRepo.saved:
+			finalLog = saved
+		default:
+			goto drained
+		}
+	}
+
+drained:
+	if finalLog == nil {
+		t.Fatal("no log was saved")
+	}
+	if finalLog.RequestOverrideError == "" {
+		t.Fatal("request override error was not persisted")
+	}
+	if finalLog.RequestBody != "" {
+		t.Fatalf("request body = %q, want empty forwarded body", finalLog.RequestBody)
+	}
+	if finalLog.RequestBodyOriginal != requestBody {
+		t.Fatalf("request body original = %q, want %q", finalLog.RequestBodyOriginal, requestBody)
 	}
 }

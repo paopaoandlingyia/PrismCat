@@ -37,7 +37,7 @@ export function TraceDetail() {
     loadDetail()
   }, [loadDetail])
 
-  const requests = detail?.requests ?? []
+  const requests = useMemo(() => detail?.requests ?? [], [detail?.requests])
   const summary = detail?.summary
 
   const maxLatency = useMemo(

@@ -134,6 +134,7 @@
         "usage_output": "输出",
         "usage_total": "总计",
         "request_override": "参数覆盖",
+        "request_body_original_fallback": "覆盖失败前的原始请求体",
         "header_changes": "Header 变更",
         "open_diff": "打开 Diff",
         "copy_as_curl": "复制为 cURL",

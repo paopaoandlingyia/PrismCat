@@ -5,10 +5,11 @@ import type { LiveLogEvent, RequestLog } from '@/lib/api'
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { JsonViewer, type JsonExpandMode, HighlightText, countJsonSearchMatches } from './JsonViewer'
+import { JsonViewer, type JsonExpandMode, HighlightText } from './JsonViewer'
 import { JsonDiffViewer } from './JsonDiffViewer'
 import { BlobPanel } from './BlobPanel'
 import { mergeStreamBody } from '@/lib/streamMerge'
+import { countJsonSearchMatches } from '@/lib/jsonSearch'
 import { logRequestDiffPath } from '@/lib/routes'
 import { buildCurlCommand } from '@/lib/curlExport'
 import {
@@ -325,11 +326,21 @@ export function LogDetail({
         }
     }, [displayLog?.streaming, responseViewMode])
 
-    const effectiveRequestBody = fullRequestBody ?? displayLog?.request_body ?? ''
+    const capturedRequestBody = fullRequestBody ?? displayLog?.request_body ?? ''
     const effectiveResponseBody = fullResponseBody ?? displayLog?.response_body ?? ''
     const originalRequestBody = displayLog?.request_body_original ?? ''
-    const finalRequestBody = displayLog?.request_body_final ?? (originalRequestBody ? effectiveRequestBody : '')
+    const showsOriginalRequestBody = Boolean(
+        displayLog?.request_override_error &&
+        !displayLog?.request_body_ref &&
+        !capturedRequestBody &&
+        originalRequestBody,
+    )
+    const effectiveRequestBody = showsOriginalRequestBody ? originalRequestBody : capturedRequestBody
+    const finalRequestBody = displayLog?.request_body_final ?? (originalRequestBody ? capturedRequestBody : '')
     const hasRequestBodyDiff = Boolean(originalRequestBody && finalRequestBody && originalRequestBody !== finalRequestBody)
+    const requestBodyDisplaySize = showsOriginalRequestBody
+        ? textByteSize(originalRequestBody)
+        : displayLog?.request_body_size ?? 0
     const requestContentType = firstHeaderValue(displayLog?.request_headers, 'Content-Type')
     const responseContentType = firstHeaderValue(displayLog?.response_headers, 'Content-Type')
     const requestBodyIsBinary = isBinaryPlaceholder(effectiveRequestBody)
@@ -407,6 +418,8 @@ export function LogDetail({
         if (!currentLog.request_body_final && currentLog.request_body_ref && !fullRequestBody) {
             body = (await fetchLogBody(currentLog.id, 'request')).body
             startTransition(() => setFullRequestBody(body))
+        } else if (!body && currentLog.request_override_error) {
+            body = currentLog.request_body_original || ''
         }
         await copyToClipboard(buildCurlCommand(currentLog, body), 'curl')
     }
@@ -1071,7 +1084,7 @@ export function LogDetail({
                                 icon={FileCode}
                                 extra={
                                     <div className="flex items-center gap-2">
-                                        <span className="text-xs font-bold text-muted-foreground">{formatSize(displayLog.request_body_size)}</span>
+                                        <span className="text-xs font-bold text-muted-foreground">{formatSize(requestBodyDisplaySize)}</span>
                                         {displayLog.truncated && (
                                             <Badge variant="outline" className="h-5 text-[11px] border-yellow-500/40 text-yellow-600 dark:text-yellow-500 bg-yellow-500/5 px-1.5 font-semibold">
                                                 {t('log_detail.truncated_tag', 'TRUNCATED')}
@@ -1097,6 +1110,12 @@ export function LogDetail({
                                                 setFullRequestBody(null)
                                             }}
                                         />
+                                    )}
+
+                                    {showsOriginalRequestBody && (
+                                        <Badge variant="outline" className="w-fit border-amber-500/30 bg-amber-500/5 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+                                            {t('log_detail.request_body_original_fallback', 'Original body before failed override')}
+                                        </Badge>
                                     )}
 
                                     {effectiveRequestBody && !(requestBodyIsBinary && displayLog.request_body_ref) ? (
@@ -1427,6 +1446,10 @@ function parseLabelDraft(value: string) {
             labels.push(label)
         })
     return labels
+}
+
+function textByteSize(text: string) {
+    return new TextEncoder().encode(text).length
 }
 
 function firstHeaderValue(headers: Record<string, string[]> | undefined, name: string) {
