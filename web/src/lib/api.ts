@@ -96,6 +96,7 @@ export interface Upstream {
     timeout: number
     order: number
     outbound_proxy: string
+    logging_enabled: boolean
 }
 
 // 查询过滤参数
@@ -273,13 +274,14 @@ export async function addUpstream(
     timeout: number = DEFAULT_UPSTREAM_TIMEOUT_SECONDS,
     order: number = 0,
     outbound_proxy: string = 'env',
+    logging_enabled: boolean = true,
 ): Promise<void> {
     const response = await fetch(`${API_BASE}/upstreams`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name, target, timeout, order, outbound_proxy }),
+        body: JSON.stringify({ name, target, timeout, order, outbound_proxy, logging_enabled }),
     })
     if (!response.ok) {
         const error = await response.json().catch(() => ({ error: '请求失败' }))

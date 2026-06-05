@@ -80,6 +80,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid upstream outbound proxy config", http.StatusInternalServerError)
 		return
 	}
+	loggingEnabled := !upstream.LoggingDisabled
 
 	targetURL, err := url.Parse(upstream.Target)
 	if err != nil {
@@ -92,7 +93,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Initial log entry (best-effort). This allows the UI to show in-flight requests.
 	traceID := strings.TrimSpace(r.Header.Get("X-PrismCat-Trace-ID"))
 	var traceSeq int
-	if traceID != "" && p.traceSeq != nil {
+	if loggingEnabled && traceID != "" && p.traceSeq != nil {
 		traceSeq = p.traceSeq.Next(traceID)
 	}
 
@@ -110,10 +111,12 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		RequestHeaders: p.sanitizeHeaders(r.Header, loggingCfg.SensitiveHeaders),
 	}
-	logMu.Lock()
-	p.saveLogSnapshot(logEntry)
-	p.publishInitialLive(logEntry)
-	logMu.Unlock()
+	if loggingEnabled {
+		logMu.Lock()
+		p.saveLogSnapshot(logEntry)
+		p.publishInitialLive(logEntry)
+		logMu.Unlock()
+	}
 
 	// Per-request timeout: do NOT mutate a shared http.Client timeout.
 	timeoutSeconds := upstream.Timeout
@@ -124,7 +127,10 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	// Capture request body for logging while streaming it to the upstream (no truncation of forwarding).
-	reqCapture := newLimitedCapture(loggingCfg.MaxRequestBody)
+	var reqCapture *limitedCapture
+	if loggingEnabled {
+		reqCapture = newLimitedCapture(loggingCfg.MaxRequestBody)
+	}
 	var body io.Reader
 	var contentLength = r.ContentLength
 	requestBodySource := r.Body
@@ -143,8 +149,10 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			logMu.Lock()
 			logEntry.Error = fmt.Sprintf("request override failed: %v", readErr)
 			logEntry.RequestOverrideError = readErr.Error()
-			p.finalizeAndSaveLog(logEntry, startTime, reqCapture, nil)
-			p.completeLive(logEntry)
+			if loggingEnabled {
+				p.finalizeAndSaveLog(logEntry, startTime, reqCapture, nil)
+				p.completeLive(logEntry)
+			}
 			logMu.Unlock()
 			http.Error(w, "request override failed: "+readErr.Error(), http.StatusBadRequest)
 			return
@@ -161,8 +169,10 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				logEntry.Error = fmt.Sprintf("request override failed: %v", applyErr)
 				logEntry.RequestOverrideError = applyErr.Error()
 				logEntry.RequestBodyOriginalRaw = append([]byte(nil), rawBody...)
-				p.finalizeAndSaveLog(logEntry, startTime, reqCapture, nil)
-				p.completeLive(logEntry)
+				if loggingEnabled {
+					p.finalizeAndSaveLog(logEntry, startTime, reqCapture, nil)
+					p.completeLive(logEntry)
+				}
 				logMu.Unlock()
 				http.Error(w, "request override failed: "+applyErr.Error(), http.StatusBadRequest)
 				return
@@ -182,32 +192,36 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if requestBodySource != nil && requestBodySource != http.NoBody {
-		tee := io.TeeReader(requestBodySource, reqCapture)
-		rc := &teeReadCloser{r: tee, c: requestBodySource}
-		if p.live != nil || loggingCfg.EarlyRequestBodySnapshot {
-			bodyDone := make(chan struct{})
-			body = &eofNotifyReadCloser{rc: rc, done: bodyDone}
+		if loggingEnabled {
+			tee := io.TeeReader(requestBodySource, reqCapture)
+			rc := &teeReadCloser{r: tee, c: requestBodySource}
+			if p.live != nil || loggingCfg.EarlyRequestBodySnapshot {
+				bodyDone := make(chan struct{})
+				body = &eofNotifyReadCloser{rc: rc, done: bodyDone}
 
-			// Publish the request body to the live detail view once it has been sent
-			// upstream. Persisting this in-flight snapshot remains optional because it
-			// adds an extra DB write per request.
-			go func() {
-				select {
-				case <-bodyDone:
-				case <-ctx.Done():
-					// Avoid leaking goroutines if the transport never fully reads the body.
-				}
+				// Publish the request body to the live detail view once it has been sent
+				// upstream. Persisting this in-flight snapshot remains optional because it
+				// adds an extra DB write per request.
+				go func() {
+					select {
+					case <-bodyDone:
+					case <-ctx.Done():
+						// Avoid leaking goroutines if the transport never fully reads the body.
+					}
 
-				logMu.Lock()
-				p.applyRequestCapture(logEntry, reqCapture)
-				if loggingCfg.EarlyRequestBodySnapshot {
-					p.saveLogSnapshot(logEntry)
-				}
-				p.publishRequestReady(logEntry)
-				logMu.Unlock()
-			}()
+					logMu.Lock()
+					p.applyRequestCapture(logEntry, reqCapture)
+					if loggingCfg.EarlyRequestBodySnapshot {
+						p.saveLogSnapshot(logEntry)
+					}
+					p.publishRequestReady(logEntry)
+					logMu.Unlock()
+				}()
+			} else {
+				body = rc
+			}
 		} else {
-			body = rc
+			body = requestBodySource
 		}
 	}
 
@@ -215,8 +229,10 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		logMu.Lock()
 		logEntry.Error = fmt.Sprintf("create upstream request: %v", err)
-		p.finalizeAndSaveLog(logEntry, startTime, reqCapture, nil)
-		p.completeLive(logEntry)
+		if loggingEnabled {
+			p.finalizeAndSaveLog(logEntry, startTime, reqCapture, nil)
+			p.completeLive(logEntry)
+		}
 		logMu.Unlock()
 		http.Error(w, "failed to create request", http.StatusInternalServerError)
 		return
@@ -252,8 +268,10 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		logMu.Lock()
 		logEntry.Error = fmt.Sprintf("upstream request failed: %v", err)
-		p.finalizeAndSaveLog(logEntry, startTime, reqCapture, nil)
-		p.completeLive(logEntry)
+		if loggingEnabled {
+			p.finalizeAndSaveLog(logEntry, startTime, reqCapture, nil)
+			p.completeLive(logEntry)
+		}
 		logMu.Unlock()
 		http.Error(w, fmt.Sprintf("upstream error: %v", err), http.StatusBadGateway)
 		return
@@ -264,7 +282,9 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	logEntry.StatusCode = resp.StatusCode
 	logEntry.ResponseHeaders = p.headerToMap(resp.Header)
 	logEntry.Streaming = isStreaming(resp.Header)
-	p.publishHeaders(logEntry)
+	if loggingEnabled {
+		p.publishHeaders(logEntry)
+	}
 	logMu.Unlock()
 
 	// Forward response headers and status code.
@@ -272,22 +292,36 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(resp.StatusCode)
 
 	// Forward response body while capturing a bounded preview for logging.
-	respCapture := newLimitedCapture(loggingCfg.MaxResponseBody)
+	var respCapture *limitedCapture
+	var respCaptureWriter io.Writer
+	if loggingEnabled {
+		respCapture = newLimitedCapture(loggingCfg.MaxResponseBody)
+		respCaptureWriter = respCapture
+	}
 	copied, copyErr := copyWithOptionalFlush(
 		w,
 		resp.Body,
-		respCapture,
+		respCaptureWriter,
 		logEntry.Streaming,
-		p.makeLiveChunkPublisher(logEntry, resp.Header),
+		p.makeLiveChunkPublisherIfEnabled(loggingEnabled, logEntry, resp.Header),
 	)
 	logMu.Lock()
 	logEntry.ResponseBodySize = copied
 	if copyErr != nil {
-		// The response may already be partially written; we can only record the error.
-		logEntry.Error = fmt.Sprintf("forward response failed: %v", copyErr)
+		// Client-side cancellation is common for streaming responses when callers
+		// stop after receiving enough data. Keep the partial capture, but do not
+		// classify it as an upstream/proxy failure.
+		if isClientCanceledResponse(r.Context(), copyErr) {
+			logEntry.Truncated = true
+		} else {
+			// The response may already be partially written; we can only record the error.
+			logEntry.Error = fmt.Sprintf("forward response failed: %v", copyErr)
+		}
 	}
-	p.finalizeAndSaveLog(logEntry, startTime, reqCapture, respCapture)
-	p.completeLive(logEntry)
+	if loggingEnabled {
+		p.finalizeAndSaveLog(logEntry, startTime, reqCapture, respCapture)
+		p.completeLive(logEntry)
+	}
 	logMu.Unlock()
 }
 
@@ -391,6 +425,13 @@ func (p *Proxy) makeLiveChunkPublisher(logEntry *storage.RequestLog, headers htt
 	return func(chunk []byte) {
 		p.publishResponseChunk(logEntry.ID, headers.Get("Content-Type"), chunk)
 	}
+}
+
+func (p *Proxy) makeLiveChunkPublisherIfEnabled(enabled bool, logEntry *storage.RequestLog, headers http.Header) func([]byte) {
+	if !enabled {
+		return nil
+	}
+	return p.makeLiveChunkPublisher(logEntry, headers)
 }
 
 func (p *Proxy) publishResponseChunk(id string, contentType string, chunk []byte) {
@@ -830,4 +871,8 @@ func copyWithOptionalFlush(dst http.ResponseWriter, src io.Reader, capture io.Wr
 			return total, err
 		}
 	}
+}
+
+func isClientCanceledResponse(ctx context.Context, err error) bool {
+	return err != nil && ctx != nil && errors.Is(ctx.Err(), context.Canceled)
 }

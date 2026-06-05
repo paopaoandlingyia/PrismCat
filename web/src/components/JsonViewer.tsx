@@ -28,6 +28,24 @@ const ROOT_AUTO_EXPAND_LIMIT = 12;
 const CHILD_AUTO_EXPAND_LIMIT = 6;
 const ARRAY_SHAPE_SAMPLE_SIZE = 5;
 const ARRAY_SHAPE_FORCE_EXPAND_LIMIT = 6;
+const BASE64_HEAD_REGEX = /^[A-Za-z0-9+/_-]+$/;
+const BASE64_SEGMENT_REGEX = /(data:[^\s]+?;base64,)?([A-Za-z0-9+/_-]{200,}[=]{0,2})/g;
+
+function isBase64Url(value: string) {
+    return /[-_]/.test(value);
+}
+
+function normalizeBase64(value: string) {
+    const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
+    const remainder = normalized.length % 4;
+    if (remainder === 0 || remainder === 1) return normalized;
+    return normalized + '='.repeat(4 - remainder);
+}
+
+function unknownBase64Label(value: string) {
+    if (value.startsWith('gAAAAA')) return 'Fernet Token';
+    return isBase64Url(value) ? 'Base64URL' : 'Base64';
+}
 
 /**
  * Detect whether a string is base64-encoded binary data.
@@ -35,9 +53,9 @@ const ARRAY_SHAPE_FORCE_EXPAND_LIMIT = 6;
  */
 function detectBase64(value: string): Base64Detection {
     if (value.length < 200) return NO_B64;
-    if (!/^[A-Za-z0-9+/]+$/.test(value.substring(0, 200))) return NO_B64;
+    if (!BASE64_HEAD_REGEX.test(value.substring(0, 200))) return NO_B64;
     try {
-        const decoded = atob(value.substring(0, 16));
+        const decoded = atob(normalizeBase64(value.substring(0, 16)));
         const b = new Uint8Array(decoded.length);
         for (let i = 0; i < decoded.length; i++) b[i] = decoded.charCodeAt(i);
 
@@ -51,7 +69,7 @@ function detectBase64(value: string): Base64Detection {
             return { isBase64: true, fileType: 'webp', isImage: true, mimeType: 'image/webp', label: 'WebP' };
         if (b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46)
             return { isBase64: true, fileType: 'pdf', isImage: false, mimeType: 'application/pdf', label: 'PDF' };
-        return { isBase64: true, fileType: 'unknown', isImage: false, label: 'Base64' };
+        return { isBase64: true, fileType: 'unknown', isImage: false, label: unknownBase64Label(value) };
     } catch {
         return NO_B64;
     }
@@ -143,7 +161,7 @@ export function SmartText({ text, searchTerm }: { text: string; searchTerm?: str
         if (isLargeText || !text || text.length < 200) return null;
         const parts: Seg[] = [];
         let lastIndex = 0, found = false;
-        const regex = /(data:[^\s]+?;base64,)?([A-Za-z0-9+/]{200,}[=]{0,2})/g;
+        const regex = new RegExp(BASE64_SEGMENT_REGEX);
         let match;
         while ((match = regex.exec(text)) !== null) {
             const prefix = match[1] || undefined;
@@ -512,8 +530,9 @@ function Base64Placeholder({ value, detection, dataUriPrefix }: {
 
     const imgSrc = useMemo(() => {
         if (!detection.isImage) return null;
-        if (dataUriPrefix) return `${dataUriPrefix}${value}`;
-        if (detection.mimeType) return `data:${detection.mimeType};base64,${value}`;
+        const imageData = normalizeBase64(value);
+        if (dataUriPrefix) return `${dataUriPrefix}${imageData}`;
+        if (detection.mimeType) return `data:${detection.mimeType};base64,${imageData}`;
         return null;
     }, [value, detection, dataUriPrefix]);
 

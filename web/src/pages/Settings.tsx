@@ -204,6 +204,7 @@ type EditingUpstream = {
     timeout: number
     order: number
     outboundProxy: string
+    loggingEnabled: boolean
     overrideEnabled: boolean
     ruleNames: string[]
     usageEnabled: boolean
@@ -496,6 +497,7 @@ export function Settings() {
     const [newTimeout, setNewTimeout] = useState(DEFAULT_UPSTREAM_TIMEOUT_SECONDS)
     const [newOrder, setNewOrder] = useState(100)
     const [newOutboundProxy, setNewOutboundProxy] = useState('env')
+    const [newLoggingEnabled, setNewLoggingEnabled] = useState(true)
     const [editingUpstream, setEditingUpstream] = useState<EditingUpstream | null>(null)
 
     const [enablePathRouting, setEnablePathRouting] = useState(false)
@@ -767,12 +769,13 @@ export function Settings() {
     const handleAddUpstream = async (e: FormEvent) => {
         e.preventDefault()
         try {
-            await addUpstream(newName, newTarget, newTimeout, newOrder, normalizedOutboundProxy(newOutboundProxy))
+            await addUpstream(newName, newTarget, newTimeout, newOrder, normalizedOutboundProxy(newOutboundProxy), newLoggingEnabled)
             setNewName('')
             setNewTarget('')
             setNewTimeout(DEFAULT_UPSTREAM_TIMEOUT_SECONDS)
             setNewOrder(prev => prev + 10)
             setNewOutboundProxy('env')
+            setNewLoggingEnabled(true)
             setShowAddForm(false)
             loadData()
             toast.success(t('settings.upstream_added'))
@@ -1014,6 +1017,7 @@ export function Settings() {
             timeout: upstream.timeout,
             order: upstream.order || 0,
             outboundProxy: upstream.outbound_proxy || 'env',
+            loggingEnabled: upstream.logging_enabled !== false,
             overrideEnabled: binding?.enabled ?? false,
             ruleNames: getBindingRuleNames(binding),
             usageEnabled: usageBinding?.enabled ?? false,
@@ -1067,6 +1071,7 @@ export function Settings() {
                 editingUpstream.timeout,
                 editingUpstream.order,
                 normalizedOutboundProxy(editingUpstream.outboundProxy),
+                editingUpstream.loggingEnabled,
             )
             await updateConfig({
                 request_overrides: buildOverridesPayload(nextBindings, overrideRules),
@@ -1185,6 +1190,14 @@ export function Settings() {
                                         t={t}
                                     />
                                 </FieldBlock>
+                                <div className="sm:col-span-2">
+                                    <ToggleSetting
+                                        label={t('upstream_manager.logging_enabled')}
+                                        description={t('upstream_manager.logging_enabled_hint')}
+                                        checked={editingUpstream.loggingEnabled}
+                                        onCheckedChange={(checked) => setEditingUpstream(current => current ? { ...current, loggingEnabled: checked } : current)}
+                                    />
+                                </div>
                             </div>
 
                             <div className="rounded-xl border border-border/50 bg-muted/20 p-4">
@@ -1504,6 +1517,15 @@ export function Settings() {
                                                     </div>
 
                                                     <div className="flex h-11 items-center">
+                                                        <ToggleSetting
+                                                            label={t('upstream_manager.logging_enabled')}
+                                                            description={t('upstream_manager.logging_enabled_hint')}
+                                                            checked={newLoggingEnabled}
+                                                            onCheckedChange={setNewLoggingEnabled}
+                                                        />
+                                                    </div>
+
+                                                    <div className="flex h-11 items-center">
                                                         <Button type="submit" variant="default" size="lg" className="h-11 rounded-xl min-w-[120px] font-medium shadow-sm whitespace-nowrap shrink-0">
                                                             <Save className="mr-1.5 h-4 w-4 shrink-0" />
                                                             {t('common.save')}
@@ -1550,6 +1572,11 @@ export function Settings() {
                                                                             {getBindingRuleNames(overrideBindings[upstream.name]).length
                                                                                 ? ` · ${getBindingRuleNames(overrideBindings[upstream.name]).length}`
                                                                                 : ''}
+                                                                        </Badge>
+                                                                    )}
+                                                                    {upstream.logging_enabled === false && (
+                                                                        <Badge variant="outline" className="rounded-full border-slate-500/30 bg-slate-500/10 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">
+                                                                            {t('upstream_manager.logging_disabled_badge')}
                                                                         </Badge>
                                                                     )}
                                                                 </div>

@@ -21,7 +21,7 @@ import (
 	"github.com/klauspost/compress/zstd"
 )
 
-var b64Regex = regexp.MustCompile(`(data:[^\s]+?;base64,)?([A-Za-z0-9+/]{200,}[=]{0,2})`)
+var b64Regex = regexp.MustCompile(`(data:[^\s]+?;base64,)?([A-Za-z0-9+/_-]{200,}[=]{0,2})`)
 
 type FormatOptions struct {
 	MaxOutputBytes               int64

@@ -3,6 +3,7 @@ package httpbody
 import (
 	"bytes"
 	"compress/gzip"
+	"encoding/base64"
 	"mime/multipart"
 	"net/textproto"
 	"strings"
@@ -82,6 +83,23 @@ func TestFormatForDisplayCanRequireContentEncodingDecode(t *testing.T) {
 	}
 	if formatted.Text == `{"already":"display"}` {
 		t.Fatalf("Text fell back to display body, want strict decode failure")
+	}
+}
+
+func TestFormatForDisplayTrimsLargeBase64URL(t *testing.T) {
+	token := base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{0xff}, 180))
+	body := []byte(`{"encrypted_content":"` + token + `"}`)
+
+	formatted := FormatForDisplay("application/json", "", body, FormatOptions{
+		MaxOutputBytes:  4096,
+		TrimLargeBase64: true,
+	})
+
+	if strings.Contains(formatted.Text, token) {
+		t.Fatalf("Text contains full Base64URL token, want trimmed output")
+	}
+	if !strings.Contains(formatted.Text, token[:200]) {
+		t.Fatalf("Text does not contain trimmed Base64URL prefix")
 	}
 }
 

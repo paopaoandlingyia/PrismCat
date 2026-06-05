@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -86,6 +87,18 @@ func TestProxyUsesUpstreamOutboundProxy(t *testing.T) {
 	}
 }
 
+func TestClientCanceledResponseIsNotForwardError(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if !isClientCanceledResponse(ctx, context.Canceled) {
+		t.Fatal("client-canceled response was not recognized")
+	}
+	if isClientCanceledResponse(context.Background(), context.Canceled) {
+		t.Fatal("context.Canceled without a canceled client context should remain an error")
+	}
+}
+
 func TestProxyDirectOutboundProxyBypassesProxy(t *testing.T) {
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -126,6 +139,52 @@ func TestProxyDirectOutboundProxyBypassesProxy(t *testing.T) {
 	}
 	if got := atomic.LoadInt32(&proxyHits); got != 0 {
 		t.Fatalf("proxy hits = %d, want 0", got)
+	}
+}
+
+func TestProxyCanDisableLoggingPerUpstream(t *testing.T) {
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/responses" {
+			t.Errorf("path = %q, want /v1/responses", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer target.Close()
+
+	cfg := &config.Config{
+		Server: config.ServerConfig{ProxyDomains: []string{"localhost"}},
+		Upstreams: map[string]config.UpstreamConfig{
+			"openai": {
+				Target:          target.URL,
+				LoggingDisabled: true,
+			},
+		},
+		Logging: config.LoggingConfig{
+			MaxRequestBody:   1024,
+			MaxResponseBody:  1024,
+			BodyPreviewBytes: 1024,
+			StoreBase64:      true,
+		},
+	}
+
+	repo := newProxyTestRepo()
+	p := New(cfg, repo, nil, nil)
+	req := httptest.NewRequest(http.MethodGet, "http://openai.localhost:8080/v1/responses", nil)
+	req.Host = "openai.localhost:8080"
+	rr := httptest.NewRecorder()
+
+	p.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	if rr.Body.String() != `{"ok":true}` {
+		t.Fatalf("body = %q, want upstream response", rr.Body.String())
+	}
+	if got := repo.count(); got != 0 {
+		t.Fatalf("saved logs = %d, want 0", got)
 	}
 }
 

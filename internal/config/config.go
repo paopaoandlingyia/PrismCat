@@ -66,10 +66,11 @@ type ServerConfig struct {
 
 // UpstreamConfig 上游配置
 type UpstreamConfig struct {
-	Target        string `yaml:"target"`
-	Timeout       int    `yaml:"timeout"` // 秒
-	Order         int    `yaml:"order,omitempty"`
-	OutboundProxy string `yaml:"outbound_proxy,omitempty"`
+	Target          string `yaml:"target"`
+	Timeout         int    `yaml:"timeout"` // 秒
+	Order           int    `yaml:"order,omitempty"`
+	OutboundProxy   string `yaml:"outbound_proxy,omitempty"`
+	LoggingDisabled bool   `yaml:"logging_disabled,omitempty"`
 }
 
 type RequestOverridesConfig struct {
