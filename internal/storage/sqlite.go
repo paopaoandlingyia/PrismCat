@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -466,6 +467,60 @@ func (r *SQLiteRepository) GetLog(id string) (*RequestLog, error) {
 }
 
 func (r *SQLiteRepository) ListLogs(filter LogFilter) ([]*RequestLog, int64, error) {
+	where, args := buildLogWhereClause(filter)
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM request_logs l LEFT JOIN log_annotations a ON a.log_id = l.id %s", where)
+	var total int64
+	if err := r.db.QueryRow(countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	// Pagination.
+	if filter.Limit <= 0 {
+		filter.Limit = 50
+	}
+	if filter.Limit > 1000 {
+		filter.Limit = 1000
+	}
+
+	query := fmt.Sprintf(`
+	SELECT l.id, l.created_at, l.upstream, l.target_url, l.method, l.path, l.query,
+		l.request_body_size, l.status_code, l.response_body_size,
+		l.streaming, l.latency_ms, l.error, l.truncated, l.tag, l.request_override_applied,
+		COALESCE(a.saved, 0), COALESCE(a.status, 'none'), COALESCE(a.note, ''), COALESCE(a.labels, '[]'),
+		COALESCE(a.created_at_unix_ms, 0), COALESCE(a.updated_at_unix_ms, 0),
+		l.trace_id, l.parent_log_id, l.trace_seq,
+		l.usage_input_tokens, l.usage_output_tokens, l.usage_total_tokens
+	FROM request_logs l
+	LEFT JOIN log_annotations a ON a.log_id = l.id
+	%s
+	ORDER BY l.created_at_unix_ms DESC, l.created_at DESC
+	LIMIT ? OFFSET ?
+	`, where)
+
+	args = append(args, filter.Limit, filter.Offset)
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var logs []*RequestLog
+	for rows.Next() {
+		log, err := r.scanLogSummary(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		logs = append(logs, log)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return logs, total, nil
+}
+
+func buildLogWhereClause(filter LogFilter) (string, []interface{}) {
 	var conditions []string
 	var args []interface{}
 
@@ -528,66 +583,51 @@ func (r *SQLiteRepository) ListLogs(filter LogFilter) ([]*RequestLog, int64, err
 		args = append(args, filter.Label)
 	}
 
-	where := ""
-	if len(conditions) > 0 {
-		where = "WHERE " + strings.Join(conditions, " AND ")
+	if len(conditions) == 0 {
+		return "", args
+	}
+	return "WHERE " + strings.Join(conditions, " AND "), args
+}
+
+func (r *SQLiteRepository) ExportLogs(ctx context.Context, filter LogFilter, each func(*RequestLog) error) error {
+	if each == nil {
+		return nil
 	}
 
-	// Total count (for pagination).
-	var countQuery string
-	if filter.Saved == nil && filter.Status == "" && filter.Label == "" {
-		countQuery = fmt.Sprintf("SELECT COUNT(*) FROM request_logs l %s", where)
-	} else {
-		countQuery = fmt.Sprintf("SELECT COUNT(*) FROM request_logs l LEFT JOIN log_annotations a ON a.log_id = l.id %s", where)
-	}
-	var total int64
-	if err := r.db.QueryRow(countQuery, args...).Scan(&total); err != nil {
-		return nil, 0, err
-	}
-
-	// Pagination.
-	if filter.Limit <= 0 {
-		filter.Limit = 50
-	}
-	if filter.Limit > 1000 {
-		filter.Limit = 1000
-	}
-
+	where, args := buildLogWhereClause(filter)
 	query := fmt.Sprintf(`
 	SELECT l.id, l.created_at, l.upstream, l.target_url, l.method, l.path, l.query,
-		l.request_body_size, l.status_code, l.response_body_size,
-		l.streaming, l.latency_ms, l.error, l.truncated, l.tag, l.request_override_applied,
-		COALESCE(a.saved, 0), COALESCE(a.status, 'none'), COALESCE(a.note, ''), COALESCE(a.labels, '[]'),
-		COALESCE(a.created_at_unix_ms, 0), COALESCE(a.updated_at_unix_ms, 0),
+		l.request_headers, l.request_body, l.request_body_original, l.request_body_final, l.request_body_ref, l.request_body_size,
+		l.status_code, l.response_headers, l.response_body, l.response_body_ref, l.response_body_size,
+		l.streaming, l.latency_ms, l.error, l.truncated, l.tag,
+		l.request_override_applied, l.request_override_rules, l.request_override_error,
+		l.request_header_override_applied, l.request_header_override_changes, l.request_headers_original,
 		l.trace_id, l.parent_log_id, l.trace_seq,
-		l.usage_input_tokens, l.usage_output_tokens, l.usage_total_tokens
+		l.usage_input_tokens, l.usage_output_tokens, l.usage_total_tokens, l.usage_raw, l.usage_source,
+		COALESCE(a.saved, 0), COALESCE(a.status, 'none'), COALESCE(a.note, ''), COALESCE(a.labels, '[]'),
+		COALESCE(a.created_at_unix_ms, 0), COALESCE(a.updated_at_unix_ms, 0)
 	FROM request_logs l
 	LEFT JOIN log_annotations a ON a.log_id = l.id
 	%s
-	ORDER BY l.created_at_unix_ms DESC, l.created_at DESC
-	LIMIT ? OFFSET ?
+	ORDER BY l.created_at_unix_ms ASC, l.created_at ASC
 	`, where)
 
-	args = append(args, filter.Limit, filter.Offset)
-	rows, err := r.db.Query(query, args...)
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, 0, err
+		return err
 	}
 	defer rows.Close()
 
-	var logs []*RequestLog
 	for rows.Next() {
-		log, err := r.scanLogSummary(rows)
+		log, err := r.scanLogWithAnnotation(rows)
 		if err != nil {
-			return nil, 0, err
+			return err
 		}
-		logs = append(logs, log)
+		if err := each(log); err != nil {
+			return err
+		}
 	}
-	if err := rows.Err(); err != nil {
-		return nil, 0, err
-	}
-
-	return logs, total, nil
+	return rows.Err()
 }
 
 const deleteBatchSize = 2000
@@ -1129,6 +1169,78 @@ func (r *SQLiteRepository) scanLog(scanner interface{ Scan(...interface{}) error
 	}
 	if reqHeadersOriginal != "" && reqHeadersOriginal != "null" {
 		log.RequestHeadersOriginal = unmarshalHeaders(reqHeadersOriginal)
+	}
+
+	return &log, nil
+}
+
+func (r *SQLiteRepository) scanLogWithAnnotation(scanner interface{ Scan(...interface{}) error }) (*RequestLog, error) {
+	var log RequestLog
+	var reqHeaders, respHeaders, overrideRules string
+	var streaming, truncated, overrideApplied int
+	var headerOverrideApplied int
+	var headerOverrideChanges, reqHeadersOriginal string
+	var usageInput, usageOutput, usageTotal sql.NullInt64
+	var usageRaw, usageSource sql.NullString
+	var annotationSaved int
+	var annotationLabels string
+	var annotationCreatedMS, annotationUpdatedMS int64
+
+	err := scanner.Scan(
+		&log.ID, &log.CreatedAt, &log.Upstream, &log.TargetURL, &log.Method, &log.Path, &log.Query,
+		&reqHeaders, &log.RequestBody, &log.RequestBodyOriginal, &log.RequestBodyFinal, &log.RequestBodyRef, &log.RequestBodySize,
+		&log.StatusCode, &respHeaders, &log.ResponseBody, &log.ResponseBodyRef, &log.ResponseBodySize,
+		&streaming, &log.Latency, &log.Error, &truncated, &log.Tag,
+		&overrideApplied, &overrideRules, &log.RequestOverrideError,
+		&headerOverrideApplied, &headerOverrideChanges, &reqHeadersOriginal,
+		&log.TraceID, &log.ParentLogID, &log.TraceSeq,
+		&usageInput, &usageOutput, &usageTotal, &usageRaw, &usageSource,
+		&annotationSaved, &log.Annotation.Status, &log.Annotation.Note, &annotationLabels,
+		&annotationCreatedMS, &annotationUpdatedMS,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Streaming = streaming == 1
+	log.Truncated = truncated == 1
+	log.RequestOverrideApplied = overrideApplied == 1
+	log.RequestHeaderOverrideApplied = headerOverrideApplied == 1
+	log.UsageInputTokens = nullIntPtr(usageInput)
+	log.UsageOutputTokens = nullIntPtr(usageOutput)
+	log.UsageTotalTokens = nullIntPtr(usageTotal)
+	if usageRaw.Valid {
+		log.UsageRaw = usageRaw.String
+	}
+	if usageSource.Valid {
+		log.UsageSource = usageSource.String
+	}
+	log.CreatedAt = log.CreatedAt.UTC()
+
+	if reqHeaders != "" && reqHeaders != "null" {
+		log.RequestHeaders = unmarshalHeaders(reqHeaders)
+	}
+	if respHeaders != "" && respHeaders != "null" {
+		log.ResponseHeaders = unmarshalHeaders(respHeaders)
+	}
+	if overrideRules != "" && overrideRules != "null" {
+		_ = json.Unmarshal([]byte(overrideRules), &log.RequestOverrideRules)
+	}
+	if headerOverrideChanges != "" && headerOverrideChanges != "null" {
+		log.RequestHeaderOverrideChanges = json.RawMessage(headerOverrideChanges)
+	}
+	if reqHeadersOriginal != "" && reqHeadersOriginal != "null" {
+		log.RequestHeadersOriginal = unmarshalHeaders(reqHeadersOriginal)
+	}
+
+	log.Annotation.Saved = annotationSaved == 1
+	log.Annotation.Status = normalizeAnnotationStatus(log.Annotation.Status)
+	_ = json.Unmarshal([]byte(annotationLabels), &log.Annotation.Labels)
+	if annotationCreatedMS > 0 {
+		log.Annotation.CreatedAt = time.UnixMilli(annotationCreatedMS).UTC()
+	}
+	if annotationUpdatedMS > 0 {
+		log.Annotation.UpdatedAt = time.UnixMilli(annotationUpdatedMS).UTC()
 	}
 
 	return &log, nil

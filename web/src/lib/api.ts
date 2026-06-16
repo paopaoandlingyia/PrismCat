@@ -231,6 +231,19 @@ export async function fetchLogs(filter: LogFilter = {}): Promise<LogListResponse
     return response.json()
 }
 
+export function buildLogsExportUrl(filter: LogFilter = {}, includeBody = true): string {
+    const params = new URLSearchParams()
+    Object.entries(filter).forEach(([key, value]) => {
+        if (key === 'offset' || key === 'limit') return
+        if (value !== undefined && value !== '') {
+            params.append(key, String(value))
+        }
+    })
+    params.set('format', 'jsonl')
+    params.set('include_body', String(includeBody))
+    return `${API_BASE}/logs/export?${params}`
+}
+
 export async function fetchLog(id: string): Promise<RequestLog> {
     const response = await fetch(`${API_BASE}/logs/${id}`)
     if (!response.ok) throw new Error('获取日志详情失败')

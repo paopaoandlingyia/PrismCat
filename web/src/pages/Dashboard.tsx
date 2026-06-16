@@ -1,5 +1,5 @@
 import { Suspense, lazy, startTransition, useEffect, useMemo, useState, useCallback, useRef } from 'react'
-import { fetchLogs, fetchLog, fetchStats, fetchUpstreams } from '@/lib/api'
+import { buildLogsExportUrl, fetchLogs, fetchLog, fetchStats, fetchUpstreams } from '@/lib/api'
 import type { RequestLog, LogStats, Upstream, LogFilter, LogListResponse } from '@/lib/api'
 import { StatsCards } from '@/components/StatsCards'
 import { LogTable } from '@/components/LogTable'
@@ -116,6 +116,10 @@ export function Dashboard() {
             .filter(item => item.id !== nextLog.id || matchesAnnotationFilter(nextLog, filter)))
     }, [filter])
 
+    const handleExportLogs = useCallback((exportFilter: LogFilter) => {
+        window.location.assign(buildLogsExportUrl(exportFilter))
+    }, [])
+
     const logDetailFallback = selectedLog ? (
         <div className="fixed inset-y-0 right-0 z-50 w-full border-l border-border/60 bg-background shadow-2xl sm:max-w-2xl">
             <div className="flex h-full flex-col items-center justify-center gap-4">
@@ -141,6 +145,7 @@ export function Dashboard() {
                     <LogFilters
                         filter={filter}
                         onSearch={setFilter}
+                        onExport={handleExportLogs}
                         upstreams={upstreams}
                         total={total}
                         loading={loading}

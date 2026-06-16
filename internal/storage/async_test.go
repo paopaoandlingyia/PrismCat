@@ -34,11 +34,14 @@ func (m *memRepo) GetLog(id string) (*RequestLog, error) { return nil, errors.Ne
 func (m *memRepo) ListLogs(filter LogFilter) ([]*RequestLog, int64, error) {
 	return nil, 0, errors.New("not implemented")
 }
+func (m *memRepo) ExportLogs(ctx context.Context, filter LogFilter, each func(*RequestLog) error) error {
+	return errors.New("not implemented")
+}
 func (m *memRepo) DeleteLogsBefore(before time.Time) (int64, error) { return 0, nil }
-func (m *memRepo) DeleteOldestLogs(count int) (int64, error)       { return 0, nil }
-func (m *memRepo) CountDeletableLogs() (int64, error)             { return 0, nil }
-func (m *memRepo) WALCheckpoint() error                           { return nil }
-func (m *memRepo) Vacuum() error                                  { return nil }
+func (m *memRepo) DeleteOldestLogs(count int) (int64, error)        { return 0, nil }
+func (m *memRepo) CountDeletableLogs() (int64, error)               { return 0, nil }
+func (m *memRepo) WALCheckpoint() error                             { return nil }
+func (m *memRepo) Vacuum() error                                    { return nil }
 func (m *memRepo) GetLogAnnotation(logID string) (LogAnnotation, error) {
 	return LogAnnotation{}, errors.New("not implemented")
 }

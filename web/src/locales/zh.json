@@ -75,7 +75,8 @@
         "per_page": "{{count}} / 页",
         "first_page": "第一页",
         "last_page": "最后一页",
-        "page_number": "页码"
+        "page_number": "页码",
+        "export_jsonl": "导出 JSONL"
     },
     "stats": {
         "total_requests": "总请求数",

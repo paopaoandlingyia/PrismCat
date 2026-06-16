@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils'
-import { Search, RotateCcw, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
+import { Search, RotateCcw, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Download } from 'lucide-react'
 import type { Upstream, LogFilter } from '@/lib/api'
 import { Suspense, lazy, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -23,6 +23,7 @@ import {
 interface LogFiltersProps {
     filter: LogFilter
     onSearch: (filter: LogFilter) => void
+    onExport?: (filter: LogFilter) => void
     upstreams: Upstream[]
     total: number
     loading?: boolean
@@ -48,6 +49,7 @@ function DateRangePickerFallback() {
 export function LogFilters({
     filter,
     onSearch,
+    onExport,
     upstreams,
     total,
     loading,
@@ -86,6 +88,10 @@ export function LogFilters({
         const resetFilter = { ...DEFAULT_FILTER }
         setDraft(resetFilter)
         onSearch(resetFilter)
+    }
+
+    const handleExport = () => {
+        onExport?.({ ...draft, offset: 0 })
     }
 
     // 分页计算
@@ -313,6 +319,24 @@ export function LogFilters({
                                 <p>{t('filters.search')}</p>
                             </TooltipContent>
                         </Tooltip>
+
+                        {onExport && (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        onClick={handleExport}
+                                        className="h-9 w-9 shrink-0 border border-input shadow-sm bg-background text-muted-foreground hover:bg-accent hover:text-foreground"
+                                    >
+                                        <Download className="h-4 w-4" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>{t('filters.export_jsonl')}</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        )}
 
                         <Tooltip>
                             <TooltipTrigger asChild>

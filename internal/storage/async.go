@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"errors"
 	"log"
 	"sync"
@@ -113,6 +114,10 @@ func (a *AsyncRepository) GetLog(id string) (*RequestLog, error) {
 
 func (a *AsyncRepository) ListLogs(filter LogFilter) ([]*RequestLog, int64, error) {
 	return a.inner.ListLogs(filter)
+}
+
+func (a *AsyncRepository) ExportLogs(ctx context.Context, filter LogFilter, each func(*RequestLog) error) error {
+	return a.inner.ExportLogs(ctx, filter, each)
 }
 
 func (a *AsyncRepository) DeleteLogsBefore(beforeTime time.Time) (int64, error) {

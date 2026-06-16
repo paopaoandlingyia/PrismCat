@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -45,14 +46,18 @@ func (r *proxyTestRepo) ListLogs(filter storage.LogFilter) ([]*storage.RequestLo
 	return nil, 0, errors.New("not implemented")
 }
 
+func (r *proxyTestRepo) ExportLogs(ctx context.Context, filter storage.LogFilter, each func(*storage.RequestLog) error) error {
+	return errors.New("not implemented")
+}
+
 func (r *proxyTestRepo) DeleteLogsBefore(before time.Time) (int64, error) {
 	return 0, nil
 }
 
 func (r *proxyTestRepo) DeleteOldestLogs(count int) (int64, error) { return 0, nil }
-func (r *proxyTestRepo) CountDeletableLogs() (int64, error)       { return 0, nil }
-func (r *proxyTestRepo) WALCheckpoint() error                     { return nil }
-func (r *proxyTestRepo) Vacuum() error                            { return nil }
+func (r *proxyTestRepo) CountDeletableLogs() (int64, error)        { return 0, nil }
+func (r *proxyTestRepo) WALCheckpoint() error                      { return nil }
+func (r *proxyTestRepo) Vacuum() error                             { return nil }
 
 func (r *proxyTestRepo) GetLogAnnotation(logID string) (storage.LogAnnotation, error) {
 	return storage.LogAnnotation{}, errors.New("not implemented")

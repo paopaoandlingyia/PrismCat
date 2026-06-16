@@ -75,7 +75,8 @@
         "per_page": "{{count}} / page",
         "first_page": "First page",
         "last_page": "Last page",
-        "page_number": "Page number"
+        "page_number": "Page number",
+        "export_jsonl": "Export JSONL"
     },
     "stats": {
         "total_requests": "Total Requests",

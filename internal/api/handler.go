@@ -50,6 +50,7 @@ func New(cfg *config.Config, repo storage.Repository, blobs storage.BlobStore, l
 // RegisterRoutes 注册 API 路由
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/logs", h.handleLogs)
+	mux.HandleFunc("/api/logs/export", h.handleLogsExport)
 	mux.HandleFunc("/api/logs/", h.handleLogDetail)
 	mux.HandleFunc("/api/stats", h.handleStats)
 	mux.HandleFunc("/api/upstreams", h.handleUpstreams)
@@ -73,6 +74,23 @@ func (h *Handler) handleLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := r.URL.Query()
+	filter := parseLogFilter(query, true)
+
+	logs, total, err := h.repo.ListLogs(filter)
+	if err != nil {
+		h.jsonError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	h.jsonResponse(w, map[string]interface{}{
+		"logs":   logs,
+		"total":  total,
+		"offset": filter.Offset,
+		"limit":  filter.Limit,
+	})
+}
+
+func parseLogFilter(query url.Values, includePagination bool) storage.LogFilter {
 	filter := storage.LogFilter{
 		Upstream: query.Get("upstream"),
 		Method:   query.Get("method"),
@@ -94,15 +112,17 @@ func (h *Handler) handleLogs(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if offset := query.Get("offset"); offset != "" {
-		if o, err := strconv.Atoi(offset); err == nil {
-			filter.Offset = o
+	if includePagination {
+		if offset := query.Get("offset"); offset != "" {
+			if o, err := strconv.Atoi(offset); err == nil {
+				filter.Offset = o
+			}
 		}
-	}
 
-	if limit := query.Get("limit"); limit != "" {
-		if l, err := strconv.Atoi(limit); err == nil {
-			filter.Limit = l
+		if limit := query.Get("limit"); limit != "" {
+			if l, err := strconv.Atoi(limit); err == nil {
+				filter.Limit = l
+			}
 		}
 	}
 
@@ -118,18 +138,124 @@ func (h *Handler) handleLogs(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	logs, total, err := h.repo.ListLogs(filter)
-	if err != nil {
-		h.jsonError(w, err.Error(), http.StatusInternalServerError)
+	return filter
+}
+
+func (h *Handler) handleLogsExport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
 		return
 	}
 
-	h.jsonResponse(w, map[string]interface{}{
-		"logs":   logs,
-		"total":  total,
-		"offset": filter.Offset,
-		"limit":  filter.Limit,
+	query := r.URL.Query()
+	format := strings.ToLower(strings.TrimSpace(query.Get("format")))
+	if format == "" {
+		format = "jsonl"
+	}
+	if format != "jsonl" {
+		h.jsonError(w, "不支持的导出格式", http.StatusBadRequest)
+		return
+	}
+
+	includeBody := true
+	if raw := query.Get("include_body"); raw != "" {
+		v, err := strconv.ParseBool(raw)
+		if err != nil {
+			h.jsonError(w, "include_body 参数无效", http.StatusBadRequest)
+			return
+		}
+		includeBody = v
+	}
+
+	filter := parseLogFilter(query, false)
+	w.Header().Set("Content-Type", "application/x-ndjson; charset=utf-8")
+	w.Header().Set("Content-Disposition", "attachment; filename=\""+logsExportFilename(filter)+"\"")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+
+	encoder := json.NewEncoder(w)
+	flusher, _ := w.(http.Flusher)
+	err := h.repo.ExportLogs(r.Context(), filter, func(logEntry *storage.RequestLog) error {
+		if includeBody {
+			h.fillExportBodies(r.Context(), logEntry)
+		} else {
+			clearExportBodies(logEntry)
+		}
+		if err := encoder.Encode(logEntry); err != nil {
+			return err
+		}
+		if flusher != nil {
+			flusher.Flush()
+		}
+		return nil
 	})
+	if err != nil && r.Context().Err() == nil {
+		// Headers may already be sent; in that case the partial JSONL file is still
+		// useful up to the last complete line.
+		return
+	}
+}
+
+func (h *Handler) fillExportBodies(ctx context.Context, logEntry *storage.RequestLog) {
+	if h.blobs == nil || logEntry == nil {
+		return
+	}
+
+	logging := h.cfg.LoggingSnapshot()
+	if logEntry.RequestBodyRef != "" {
+		if body, err := h.blobs.Get(ctx, logEntry.RequestBodyRef); err == nil {
+			formatted := httpbody.FormatForDisplay(
+				storage.FirstHeaderValue(logEntry.RequestHeaders, "Content-Type"),
+				storage.FirstHeaderValue(logEntry.RequestHeaders, "Content-Encoding"),
+				body,
+				httpbody.FormatOptions{
+					MaxOutputBytes:               logging.MaxRequestBody,
+					TrimLargeBase64:              !logging.StoreBase64,
+					RequireContentEncodingDecode: true,
+				},
+			)
+			logEntry.RequestBody = formatted.Text
+			logEntry.Truncated = logEntry.Truncated || formatted.Truncated
+		}
+	}
+	if logEntry.ResponseBodyRef != "" {
+		if body, err := h.blobs.Get(ctx, logEntry.ResponseBodyRef); err == nil {
+			formatted := httpbody.FormatForDisplay(
+				storage.FirstHeaderValue(logEntry.ResponseHeaders, "Content-Type"),
+				storage.FirstHeaderValue(logEntry.ResponseHeaders, "Content-Encoding"),
+				body,
+				httpbody.FormatOptions{
+					MaxOutputBytes:               logging.MaxResponseBody,
+					TrimLargeBase64:              !logging.StoreBase64,
+					RequireContentEncodingDecode: true,
+				},
+			)
+			logEntry.ResponseBody = formatted.Text
+			logEntry.Truncated = logEntry.Truncated || formatted.Truncated
+		}
+	}
+}
+
+func clearExportBodies(logEntry *storage.RequestLog) {
+	if logEntry == nil {
+		return
+	}
+	logEntry.RequestBody = ""
+	logEntry.RequestBodyOriginal = ""
+	logEntry.RequestBodyFinal = ""
+	logEntry.ResponseBody = ""
+}
+
+func logsExportFilename(filter storage.LogFilter) string {
+	const layout = "20060102T150405Z"
+	start := "all"
+	end := time.Now().UTC().Format(layout)
+	if filter.StartTime != nil {
+		start = filter.StartTime.UTC().Format(layout)
+	}
+	if filter.EndTime != nil {
+		end = filter.EndTime.UTC().Format(layout)
+	}
+	return "prismcat-logs-" + start + "-" + end + ".jsonl"
 }
 
 // handleLogDetail 获取日志详情
