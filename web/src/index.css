@@ -25,6 +25,10 @@
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
   --radius-radius: var(--radius);
+
+  /* 卡片柔和阴影 - 配合背景明度差制造"浮起"的层级感 */
+  --shadow-card: 0 1px 3px 0 hsl(222 47% 11% / 0.06), 0 4px 16px -3px hsl(222 47% 11% / 0.10);
+  --shadow-card-hover: 0 2px 6px 0 hsl(222 47% 11% / 0.08), 0 12px 28px -4px hsl(222 47% 11% / 0.16);
 }
 
 /* 全局样式变量 */
@@ -40,7 +44,8 @@
   --color-prism-red: 0 85% 55%;
 
   /* --- 亮色模式 (Light Mode) --- */
-  --background: 0 0% 100%;
+  /* 背景比卡片略深(浅灰),让纯白卡片浮起来 = 层级感的物理基础 */
+  --background: 210 40% 97%;
   --foreground: 222 47% 11%;
   --card: 0 0% 100%;
   --card-foreground: 222 47% 11%;
@@ -48,11 +53,12 @@
   --popover-foreground: 222 47% 11%;
   --primary: 263 70% 50%;
   --primary-foreground: 210 40% 98%;
-  --secondary: 210 40% 96%;
+  /* 次级面比背景(97%)再深一档,确保悬停/次级元素在浅灰画布上仍可辨 */
+  --secondary: 210 40% 93%;
   --secondary-foreground: 222 47% 11%;
-  --muted: 210 40% 96%;
+  --muted: 210 40% 93%;
   --muted-foreground: 215 16% 47%;
-  --accent: 210 40% 96%;
+  --accent: 210 40% 93%;
   --accent-foreground: 222 47% 11%;
   --destructive: 0 84% 60%;
   --destructive-foreground: 210 40% 98%;
@@ -70,11 +76,12 @@
 
 .dark {
   /* --- 暗色模式 (Dark Mode) --- */
-  --background: 222 47% 11%;
+  /* 背景压暗、卡片提亮,拉开明度差(原来仅差 1% 几乎无感) */
+  --background: 222 47% 9%;
   --foreground: 210 40% 98%;
-  --card: 222 47% 12%;
+  --card: 222 40% 14%;
   --card-foreground: 210 40% 98%;
-  --popover: 222 47% 12%;
+  --popover: 222 40% 14%;
   --popover-foreground: 210 40% 98%;
   --primary: 263 75% 68%;
   --primary-foreground: 222 47% 11%;

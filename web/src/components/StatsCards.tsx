@@ -17,7 +17,8 @@ export function StatsCards({ stats, loading }: StatsCardsProps) {
             title: t('stats.total_requests'),
             value: stats?.total_requests ?? 0,
             icon: Activity,
-            gradient: 'from-blue-500 to-cyan-500',
+            // 主指标 - 品牌色作为唯一焦点
+            valueColor: 'text-primary',
             iconColor: 'text-blue-500 dark:text-blue-400',
             bgColor: 'bg-blue-500/10',
         },
@@ -25,7 +26,8 @@ export function StatsCards({ stats, loading }: StatsCardsProps) {
             title: t('common.success', '成功'),
             value: stats?.success_count ?? 0,
             icon: CheckCircle,
-            gradient: 'from-green-500 to-emerald-500',
+            // 语义色 - 成功
+            valueColor: 'text-green-600 dark:text-green-400',
             iconColor: 'text-green-500 dark:text-green-400',
             bgColor: 'bg-green-500/10',
         },
@@ -33,7 +35,8 @@ export function StatsCards({ stats, loading }: StatsCardsProps) {
             title: t('common.error', '错误'),
             value: stats?.error_count ?? 0,
             icon: AlertCircle,
-            gradient: 'from-red-500 to-orange-500',
+            // 语义色 - 错误
+            valueColor: 'text-red-600 dark:text-red-400',
             iconColor: 'text-red-500 dark:text-red-400',
             bgColor: 'bg-red-500/10',
         },
@@ -41,7 +44,7 @@ export function StatsCards({ stats, loading }: StatsCardsProps) {
             title: t('log_detail.streaming', '流式'),
             value: stats?.streaming_count ?? 0,
             icon: Zap,
-            gradient: 'from-purple-500 to-pink-500',
+            valueColor: 'text-foreground',
             iconColor: 'text-purple-500 dark:text-purple-400',
             bgColor: 'bg-purple-500/10',
         },
@@ -49,7 +52,7 @@ export function StatsCards({ stats, loading }: StatsCardsProps) {
             title: t('stats.avg_latency'),
             value: formatLatency(stats?.avg_latency_ms ?? 0),
             icon: Clock,
-            gradient: 'from-yellow-500 to-orange-500',
+            valueColor: 'text-foreground',
             iconColor: 'text-yellow-600 dark:text-yellow-400',
             bgColor: 'bg-yellow-500/10',
             isText: true,
@@ -58,7 +61,7 @@ export function StatsCards({ stats, loading }: StatsCardsProps) {
             title: t('log_table.upstream', '上游数量'),
             value: Object.keys(stats?.by_upstream ?? {}).length,
             icon: Box,
-            gradient: 'from-indigo-500 to-violet-500',
+            valueColor: 'text-foreground',
             iconColor: 'text-indigo-500 dark:text-indigo-400',
             bgColor: 'bg-indigo-500/10',
         },
@@ -71,7 +74,7 @@ export function StatsCards({ stats, loading }: StatsCardsProps) {
                     key={card.title}
                     className={cn(
                         'relative overflow-hidden',
-                        'border border-border/50 bg-card shadow-sm hover:shadow-md transition-shadow',
+                        'border border-border bg-card shadow-card hover:shadow-card-hover transition-shadow',
                         loading && 'animate-pulse'
                     )}
                 >
@@ -84,10 +87,10 @@ export function StatsCards({ stats, loading }: StatsCardsProps) {
 
                         <div className="relative z-10 flex items-start justify-between">
                             <div className="space-y-1">
-                                <span className="text-[10px] font-bold text-foreground/75 uppercase tracking-wider">{card.title}</span>
+                                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{card.title}</span>
                                 <div className={cn(
-                                    'text-xl sm:text-2xl font-black tracking-tight',
-                                    `bg-gradient-to-br ${card.gradient} bg-clip-text text-transparent`
+                                    'text-2xl sm:text-3xl font-black tracking-tight tabular-nums',
+                                    card.valueColor
                                 )}>
                                     {card.isText ? card.value : card.value.toLocaleString()}
                                 </div>

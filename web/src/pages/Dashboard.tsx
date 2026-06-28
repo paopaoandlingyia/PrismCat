@@ -138,10 +138,10 @@ export function Dashboard() {
                 <StatsCards stats={stats} loading={loading && !stats} />
             </section>
 
-            {/* 日志区域 - 包含过滤器和表格 */}
-            <section className="flex flex-col gap-4">
-                {/* 过滤器 */}
-                <div className="bg-muted/30 rounded-xl p-2 md:p-3">
+            {/* 日志模块 - 筛选栏(头部) + 表格(主体) 合为一张卡片 */}
+            <section className="rounded-2xl overflow-hidden border border-border bg-card shadow-card">
+                {/* 筛选 + 分页 头部 */}
+                <div className="border-b border-border px-2 sm:px-0">
                     <LogFilters
                         filter={filter}
                         onSearch={setFilter}
@@ -153,14 +153,12 @@ export function Dashboard() {
                 </div>
 
                 {/* 日志列表 */}
-                <div className="rounded-2xl overflow-hidden shadow-sm border border-border bg-card">
-                    <LogTable
-                        logs={logs}
-                        loading={loading}
-                        onSelect={handleSelectLog}
-                        selectedId={selectedLog?.id}
-                    />
-                </div>
+                <LogTable
+                    logs={logs}
+                    loading={loading}
+                    onSelect={handleSelectLog}
+                    selectedId={selectedLog?.id}
+                />
             </section>
 
             {/* 日志详情侧边栏 */}
