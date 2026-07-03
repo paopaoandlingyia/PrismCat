@@ -82,7 +82,7 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
       </div>
       {/* 头部 */}
       <header className="sticky top-0 z-40 backdrop-blur-md bg-background/80">
-        <div className="w-full px-4 py-3 sm:px-6 sm:py-4">
+        <div className="mx-auto w-full max-w-[1600px] px-4 py-3 sm:px-6 sm:py-4">
           <div className="flex items-start justify-between gap-3 sm:items-center">
             <div className="flex min-w-0 items-center gap-3 sm:gap-6">
               {/* Logo */}
@@ -176,6 +176,7 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
 
       {/* 主内容 */}
       <main className="relative z-0 w-full flex-1 bg-background px-4 py-5 space-y-6 sm:px-6 sm:py-6">
+        <div className="mx-auto w-full max-w-[1600px]">
         <Suspense fallback={routeFallback}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
@@ -186,6 +187,7 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </Suspense>
+        </div>
       </main>
 
       {/* 页脚版本号 */}

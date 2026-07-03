@@ -276,7 +276,7 @@ export function Playground() {
     }, [handleSend])
 
     return (
-        <div className="w-full space-y-5 animate-fade-in">
+        <div className="mx-auto w-full max-w-7xl space-y-5 animate-fade-in">
 
             {/* Unified Address Bar */}
             <div className="flex flex-wrap items-center gap-2 bg-muted/10 p-1.5 rounded-2xl">
