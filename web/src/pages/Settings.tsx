@@ -1339,7 +1339,6 @@ export function Settings() {
                 </DialogContent>
             </Dialog>
 
-            <div className="flex w-full justify-center">
                 <div className="relative z-10 w-full space-y-10 pb-20 px-4 sm:px-10 pt-6 animate-fade-in">
 
                     {/* Header & Tabs */}
@@ -2679,7 +2678,6 @@ export function Settings() {
                         </div>
                     )}
                 </div>
-            </div>
         </div>
     )
 }
