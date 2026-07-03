@@ -310,6 +310,8 @@
         "request_overrides_warning": "对已启用覆盖并绑定规则的上游生效。Body JSON Patch 需缓冲请求体；Header 覆盖无此限制，即使非 JSON 请求也可生效。日志中记录原始与修改后的差异。",
         "rule_tab_request_overrides": "请求覆盖",
         "rule_tab_usage_extraction": "Usage 提取",
+        "request_overrides_config": "覆盖设置",
+        "usage_extraction_config": "提取设置",
         "request_overrides_enable": "启用参数覆盖",
         "request_overrides_enable_hint": "全局开关。关闭后所有规则不生效，请求将透明转发。",
         "request_overrides_max_body": "覆盖最大请求体",

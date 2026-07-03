@@ -310,6 +310,8 @@
         "request_overrides_warning": "Applies to upstreams with overrides enabled and rules bound. Body JSON Patch requires buffering; header overrides work on any request type. Original vs. modified diffs are logged.",
         "rule_tab_request_overrides": "Request Overrides",
         "rule_tab_usage_extraction": "Usage Extraction",
+        "request_overrides_config": "Override settings",
+        "usage_extraction_config": "Extraction settings",
         "request_overrides_enable": "Enable Request Overrides",
         "request_overrides_enable_hint": "Global switch. When off, all rules are ignored and requests pass through transparently.",
         "request_overrides_max_body": "Override Max Body",

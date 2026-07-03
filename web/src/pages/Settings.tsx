@@ -475,19 +475,24 @@ function MetricCard({
 function SettingSection({
     title,
     description,
+    action,
     children,
 }: {
     title: string
     description?: string
+    action?: ReactNode
     children: ReactNode
 }) {
     return (
         <section className="overflow-hidden rounded-2xl border border-border/50 bg-card/40 shadow-sm">
-            <div className="border-b border-border/40 px-6 py-4">
-                <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-                {description && (
-                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>
-                )}
+            <div className="flex items-start justify-between gap-4 border-b border-border/40 px-6 py-4">
+                <div className="min-w-0">
+                    <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+                    {description && (
+                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>
+                    )}
+                </div>
+                {action && <div className="shrink-0">{action}</div>}
             </div>
             <div className="px-6 py-6">{children}</div>
         </section>
@@ -1391,11 +1396,13 @@ export function Settings() {
                     {/* Content Area */}
                     <div className="pt-2">
                         {activeTab === 'routing' && (
-                            <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-300 motion-reduce:animate-none motion-reduce:duration-0">
-                                {/* Action Toolbar */}
-                                <section className="flex flex-col gap-6">
-                                    <div className="flex flex-wrap items-end gap-x-8 gap-y-6">
-                                        <div className="w-[240px]">
+                            <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 motion-reduce:animate-none motion-reduce:duration-0">
+                                <div className="mx-auto max-w-7xl space-y-6">
+                                    <SettingSection
+                                        title={t('settings.access_title')}
+                                        description={t('settings.access_description')}
+                                    >
+                                        <div className="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
                                             <FieldBlock
                                                 label={t('settings.proxy_domain_suffix')}
                                                 hint={t('settings.proxy_domain_suffix_hint', {
@@ -1406,12 +1413,9 @@ export function Settings() {
                                                 <Input
                                                     value={`.${domainSuffix}`}
                                                     readOnly
-                                                    className="h-11 rounded-xl border-border/30 bg-background/40 text-sm font-medium shadow-sm transition-colors cursor-default"
+                                                    className="h-11 w-full rounded-xl border-border/30 bg-background/40 text-sm font-medium shadow-sm transition-colors cursor-default"
                                                 />
                                             </FieldBlock>
-                                        </div>
-
-                                        <div className="w-[240px]">
                                             <FieldBlock
                                                 label={t('settings.path_routing_prefix')}
                                                 htmlFor="path-routing-prefix"
@@ -1422,48 +1426,36 @@ export function Settings() {
                                                     value={pathRoutingPrefix}
                                                     onChange={e => setPathRoutingPrefix(e.target.value)}
                                                     placeholder="/_proxy"
-                                                    className="h-11 rounded-xl border-border/30 bg-background/50 text-sm shadow-sm transition-colors focus-visible:bg-background"
+                                                    className="h-11 w-full rounded-xl border-border/30 bg-background/50 text-sm shadow-sm transition-colors focus-visible:bg-background"
                                                 />
                                             </FieldBlock>
+                                            <div className="flex items-center lg:pt-6">
+                                                <ToggleSetting
+                                                    label={t('settings.enable_path_routing')}
+                                                    description={t('settings.enable_path_routing_hint')}
+                                                    checked={enablePathRouting}
+                                                    onCheckedChange={setEnablePathRouting}
+                                                />
+                                            </div>
                                         </div>
+                                    </SettingSection>
 
-                                        <div className="h-11 flex items-center">
-                                            <ToggleSetting
-                                                label={t('settings.enable_path_routing')}
-                                                description={t('settings.enable_path_routing_hint')}
-                                                checked={enablePathRouting}
-                                                onCheckedChange={setEnablePathRouting}
-                                            />
-                                        </div>
-
-                                        <div className="h-11 flex items-center gap-3 sm:ml-auto">
-                                            <Button
-                                                type="button"
-                                                onClick={handleSaveAll}
-                                                disabled={saving}
-                                                variant="default"
-                                                size="lg"
-                                                className="h-11 rounded-xl min-w-[120px] font-medium shadow-sm transition-all whitespace-nowrap shrink-0"
-                                            >
-                                                <Save className="mr-1.5 h-4 w-4 shrink-0" />
-                                                {t('common.save')}
-                                            </Button>
+                                    <SettingSection
+                                        title={t('settings.tabs.upstreams')}
+                                        description={t('settings.upstreams_description')}
+                                        action={
                                             <Button
                                                 type="button"
                                                 variant={showAddForm ? 'secondary' : 'default'}
                                                 onClick={() => setShowAddForm(prev => !prev)}
-                                                size="lg"
-                                                className="h-11 rounded-xl min-w-[140px] font-medium shadow-sm transition-all whitespace-nowrap shrink-0"
+                                                size="sm"
+                                                className="h-9 rounded-lg font-medium shadow-sm transition-all whitespace-nowrap"
                                             >
                                                 {!showAddForm && <Plus className="mr-1.5 h-4 w-4 shrink-0" />}
                                                 {showAddForm ? t('common.cancel') : t('upstream_manager.add_new')}
                                             </Button>
-                                        </div>
-                                    </div>
-                                </section>
-
-                                {/* Upstreams List Area */}
-                                <section className="flex flex-col gap-6 pt-2">
+                                        }
+                                    >
                                     <div className="w-full">
                                         {showAddForm && (
                                             <div className="mb-8 rounded-2xl bg-background/40 p-6 ring-1 ring-border/20 backdrop-blur-sm w-fit">
@@ -1699,7 +1691,8 @@ export function Settings() {
                                             </div>
                                         )}
                                     </div>
-                                </section>
+                                    </SettingSection>
+                                </div>
                             </div>
                         )}
 
@@ -1850,7 +1843,7 @@ export function Settings() {
                         )}
 
                         {activeTab === 'system' && (
-                            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300 motion-reduce:animate-none motion-reduce:duration-0">
+                            <div className="mx-auto max-w-7xl space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300 motion-reduce:animate-none motion-reduce:duration-0">
                                 {metricsError && (
                                     <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
                                         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -2136,36 +2129,38 @@ export function Settings() {
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-1 gap-x-12 gap-y-8 sm:grid-cols-2">
-                                        <div className="flex items-center pt-7">
-                                            <ToggleSetting
-                                                label={t('settings.request_overrides_enable')}
-                                                description={t('settings.request_overrides_enable_hint')}
-                                                checked={requestOverridesEnabled}
-                                                onCheckedChange={setRequestOverridesEnabled}
-                                            />
+                                    <SettingSection title={t('settings.request_overrides_config')}>
+                                        <div className="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
+                                            <div className="flex items-center sm:pt-6">
+                                                <ToggleSetting
+                                                    label={t('settings.request_overrides_enable')}
+                                                    description={t('settings.request_overrides_enable_hint')}
+                                                    checked={requestOverridesEnabled}
+                                                    onCheckedChange={setRequestOverridesEnabled}
+                                                />
+                                            </div>
+
+                                            <FieldBlock
+                                                label={t('settings.request_overrides_max_body')}
+                                                hint={t('settings.request_overrides_max_body_hint')}
+                                                htmlFor="override-max-body"
+                                                unit="KB"
+                                            >
+                                                <Input
+                                                    id="override-max-body"
+                                                    type="number"
+                                                    min="1"
+                                                    value={overrideMaxBodyKB}
+                                                    onChange={e => setOverrideMaxBodyKB(Number(e.target.value))}
+                                                    className="h-11 w-full rounded-xl border-border/30 bg-background/50 text-sm shadow-sm transition-colors focus-visible:bg-background"
+                                                />
+                                            </FieldBlock>
                                         </div>
+                                    </SettingSection>
 
-                                        <FieldBlock
-                                            label={t('settings.request_overrides_max_body')}
-                                            hint={t('settings.request_overrides_max_body_hint')}
-                                            htmlFor="override-max-body"
-                                            unit="KB"
-                                        >
-                                            <Input
-                                                id="override-max-body"
-                                                type="number"
-                                                min="1"
-                                                value={overrideMaxBodyKB}
-                                                onChange={e => setOverrideMaxBodyKB(Number(e.target.value))}
-                                                className="h-11 rounded-xl border-border/30 bg-background/50 text-sm shadow-sm transition-colors focus-visible:bg-background"
-                                            />
-                                        </FieldBlock>
-                                    </div>
-
-                                    <FieldBlock
-                                        label={t('settings.request_overrides_rules')}
-                                        hint={t('settings.request_overrides_rules_hint')}
+                                    <SettingSection
+                                        title={t('settings.request_overrides_rules')}
+                                        description={t('settings.request_overrides_rules_hint')}
                                     >
                                         <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/40 bg-muted/30 px-3 py-2">
                                             <p className="text-xs leading-5 text-muted-foreground">
@@ -2456,24 +2451,26 @@ export function Settings() {
                                                 </div>
                                             )}
                                         </div>
-                                    </FieldBlock>
+                                    </SettingSection>
 
                                         </>
                                     )}
 
                                     {activeRuleTab === 'usage_extraction' && (
                                         <>
-                                    <div className="space-y-5 rounded-xl border border-border/40 bg-muted/20 p-4">
+                                    <SettingSection title={t('settings.usage_extraction_config')}>
                                         <ToggleSetting
                                             label={t('settings.usage_extraction_enable')}
                                             description={t('settings.usage_extraction_enable_hint')}
                                             checked={usageExtractionEnabled}
                                             onCheckedChange={setUsageExtractionEnabled}
                                         />
-                                        <FieldBlock
-                                            label={t('settings.usage_extraction_rules')}
-                                            hint={t('settings.usage_extraction_rules_hint')}
-                                        >
+                                    </SettingSection>
+
+                                    <SettingSection
+                                        title={t('settings.usage_extraction_rules')}
+                                        description={t('settings.usage_extraction_rules_hint')}
+                                    >
                                             <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/40 bg-background/50 px-3 py-2">
                                                 <p className="text-xs leading-5 text-muted-foreground">
                                                     {t('settings.usage_extraction_scope_hint')}
@@ -2655,8 +2652,7 @@ export function Settings() {
                                                     </div>
                                                 )}
                                             </div>
-                                        </FieldBlock>
-                                    </div>
+                                    </SettingSection>
 
                                         </>
                                     )}
@@ -2665,7 +2661,7 @@ export function Settings() {
                             </div>
                         )}
                     </div>
-                    {(activeTab === 'logging' || activeTab === 'overrides') && (
+                    {(activeTab === 'routing' || activeTab === 'logging' || activeTab === 'overrides') && (
                         <div className="sticky bottom-0 z-30 -mx-4 border-t border-border/40 bg-background/85 px-4 py-3 backdrop-blur-md sm:-mx-10 sm:px-10">
                             <div className="mx-auto flex max-w-7xl items-center justify-end gap-4">
                                 <Button
