@@ -472,6 +472,28 @@ function MetricCard({
     )
 }
 
+function SettingSection({
+    title,
+    description,
+    children,
+}: {
+    title: string
+    description?: string
+    children: ReactNode
+}) {
+    return (
+        <section className="overflow-hidden rounded-2xl border border-border/50 bg-card/40 shadow-sm">
+            <div className="border-b border-border/40 px-6 py-4">
+                <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+                {description && (
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>
+                )}
+            </div>
+            <div className="px-6 py-6">{children}</div>
+        </section>
+    )
+}
+
 
 export function Settings() {
     const { t } = useTranslation()
@@ -1682,117 +1704,126 @@ export function Settings() {
                         )}
 
                         {activeTab === 'logging' && (
-                            <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-300 motion-reduce:animate-none motion-reduce:duration-0">
-                                <div className="max-w-3xl space-y-10">
-                                    
-                                    {/* 表单项网格 */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-8">
-                                        <FieldBlock
-                                            label={t('settings.max_request_body')}
-                                            hint={t('settings.max_request_body_hint')}
-                                            htmlFor="max-req"
-                                            unit="KB"
-                                        >
-                                            <Input
-                                                id="max-req"
-                                                type="number"
-                                                min="1"
-                                                value={maxRequestBody}
-                                                onChange={e => setMaxRequestBody(Number(e.target.value))}
-                                                className="h-11 rounded-xl border-border/30 bg-background/50 text-sm shadow-sm transition-colors focus-visible:bg-background"
-                                            />
-                                        </FieldBlock>
+                            <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 motion-reduce:animate-none motion-reduce:duration-0">
+                                <div className="mx-auto max-w-7xl space-y-6">
+                                    <SettingSection
+                                        title={t('settings.section_content_size')}
+                                        description={t('settings.section_content_size_desc')}
+                                    >
+                                        <div className="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
+                                            <FieldBlock
+                                                label={t('settings.max_request_body')}
+                                                hint={t('settings.max_request_body_hint')}
+                                                htmlFor="max-req"
+                                                unit="KB"
+                                            >
+                                                <Input
+                                                    id="max-req"
+                                                    type="number"
+                                                    min="1"
+                                                    value={maxRequestBody}
+                                                    onChange={e => setMaxRequestBody(Number(e.target.value))}
+                                                    className="h-11 w-full rounded-xl border-border/30 bg-background/50 text-sm shadow-sm transition-colors focus-visible:bg-background"
+                                                />
+                                            </FieldBlock>
+                                            <FieldBlock
+                                                label={t('settings.max_response_body')}
+                                                hint={t('settings.max_response_body_hint')}
+                                                htmlFor="max-res"
+                                                unit="KB"
+                                            >
+                                                <Input
+                                                    id="max-res"
+                                                    type="number"
+                                                    min="1"
+                                                    value={maxResponseBody}
+                                                    onChange={e => setMaxResponseBody(Number(e.target.value))}
+                                                    className="h-11 w-full rounded-xl border-border/30 bg-background/50 text-sm shadow-sm transition-colors focus-visible:bg-background"
+                                                />
+                                            </FieldBlock>
+                                            <FieldBlock
+                                                label={t('settings.detach_body_over_bytes')}
+                                                hint={t('settings.detach_body_over_bytes_hint')}
+                                                htmlFor="detach-over"
+                                                unit="KB"
+                                            >
+                                                <Input
+                                                    id="detach-over"
+                                                    type="number"
+                                                    min="0"
+                                                    value={detachBodyOver}
+                                                    onChange={e => setDetachBodyOver(Number(e.target.value))}
+                                                    className="h-11 w-full rounded-xl border-border/30 bg-background/50 text-sm shadow-sm transition-colors focus-visible:bg-background"
+                                                />
+                                            </FieldBlock>
+                                            <FieldBlock
+                                                label={t('settings.body_preview_bytes')}
+                                                hint={t('settings.body_preview_bytes_hint')}
+                                                htmlFor="body-preview"
+                                                unit="KB"
+                                            >
+                                                <Input
+                                                    id="body-preview"
+                                                    type="number"
+                                                    min="0"
+                                                    value={bodyPreview}
+                                                    onChange={e => setBodyPreview(Number(e.target.value))}
+                                                    className="h-11 w-full rounded-xl border-border/30 bg-background/50 text-sm shadow-sm transition-colors focus-visible:bg-background"
+                                                />
+                                            </FieldBlock>
+                                        </div>
+                                    </SettingSection>
 
-                                        <FieldBlock
-                                            label={t('settings.max_response_body')}
-                                            hint={t('settings.max_response_body_hint')}
-                                            htmlFor="max-res"
-                                            unit="KB"
-                                        >
-                                            <Input
-                                                id="max-res"
-                                                type="number"
-                                                min="1"
-                                                value={maxResponseBody}
-                                                onChange={e => setMaxResponseBody(Number(e.target.value))}
-                                                className="h-11 rounded-xl border-border/30 bg-background/50 text-sm shadow-sm transition-colors focus-visible:bg-background"
-                                            />
-                                        </FieldBlock>
+                                    <SettingSection
+                                        title={t('settings.section_retention')}
+                                        description={t('settings.section_retention_desc')}
+                                    >
+                                        <div className="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
+                                            <FieldBlock
+                                                label={t('settings.retention_days')}
+                                                hint={t('settings.retention_days_hint')}
+                                                htmlFor="retention-days"
+                                                unit={t('settings.days')}
+                                            >
+                                                <Input
+                                                    id="retention-days"
+                                                    type="number"
+                                                    min="0"
+                                                    value={retentionDays}
+                                                    onChange={e => setRetentionDays(Number(e.target.value))}
+                                                    className="h-11 w-full rounded-xl border-border/30 bg-background/50 text-sm shadow-sm transition-colors focus-visible:bg-background"
+                                                />
+                                            </FieldBlock>
+                                            <FieldBlock
+                                                label={t('settings.max_storage_bytes')}
+                                                hint={t('settings.max_storage_bytes_hint')}
+                                                htmlFor="max-storage"
+                                                unit="GB"
+                                            >
+                                                <Input
+                                                    id="max-storage"
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.1"
+                                                    value={maxStorageGB}
+                                                    onChange={e => setMaxStorageGB(Number(e.target.value))}
+                                                    className="h-11 w-full rounded-xl border-border/30 bg-background/50 text-sm shadow-sm transition-colors focus-visible:bg-background"
+                                                />
+                                            </FieldBlock>
+                                        </div>
+                                    </SettingSection>
 
-                                        <FieldBlock
-                                            label={t('settings.detach_body_over_bytes')}
-                                            hint={t('settings.detach_body_over_bytes_hint')}
-                                            htmlFor="detach-over"
-                                            unit="KB"
-                                        >
-                                            <Input
-                                                id="detach-over"
-                                                type="number"
-                                                min="0"
-                                                value={detachBodyOver}
-                                                onChange={e => setDetachBodyOver(Number(e.target.value))}
-                                                className="h-11 rounded-xl border-border/30 bg-background/50 text-sm shadow-sm transition-colors focus-visible:bg-background"
-                                            />
-                                        </FieldBlock>
-
-                                        <FieldBlock
-                                            label={t('settings.body_preview_bytes')}
-                                            hint={t('settings.body_preview_bytes_hint')}
-                                            htmlFor="body-preview"
-                                            unit="KB"
-                                        >
-                                            <Input
-                                                id="body-preview"
-                                                type="number"
-                                                min="0"
-                                                value={bodyPreview}
-                                                onChange={e => setBodyPreview(Number(e.target.value))}
-                                                className="h-11 rounded-xl border-border/30 bg-background/50 text-sm shadow-sm transition-colors focus-visible:bg-background"
-                                            />
-                                        </FieldBlock>
-
-                                        <FieldBlock
-                                            label={t('settings.retention_days')}
-                                            hint={t('settings.retention_days_hint')}
-                                            htmlFor="retention-days"
-                                            unit={t('settings.days')}
-                                        >
-                                            <Input
-                                                id="retention-days"
-                                                type="number"
-                                                min="0"
-                                                value={retentionDays}
-                                                onChange={e => setRetentionDays(Number(e.target.value))}
-                                                className="h-11 rounded-xl border-border/30 bg-background/50 text-sm shadow-sm transition-colors focus-visible:bg-background"
-                                            />
-                                        </FieldBlock>
-
-                                        <FieldBlock
-                                            label={t('settings.max_storage_bytes')}
-                                            hint={t('settings.max_storage_bytes_hint')}
-                                            htmlFor="max-storage"
-                                            unit="GB"
-                                        >
-                                            <Input
-                                                id="max-storage"
-                                                type="number"
-                                                min="0"
-                                                step="0.1"
-                                                value={maxStorageGB}
-                                                onChange={e => setMaxStorageGB(Number(e.target.value))}
-                                                className="h-11 rounded-xl border-border/30 bg-background/50 text-sm shadow-sm transition-colors focus-visible:bg-background"
-                                            />
-                                        </FieldBlock>
-
-                                        {/* 开关项目放入最后网格列中 */}
-                                        <div className="flex flex-col justify-center gap-y-5 pt-3">
+                                    <SettingSection
+                                        title={t('settings.section_logging_behavior')}
+                                        description={t('settings.section_logging_behavior_desc')}
+                                    >
+                                        <div className="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-2">
                                             <ToggleSetting
                                                 label={t('settings.early_request_body_snapshot')}
                                                 description={t('settings.early_request_body_snapshot_hint')}
                                                 checked={earlyRequestBodySnapshot}
                                                 onCheckedChange={setEarlyRequestBodySnapshot}
                                             />
-
                                             <ToggleSetting
                                                 label={t('settings.store_base64')}
                                                 description={t('settings.store_base64_hint')}
@@ -1800,38 +1831,20 @@ export function Settings() {
                                                 onCheckedChange={setStoreBase64}
                                             />
                                         </div>
-                                    </div>
+                                    </SettingSection>
 
-                                    {/* 文本输入池 */}
-                                    <div className="pt-2">
-                                        <FieldBlock
-                                            label={t('settings.sensitive_headers')}
-                                            hint={t('settings.sensitive_headers_hint')}
-                                        >
-                                            <Textarea
-                                                value={sensitiveHeaders}
-                                                onChange={e => setSensitiveHeaders(e.target.value)}
-                                                rows={5}
-                                                className="min-h-[140px] w-full rounded-xl border-border/30 bg-background/50 font-mono text-sm leading-relaxed shadow-sm transition-colors focus-visible:bg-background resize-y"
-                                                placeholder="Authorization&#10;x-api-key&#10;api-key"
-                                            />
-                                        </FieldBlock>
-                                    </div>
-
-                                    {/* 操作区 */}
-                                    <div className="flex justify-center pt-4">
-                                        <Button
-                                            type="button"
-                                            onClick={handleSaveAll}
-                                            disabled={saving}
-                                            variant="default"
-                                            size="lg"
-                                            className="h-11 rounded-xl font-medium shadow-sm transition-all whitespace-nowrap shrink-0"
-                                        >
-                                            <Save className="mr-2 h-4 w-4 shrink-0" />
-                                            {t('common.save')}
-                                        </Button>
-                                    </div>
+                                    <SettingSection
+                                        title={t('settings.section_sensitive_headers')}
+                                        description={t('settings.section_sensitive_headers_desc')}
+                                    >
+                                        <Textarea
+                                            value={sensitiveHeaders}
+                                            onChange={e => setSensitiveHeaders(e.target.value)}
+                                            rows={4}
+                                            className="min-h-[112px] w-full rounded-xl border-border/30 bg-background/50 font-mono text-sm leading-relaxed shadow-sm transition-colors focus-visible:bg-background resize-y"
+                                            placeholder="Authorization&#10;x-api-key&#10;api-key"
+                                        />
+                                    </SettingSection>
                                 </div>
                             </div>
                         )}
@@ -2085,7 +2098,7 @@ export function Settings() {
 
                         {activeTab === 'overrides' && (
                             <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-300 motion-reduce:animate-none motion-reduce:duration-0">
-                                <div className="max-w-7xl space-y-8">
+                                <div className="mx-auto max-w-7xl space-y-8">
                                     <div className="inline-flex rounded-xl border border-border/50 bg-muted/30 p-1">
                                         <button
                                             type="button"
@@ -2648,23 +2661,27 @@ export function Settings() {
                                         </>
                                     )}
 
-                                    <div className="flex justify-center pt-2">
-                                        <Button
-                                            type="button"
-                                            onClick={handleSaveAll}
-                                            disabled={saving}
-                                            variant="default"
-                                            size="lg"
-                                            className="h-11 font-medium shadow-sm transition-all whitespace-nowrap shrink-0"
-                                        >
-                                            <Save className="mr-2 h-4 w-4 shrink-0" />
-                                            {t('common.save')}
-                                        </Button>
-                                    </div>
                                 </div>
                             </div>
                         )}
                     </div>
+                    {(activeTab === 'logging' || activeTab === 'overrides') && (
+                        <div className="sticky bottom-0 z-30 -mx-4 border-t border-border/40 bg-background/85 px-4 py-3 backdrop-blur-md sm:-mx-10 sm:px-10">
+                            <div className="mx-auto flex max-w-7xl items-center justify-end gap-4">
+                                <Button
+                                    type="button"
+                                    onClick={handleSaveAll}
+                                    disabled={saving}
+                                    variant="default"
+                                    size="lg"
+                                    className="h-11 min-w-[160px] rounded-xl font-medium shadow-sm transition-all whitespace-nowrap"
+                                >
+                                    <Save className="mr-2 h-4 w-4 shrink-0" />
+                                    {t('common.save')}
+                                </Button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

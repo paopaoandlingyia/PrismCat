@@ -134,6 +134,17 @@
   background: hsl(var(--muted-foreground));
 }
 
+/* 隐藏 number 输入框默认的上下箭头 (spinner) */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
 /* 搜索高亮 - 当前激活的匹配项 */
 [data-search-match-active] {
   background-color: rgb(253 186 116) !important;
