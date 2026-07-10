@@ -6,7 +6,7 @@ on:
       tag_name:
         description: '要补充文件的 Release 标签 (例如 v1.6.0)'
         required: true
-        default: 'v1.11.0'
+        default: 'v1.11.1'
 
 jobs:
   build-and-release:
