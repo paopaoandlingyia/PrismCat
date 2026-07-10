@@ -2,14 +2,14 @@ import { cn, formatDate, formatLatency, formatSize, getStatusColor, getMethodCol
 import { Copy, Check, Zap, AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsDownUp, ChevronsUpDown, FileCode, ListTree, Globe, Layers, RotateCcw, Maximize2, Minimize2, ExternalLink, Terminal, Bookmark, BookmarkCheck, CheckCircle2, CircleDot, Tags, Search, X } from 'lucide-react'
 import { fetchBlob, fetchLogBody, updateLogAnnotation } from '@/lib/api'
 import type { LiveLogEvent, RequestLog } from '@/lib/api'
-import { startTransition, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react'
+import { startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { JsonViewer, type JsonExpandMode, HighlightText } from './JsonViewer'
 import { JsonDiffViewer } from './JsonDiffViewer'
 import { BlobPanel } from './BlobPanel'
 import { mergeStreamBody } from '@/lib/streamMerge'
-import { countJsonSearchMatches } from '@/lib/jsonSearch'
+import { collectTextSearchMatches, createJsonSearchPlan, MAX_RENDERED_SEARCH_MATCHES, type JsonSearchPlan } from '@/lib/jsonSearch'
 import { logRequestDiffPath } from '@/lib/routes'
 import { buildCurlCommand } from '@/lib/curlExport'
 import {
@@ -79,13 +79,14 @@ function getInitialExpandedSections(): typeof defaultExpandedSections {
     }
 }
 
-function countTextMatches(text: string, term: string): number {
-    if (!term || !text) return 0;
-    const lower = text.toLowerCase();
-    const lowerTerm = term.toLowerCase();
-    let count = 0, idx = 0;
-    while ((idx = lower.indexOf(lowerTerm, idx)) !== -1) { count++; idx += lowerTerm.length; }
-    return count;
+interface BodySearchStats {
+    matchCount: number
+    truncated: boolean
+}
+
+function createTextSearchStats(text: string, term: string): BodySearchStats {
+    const result = collectTextSearchMatches(text, term, MAX_RENDERED_SEARCH_MATCHES)
+    return { matchCount: result.ranges.length, truncated: result.truncated }
 }
 
 function navigateSearchMatch(container: HTMLElement | null, direction: 'prev' | 'next') {
@@ -105,10 +106,14 @@ function navigateSearchMatch(container: HTMLElement | null, direction: 'prev' | 
     matches[nextIdx].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-function RawBodyViewer({ text, searchTerm }: { text: string; searchTerm?: string }) {
+function clearActiveSearchMatch(container: HTMLElement | null) {
+    container?.querySelector<HTMLElement>('[data-search-match-active]')?.removeAttribute('data-search-match-active');
+}
+
+function RawBodyViewer({ text, searchTerm, maxMatches }: { text: string; searchTerm?: string; maxMatches: number }) {
     return (
         <pre className="whitespace-pre-wrap break-all text-[11px] font-mono leading-relaxed text-foreground select-text">
-            {searchTerm ? <HighlightText text={text} searchTerm={searchTerm} /> : text}
+            {searchTerm ? <HighlightText text={text} searchTerm={searchTerm} maxMatches={maxMatches} /> : text}
         </pre>
     );
 }
@@ -128,16 +133,27 @@ function BodySearchBar({
     searchTerm,
     onSearchTermChange,
     matchCount,
+    truncated,
+    pending,
     onNavigate,
     onClose,
 }: {
     searchTerm: string;
     onSearchTermChange: (term: string) => void;
     matchCount: number;
+    truncated: boolean;
+    pending: boolean;
     onNavigate: (dir: 'prev' | 'next') => void;
     onClose: () => void;
 }) {
     const { t } = useTranslation();
+    const matchLabel = pending
+        ? '…'
+        : truncated
+            ? t('body_search.match_count_truncated', { count: matchCount, defaultValue: '{{count}}+ matches' })
+            : matchCount > 0
+                ? t('body_search.match_count', { count: matchCount })
+                : t('body_search.no_matches', 'No matches')
     return (
         <div className="flex items-center gap-2 border-b border-border/60 px-3 py-1.5 bg-muted/20">
             <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
@@ -146,7 +162,10 @@ function BodySearchBar({
                 value={searchTerm}
                 onChange={(e) => onSearchTermChange(e.target.value)}
                 onKeyDown={(e) => {
-                    if (e.key === 'Enter') { e.preventDefault(); onNavigate(e.shiftKey ? 'prev' : 'next'); }
+                    if (e.key === 'Enter') {
+                        e.preventDefault()
+                        if (!pending && matchCount > 0) onNavigate(e.shiftKey ? 'prev' : 'next')
+                    }
                     if (e.key === 'Escape') { e.preventDefault(); onClose(); }
                 }}
                 placeholder={t('body_search.placeholder', 'Search in body...')}
@@ -154,17 +173,14 @@ function BodySearchBar({
             />
             {searchTerm && (
                 <span className="text-[10px] font-bold text-muted-foreground whitespace-nowrap">
-                    {matchCount > 0
-                        ? t('body_search.match_count', { count: matchCount })
-                        : t('body_search.no_matches', 'No matches')
-                    }
+                    {matchLabel}
                 </span>
             )}
             <div className="flex items-center">
                 <button
                     type="button"
                     onClick={() => onNavigate('prev')}
-                    disabled={!searchTerm || matchCount === 0}
+                    disabled={!searchTerm || pending || matchCount === 0}
                     className="h-6 w-6 inline-flex items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-30 disabled:pointer-events-none"
                 >
                     <ChevronUp className="h-3 w-3" />
@@ -172,7 +188,7 @@ function BodySearchBar({
                 <button
                     type="button"
                     onClick={() => onNavigate('next')}
-                    disabled={!searchTerm || matchCount === 0}
+                    disabled={!searchTerm || pending || matchCount === 0}
                     className="h-6 w-6 inline-flex items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-30 disabled:pointer-events-none"
                 >
                     <ChevronDown className="h-3 w-3" />
@@ -228,6 +244,8 @@ export function LogDetail({
     const [requestSearchTerm, setRequestSearchTerm] = useState('')
     const [responseSearchOpen, setResponseSearchOpen] = useState(false)
     const [responseSearchTerm, setResponseSearchTerm] = useState('')
+    const deferredRequestSearchTerm = useDeferredValue(requestSearchTerm)
+    const deferredResponseSearchTerm = useDeferredValue(responseSearchTerm)
     const requestBodyRef = useRef<HTMLDivElement>(null)
     const responseBodyRef = useRef<HTMLDivElement>(null)
     const displayLog = liveLog ?? log
@@ -387,22 +405,44 @@ export function LogDetail({
         return mergeStreamBody(effectiveResponseBody)
     }, [shouldInspectResponseBody, displayLog?.streaming, responseViewMode, effectiveResponseBody])
 
-    const requestSearchMatchCount = useMemo(() => {
-        if (!requestSearchTerm) return 0
-        if (requestViewMode === 'raw' || requestViewMode === 'diff') return countTextMatches(effectiveRequestBody, requestSearchTerm)
-        return parsedRequestBody
-            ? countJsonSearchMatches(parsedRequestBody, requestSearchTerm)
-            : countTextMatches(effectiveRequestBody, requestSearchTerm)
-    }, [requestSearchTerm, requestViewMode, effectiveRequestBody, parsedRequestBody])
+    const effectiveRequestSearchTerm = requestSearchTerm ? deferredRequestSearchTerm : ''
+    const effectiveResponseSearchTerm = responseSearchTerm ? deferredResponseSearchTerm : ''
+    const requestSearchPending = requestSearchTerm !== effectiveRequestSearchTerm
+    const responseSearchPending = responseSearchTerm !== effectiveResponseSearchTerm
+    const requestViewerData = parsedRequestBody ?? effectiveRequestBody
+    const responseViewerData = responseViewMode === 'merged' && mergedResponse
+        ? mergedResponse.merged
+        : parsedResponseBody ?? effectiveResponseBody
 
-    const responseSearchMatchCount = useMemo(() => {
-        if (!responseSearchTerm) return 0
-        if (responseViewMode === 'raw') return countTextMatches(effectiveResponseBody, responseSearchTerm)
-        if (responseViewMode === 'merged' && mergedResponse) return countJsonSearchMatches(mergedResponse.merged, responseSearchTerm)
-        return parsedResponseBody
-            ? countJsonSearchMatches(parsedResponseBody, responseSearchTerm)
-            : countTextMatches(effectiveResponseBody, responseSearchTerm)
-    }, [responseSearchTerm, responseViewMode, effectiveResponseBody, parsedResponseBody, mergedResponse])
+    const requestJsonSearchPlan = useMemo<JsonSearchPlan | null>(() => {
+        if (!effectiveRequestSearchTerm || requestViewMode !== 'pretty') return null
+        return createJsonSearchPlan(requestViewerData, effectiveRequestSearchTerm)
+    }, [effectiveRequestSearchTerm, requestViewMode, requestViewerData])
+
+    const responseJsonSearchPlan = useMemo<JsonSearchPlan | null>(() => {
+        if (!effectiveResponseSearchTerm || responseViewMode === 'raw' || (responseViewMode === 'merged' && !mergedResponse)) return null
+        return createJsonSearchPlan(responseViewerData, effectiveResponseSearchTerm)
+    }, [effectiveResponseSearchTerm, responseViewMode, responseViewerData, mergedResponse])
+
+    const requestSearchStats = useMemo<BodySearchStats>(() => {
+        if (!effectiveRequestSearchTerm || requestViewMode === 'diff') return { matchCount: 0, truncated: false }
+        if (requestViewMode === 'raw') return createTextSearchStats(effectiveRequestBody, effectiveRequestSearchTerm)
+        return requestJsonSearchPlan ?? { matchCount: 0, truncated: false }
+    }, [effectiveRequestSearchTerm, requestViewMode, effectiveRequestBody, requestJsonSearchPlan])
+
+    const responseSearchStats = useMemo<BodySearchStats>(() => {
+        if (!effectiveResponseSearchTerm) return { matchCount: 0, truncated: false }
+        if (responseViewMode === 'raw') return createTextSearchStats(effectiveResponseBody, effectiveResponseSearchTerm)
+        return responseJsonSearchPlan ?? { matchCount: 0, truncated: false }
+    }, [effectiveResponseSearchTerm, responseViewMode, effectiveResponseBody, responseJsonSearchPlan])
+
+    useEffect(() => {
+        clearActiveSearchMatch(requestBodyRef.current)
+    }, [effectiveRequestSearchTerm, requestViewMode])
+
+    useEffect(() => {
+        clearActiveSearchMatch(responseBodyRef.current)
+    }, [effectiveResponseSearchTerm, responseViewMode])
 
     const copyToClipboard = async (text: string, field: string) => {
         await navigator.clipboard.writeText(text)
@@ -1155,29 +1195,33 @@ export function LogDetail({
                                                             </TooltipContent>
                                                         </Tooltip>
                                                     )}
-                                                    <SearchToggle active={requestSearchOpen} onClick={() => {
-                                                        setRequestSearchOpen(v => !v)
-                                                        if (requestSearchOpen) setRequestSearchTerm('')
-                                                    }} />
+                                                    {requestViewMode !== 'diff' && (
+                                                        <SearchToggle active={requestSearchOpen} onClick={() => {
+                                                            setRequestSearchOpen(v => !v)
+                                                            if (requestSearchOpen) setRequestSearchTerm('')
+                                                        }} />
+                                                    )}
                                                     <CopyButton text={effectiveRequestBody} field="requestBody" />
                                                 </div>
                                             </div>
-                                            {requestSearchOpen && (
+                                            {requestSearchOpen && requestViewMode !== 'diff' && (
                                                 <BodySearchBar
                                                     searchTerm={requestSearchTerm}
                                                     onSearchTermChange={setRequestSearchTerm}
-                                                    matchCount={requestSearchMatchCount}
+                                                    matchCount={requestSearchStats.matchCount}
+                                                    truncated={requestSearchStats.truncated}
+                                                    pending={requestSearchPending}
                                                     onNavigate={(dir) => navigateSearchMatch(requestBodyRef.current, dir)}
                                                     onClose={() => { setRequestSearchOpen(false); setRequestSearchTerm(''); }}
                                                 />
                                             )}
                                             <div ref={requestBodyRef} className="custom-scrollbar flex-1 overflow-x-auto overflow-y-auto p-4">
                                                 {requestViewMode === 'raw' ? (
-                                                    <RawBodyViewer text={effectiveRequestBody} searchTerm={requestSearchTerm || undefined} />
+                                                    <RawBodyViewer text={effectiveRequestBody} searchTerm={effectiveRequestSearchTerm || undefined} maxMatches={requestSearchStats.matchCount} />
                                                 ) : requestViewMode === 'diff' && hasRequestBodyDiff ? (
                                                     <JsonDiffViewer beforeText={originalRequestBody} afterText={finalRequestBody} />
                                                 ) : (
-                                                    <JsonViewer data={parsedRequestBody ?? effectiveRequestBody} expandMode={requestExpandMode} searchTerm={requestSearchTerm || undefined} />
+                                                    <JsonViewer data={requestViewerData} expandMode={requestExpandMode} searchTerm={effectiveRequestSearchTerm || undefined} searchPlan={requestJsonSearchPlan} />
                                                 )}
                                             </div>
                                         </div>
@@ -1305,24 +1349,26 @@ export function LogDetail({
                                                 <BodySearchBar
                                                     searchTerm={responseSearchTerm}
                                                     onSearchTermChange={setResponseSearchTerm}
-                                                    matchCount={responseSearchMatchCount}
+                                                    matchCount={responseSearchStats.matchCount}
+                                                    truncated={responseSearchStats.truncated}
+                                                    pending={responseSearchPending}
                                                     onNavigate={(dir) => navigateSearchMatch(responseBodyRef.current, dir)}
                                                     onClose={() => { setResponseSearchOpen(false); setResponseSearchTerm(''); }}
                                                 />
                                             )}
                                             <div ref={responseBodyRef} className="custom-scrollbar flex-1 overflow-x-auto overflow-y-auto p-4">
                                                 {responseViewMode === 'raw' ? (
-                                                    <RawBodyViewer text={effectiveResponseBody} searchTerm={responseSearchTerm || undefined} />
+                                                    <RawBodyViewer text={effectiveResponseBody} searchTerm={effectiveResponseSearchTerm || undefined} maxMatches={responseSearchStats.matchCount} />
                                                 ) : responseViewMode === 'merged' ? (
                                                     mergedResponse ? (
-                                                        <JsonViewer data={mergedResponse.merged} expandMode={responseExpandMode} searchTerm={responseSearchTerm || undefined} />
+                                                        <JsonViewer data={mergedResponse.merged} expandMode={responseExpandMode} searchTerm={effectiveResponseSearchTerm || undefined} searchPlan={responseJsonSearchPlan} />
                                                     ) : (
                                                         <div className={cn(emptyStateClassName, "text-[11px] italic text-muted-foreground")}>
                                                             {t('log_detail.stream_merge_unavailable', '当前无法生成合并视图，请切换到 Raw 查看原始内容。')}
                                                         </div>
                                                     )
                                                 ) : (
-                                                    <JsonViewer data={parsedResponseBody ?? effectiveResponseBody} expandMode={responseExpandMode} searchTerm={responseSearchTerm || undefined} />
+                                                    <JsonViewer data={responseViewerData} expandMode={responseExpandMode} searchTerm={effectiveResponseSearchTerm || undefined} searchPlan={responseJsonSearchPlan} />
                                                 )}
                                             </div>
                                         </div>

@@ -158,6 +158,7 @@
         "search": "Search",
         "placeholder": "Search in body...",
         "match_count": "{{count}} matches",
+        "match_count_truncated": "{{count}}+ matches",
         "no_matches": "No matches"
     },
     "json_viewer": {

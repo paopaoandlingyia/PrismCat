@@ -3,7 +3,25 @@ import { useTranslation } from 'react-i18next';
 import { Copy, Eye, Image as ImageIcon, FileCode } from 'lucide-react';
 import { Button } from './ui/button';
 import { formatSize } from '@/lib/utils';
-import { containsSearchMatch } from '@/lib/jsonSearch';
+import {
+    buildSmartTextSegments,
+    detectionFromMime,
+    detectBase64,
+    LARGE_TEXT_PREVIEW_LENGTH,
+    LARGE_TEXT_THRESHOLD,
+    normalizeBase64,
+    parseDataUri,
+    type Base64Detection,
+} from '@/lib/bodyContent';
+import {
+    childJsonSearchPath as childNodePath,
+    collectTextSearchMatches,
+    createJsonSearchPlan,
+    jsonKeySearchSlot as keySearchSlot,
+    jsonValueSearchSlot as valueSearchSlot,
+    MAX_RENDERED_SEARCH_MATCHES,
+    type JsonSearchPlan,
+} from '@/lib/jsonSearch';
 import {
     Dialog,
     DialogContent,
@@ -11,108 +29,34 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 
-// ─── Base64 Detection (magic-number based) ───────────────────────────
-
-interface Base64Detection {
-    isBase64: boolean;
-    fileType: 'jpeg' | 'png' | 'gif' | 'webp' | 'pdf' | 'unknown' | null;
-    isImage: boolean;
-    mimeType?: string;
-    label: string;
-}
-
-const NO_B64: Base64Detection = { isBase64: false, fileType: null, isImage: false, label: '' };
-const LARGE_TEXT_THRESHOLD = 50_000;
-const LARGE_TEXT_PREVIEW_LENGTH = 4_000;
 const ROOT_AUTO_EXPAND_LIMIT = 12;
 const CHILD_AUTO_EXPAND_LIMIT = 6;
 const ARRAY_SHAPE_SAMPLE_SIZE = 5;
 const ARRAY_SHAPE_FORCE_EXPAND_LIMIT = 6;
-const BASE64_HEAD_REGEX = /^[A-Za-z0-9+/_-]+$/;
-const BASE64_SEGMENT_REGEX = /(data:[^\s]+?;base64,)?([A-Za-z0-9+/_-]{200,}[=]{0,2})/g;
 
-function isBase64Url(value: string) {
-    return /[-_]/.test(value);
-}
-
-function normalizeBase64(value: string) {
-    const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
-    const remainder = normalized.length % 4;
-    if (remainder === 0 || remainder === 1) return normalized;
-    return normalized + '='.repeat(4 - remainder);
-}
-
-function unknownBase64Label(value: string) {
-    if (value.startsWith('gAAAAA')) return 'Fernet Token';
-    return isBase64Url(value) ? 'Base64URL' : 'Base64';
-}
-
-/**
- * Detect whether a string is base64-encoded binary data.
- * Decodes only the first 16 chars (~12 bytes) to check magic numbers.
- */
-function detectBase64(value: string): Base64Detection {
-    if (value.length < 200) return NO_B64;
-    if (!BASE64_HEAD_REGEX.test(value.substring(0, 200))) return NO_B64;
-    try {
-        const decoded = atob(normalizeBase64(value.substring(0, 16)));
-        const b = new Uint8Array(decoded.length);
-        for (let i = 0; i < decoded.length; i++) b[i] = decoded.charCodeAt(i);
-
-        if (b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF)
-            return { isBase64: true, fileType: 'jpeg', isImage: true, mimeType: 'image/jpeg', label: 'JPEG' };
-        if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47)
-            return { isBase64: true, fileType: 'png', isImage: true, mimeType: 'image/png', label: 'PNG' };
-        if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46)
-            return { isBase64: true, fileType: 'gif', isImage: true, mimeType: 'image/gif', label: 'GIF' };
-        if (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46)
-            return { isBase64: true, fileType: 'webp', isImage: true, mimeType: 'image/webp', label: 'WebP' };
-        if (b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46)
-            return { isBase64: true, fileType: 'pdf', isImage: false, mimeType: 'application/pdf', label: 'PDF' };
-        return { isBase64: true, fileType: 'unknown', isImage: false, label: unknownBase64Label(value) };
-    } catch {
-        return NO_B64;
-    }
-}
-
-/** Parse data URI: "data:image/jpeg;base64,xxx" → { prefix, base64Data, mimeType } */
-function parseDataUri(value: string) {
-    if (!value.startsWith('data:')) return null;
-    const marker = ';base64,';
-    const idx = value.indexOf(marker);
-    if (idx < 0) return null;
-    const base64Data = value.substring(idx + marker.length);
-    if (!base64Data || base64Data.length < 100) return null;
-    return {
-        prefix: value.substring(0, idx + marker.length),
-        base64Data,
-        mimeType: value.substring(5, idx).split(';')[0],
-    };
-}
-
-function detectionFromMime(mimeType: string): Base64Detection {
-    return { isBase64: true, fileType: 'unknown', isImage: mimeType.startsWith('image/'), mimeType, label: mimeType.split('/')[1]?.toUpperCase() || 'Base64' };
-}
-
-export function HighlightText({ text, searchTerm }: { text: string; searchTerm?: string }) {
-    if (!searchTerm) return <>{text}</>;
-    const lowerText = text.toLowerCase();
-    const lowerTerm = searchTerm.toLowerCase();
-    if (!lowerText.includes(lowerTerm)) return <>{text}</>;
+export function HighlightText({
+    text,
+    searchTerm,
+    maxMatches = MAX_RENDERED_SEARCH_MATCHES,
+}: {
+    text: string;
+    searchTerm?: string;
+    maxMatches?: number;
+}) {
+    if (!searchTerm || maxMatches <= 0) return <>{text}</>;
+    const { ranges } = collectTextSearchMatches(text, searchTerm, maxMatches);
+    if (!ranges.length) return <>{text}</>;
     const parts: ReactNode[] = [];
     let lastIndex = 0;
-    let idx = lowerText.indexOf(lowerTerm);
-    let k = 0;
-    while (idx !== -1) {
-        if (idx > lastIndex) parts.push(text.slice(lastIndex, idx));
+    ranges.forEach((range, index) => {
+        if (range.start > lastIndex) parts.push(text.slice(lastIndex, range.start));
         parts.push(
-            <mark key={k++} className="bg-yellow-200 dark:bg-yellow-500/30 text-inherit rounded-[2px]" data-search-match="">
-                {text.slice(idx, idx + searchTerm.length)}
+            <mark key={index} className="bg-yellow-200 dark:bg-yellow-500/30 text-inherit rounded-[2px]" data-search-match="">
+                {text.slice(range.start, range.end)}
             </mark>
         );
-        lastIndex = idx + searchTerm.length;
-        idx = lowerText.indexOf(lowerTerm, lastIndex);
-    }
+        lastIndex = range.end;
+    });
     if (lastIndex < text.length) parts.push(text.slice(lastIndex));
     return <>{parts}</>;
 }
@@ -127,11 +71,18 @@ interface JsonViewerProps {
     initialExpanded?: boolean;
     expandMode?: JsonExpandMode;
     searchTerm?: string;
+    searchPlan?: JsonSearchPlan | null;
 }
 
-export function JsonViewer({ data, initialExpanded = true, expandMode = 'default', searchTerm }: JsonViewerProps) {
-    if (typeof data === 'string') return <SmartText text={data} searchTerm={searchTerm} />;
-    if (typeof data !== 'object' || data === null) return <ValueNode value={data} searchTerm={searchTerm} />;
+export function JsonViewer({ data, initialExpanded = true, expandMode = 'default', searchTerm, searchPlan }: JsonViewerProps) {
+    const fallbackSearchPlan = useMemo(
+        () => !searchPlan && searchTerm ? createJsonSearchPlan(data, searchTerm) : null,
+        [data, searchPlan, searchTerm],
+    );
+    const effectiveSearchPlan = searchPlan ?? fallbackSearchPlan;
+
+    if (typeof data === 'string') return <SmartText text={data} searchTerm={searchTerm} searchPlan={effectiveSearchPlan} nodePath="" />;
+    if (typeof data !== 'object' || data === null) return <ValueNode value={data} searchTerm={searchTerm} searchPlan={effectiveSearchPlan} nodePath="" />;
 
     const rootData: JsonContainer = Array.isArray(data) || isRecord(data) ? data : {};
     const rootInitialExpanded = shouldAutoExpandNode({
@@ -143,7 +94,7 @@ export function JsonViewer({ data, initialExpanded = true, expandMode = 'default
 
     return (
         <div className="font-mono text-[13px] leading-relaxed select-text">
-            <CollapsibleNode data={rootData} label="" isRoot initialExpanded={rootInitialExpanded} depth={0} expandMode={expandMode} searchTerm={searchTerm} />
+            <CollapsibleNode data={rootData} label="" isRoot initialExpanded={rootInitialExpanded} depth={0} expandMode={expandMode} searchTerm={searchTerm} searchPlan={effectiveSearchPlan} nodePath="" />
         </div>
     );
 }
@@ -152,53 +103,53 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function getSearchMatchLimit(searchPlan: JsonSearchPlan | null | undefined, slot: string): number {
+    return searchPlan?.matchesBySlot.get(slot) ?? 0;
+}
+
 // ─── SmartText: raw text with base64 detection ───────────────────────
 
-export function SmartText({ text, searchTerm }: { text: string; searchTerm?: string }) {
+export function SmartText({
+    text,
+    searchTerm,
+    searchPlan,
+    nodePath,
+}: {
+    text: string;
+    searchTerm?: string;
+    searchPlan?: JsonSearchPlan | null;
+    nodePath: string;
+}) {
     const isLargeText = text.length > LARGE_TEXT_THRESHOLD;
-    type Seg = { type: 'text'; content: string } | { type: 'b64'; content: string; detection: Base64Detection; prefix?: string };
-    const segments = useMemo(() => {
-        if (isLargeText || !text || text.length < 200) return null;
-        const parts: Seg[] = [];
-        let lastIndex = 0, found = false;
-        const regex = new RegExp(BASE64_SEGMENT_REGEX);
-        let match;
-        while ((match = regex.exec(text)) !== null) {
-            const prefix = match[1] || undefined;
-            const b64 = match[2];
-            const detection = detectBase64(b64);
-            if (!detection.isBase64) continue;
-            found = true;
-            if (match.index > lastIndex) parts.push({ type: 'text', content: text.substring(lastIndex, match.index) });
-            if (prefix) parts.push({ type: 'text', content: prefix });
-            parts.push({ type: 'b64', content: b64, detection, prefix });
-            lastIndex = regex.lastIndex;
-        }
-        if (!found) return null;
-        if (lastIndex < text.length) parts.push({ type: 'text', content: text.substring(lastIndex) });
-        return parts;
-    }, [isLargeText, text]);
+    const segments = useMemo(() => buildSmartTextSegments(text), [text]);
 
     if (isLargeText) {
-        return <LargeTextPreview text={text} />;
+        return <LargeTextPreview text={text} searchTerm={searchTerm} maxMatches={getSearchMatchLimit(searchPlan, valueSearchSlot(nodePath))} />;
     }
 
-    if (!segments) return <pre className="whitespace-pre-wrap break-all text-[11px] font-mono">{searchTerm ? <HighlightText text={text} searchTerm={searchTerm} /> : text}</pre>;
+    if (!segments) return <pre className="whitespace-pre-wrap break-all text-[11px] font-mono">{searchTerm ? <HighlightText text={text} searchTerm={searchTerm} maxMatches={getSearchMatchLimit(searchPlan, valueSearchSlot(nodePath))} /> : text}</pre>;
+    let searchableFragmentIndex = 0;
     return (
         <div className="whitespace-pre-wrap break-all leading-relaxed text-[11px] font-mono">
-            {segments.map((seg, i) =>
-                seg.type === 'text'
-                    ? <span key={i}>{searchTerm ? <HighlightText text={seg.content} searchTerm={searchTerm} /> : seg.content}</span>
-                    : <Base64Placeholder key={i} value={seg.content} detection={seg.detection} dataUriPrefix={seg.prefix} />
-            )}
+            {segments.map((seg, i) => {
+                if (seg.type === 'b64') {
+                    return <Base64Placeholder key={i} value={seg.content} detection={seg.detection} dataUriPrefix={seg.prefix} />;
+                }
+                const fragmentIndex = searchableFragmentIndex++;
+                return <span key={i}>{searchTerm ? <HighlightText text={seg.content} searchTerm={searchTerm} maxMatches={getSearchMatchLimit(searchPlan, valueSearchSlot(nodePath, fragmentIndex))} /> : seg.content}</span>;
+            })}
         </div>
     );
 }
 
-function LargeTextPreview({ text }: { text: string }) {
+function LargeTextPreview({ text, searchTerm, maxMatches }: { text: string; searchTerm?: string; maxMatches: number }) {
     const { t } = useTranslation();
     const [expanded, setExpanded] = useState(false);
     const preview = useMemo(() => text.slice(0, LARGE_TEXT_PREVIEW_LENGTH), [text]);
+    const searchRanges = useMemo(
+        () => searchTerm ? collectTextSearchMatches(text, searchTerm, maxMatches).ranges : [],
+        [maxMatches, searchTerm, text],
+    );
 
     const copyToClipboard = () => {
         void navigator.clipboard.writeText(text);
@@ -225,9 +176,37 @@ function LargeTextPreview({ text }: { text: string }) {
                 </button>
             </div>
             <pre className="whitespace-pre-wrap break-all rounded-xl border border-border/60 bg-background p-3 text-[11px] font-mono shadow-xs">
-                {expanded || text.length <= preview.length ? text : `${preview}\n...`}
+                {searchTerm && searchRanges.length && !expanded ? (
+                    <LargeTextSearchSnippets text={text} ranges={searchRanges} />
+                ) : expanded || text.length <= preview.length ? (
+                    searchTerm ? <HighlightText text={text} searchTerm={searchTerm} maxMatches={maxMatches} /> : text
+                ) : `${preview}\n...`}
             </pre>
         </div>
+    );
+}
+
+function LargeTextSearchSnippets({ text, ranges }: { text: string; ranges: Array<{ start: number; end: number }> }) {
+    const contextLength = 80;
+    return (
+        <>
+            {ranges.map((range, index) => {
+                const start = Math.max(0, range.start - contextLength);
+                const end = Math.min(text.length, range.end + contextLength);
+                return (
+                    <span key={`${range.start}:${range.end}`} className="block border-b border-border/40 py-1 last:border-b-0">
+                        {start > 0 ? '…' : ''}
+                        {text.slice(start, range.start)}
+                        <mark className="bg-yellow-200 dark:bg-yellow-500/30 text-inherit rounded-[2px]" data-search-match="">
+                            {text.slice(range.start, range.end)}
+                        </mark>
+                        {text.slice(range.end, end)}
+                        {end < text.length ? '…' : ''}
+                        {index < ranges.length - 1 ? '\n' : ''}
+                    </span>
+                );
+            })}
+        </>
     );
 }
 
@@ -291,7 +270,6 @@ function createExpansionSnapshot({
     initialExpanded,
     forceExpanded,
     expandMode,
-    searchTerm,
 }: {
     data: JsonContainer;
     depth: number;
@@ -299,12 +277,9 @@ function createExpansionSnapshot({
     initialExpanded: boolean;
     forceExpanded: boolean;
     expandMode: JsonExpandMode;
-    searchTerm?: string;
 }) {
     let expanded: boolean;
-    if (searchTerm && containsSearchMatch(data, searchTerm)) {
-        expanded = true;
-    } else if (expandMode === 'all') {
+    if (expandMode === 'all') {
         expanded = true;
     } else if (expandMode === 'none') {
         expanded = false;
@@ -318,12 +293,11 @@ function createExpansionSnapshot({
         initialExpanded,
         forceExpanded,
         expandMode,
-        searchTerm,
         expanded,
     };
 }
 
-function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, initialExpanded = true, forceExpanded = false, suffix = null, depth = 0, expandMode = 'default', searchTerm }: {
+function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, initialExpanded = true, forceExpanded = false, suffix = null, depth = 0, expandMode = 'default', searchTerm, searchPlan, nodePath }: {
     data: JsonContainer;
     label: string;
     isRoot?: boolean;
@@ -334,6 +308,8 @@ function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, ini
     depth?: number;
     expandMode?: JsonExpandMode;
     searchTerm?: string;
+    searchPlan?: JsonSearchPlan | null;
+    nodePath: string;
 }) {
     const { t } = useTranslation();
     const [expansion, setExpansion] = useState(() => createExpansionSnapshot({
@@ -343,7 +319,6 @@ function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, ini
         initialExpanded,
         forceExpanded,
         expandMode,
-        searchTerm,
     }));
     let currentExpansion = expansion;
     if (
@@ -352,8 +327,7 @@ function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, ini
         expansion.isRoot !== isRoot ||
         expansion.initialExpanded !== initialExpanded ||
         expansion.forceExpanded !== forceExpanded ||
-        expansion.expandMode !== expandMode ||
-        expansion.searchTerm !== searchTerm
+        expansion.expandMode !== expandMode
     ) {
         currentExpansion = createExpansionSnapshot({
             data,
@@ -362,16 +336,18 @@ function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, ini
             initialExpanded,
             forceExpanded,
             expandMode,
-            searchTerm,
         });
         setExpansion(currentExpansion);
     }
-    const expanded = currentExpansion.expanded;
+    const expanded = currentExpansion.expanded || Boolean(searchTerm && searchPlan?.expandedPaths.has(nodePath));
     const setExpanded = (value: boolean) => {
         setExpansion((current) => ({ ...current, expanded: value }));
     };
     const isArray = Array.isArray(data);
     const entries = Object.entries(data);
+    const renderedEntries = searchTerm && searchPlan
+        ? entries.filter(([key]) => searchPlan.visiblePaths.has(childNodePath(nodePath, key)))
+        : entries;
     const isEmpty = entries.length === 0;
     const [open, close] = isArray ? ['[', ']'] : ['{', '}'];
     const showLabel = !isRoot && !isArrayItem;
@@ -409,7 +385,7 @@ function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, ini
     if (isEmpty) {
         return (
             <div>
-                {showLabel && <span className="text-violet-600 dark:text-violet-400 font-semibold mr-1">"<HighlightText text={label} searchTerm={searchTerm} />": </span>}
+                {showLabel && <span className="text-violet-600 dark:text-violet-400 font-semibold mr-1">"<HighlightText text={label} searchTerm={searchTerm} maxMatches={getSearchMatchLimit(searchPlan, keySearchSlot(nodePath))} />": </span>}
                 <span className="text-muted-foreground/60">{open}{close}</span>{suffix}
             </div>
         );
@@ -422,7 +398,7 @@ function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, ini
                 className="cursor-pointer hover:bg-muted/30 rounded-sm transition-colors flex items-center w-fit"
                 onClick={() => setExpanded(!expanded)}
             >
-                {showLabel && <span className="text-violet-600 dark:text-violet-400 font-semibold mr-1">"<HighlightText text={label} searchTerm={searchTerm} />": </span>}
+                {showLabel && <span className="text-violet-600 dark:text-violet-400 font-semibold mr-1">"<HighlightText text={label} searchTerm={searchTerm} maxMatches={getSearchMatchLimit(searchPlan, keySearchSlot(nodePath))} />": </span>}
                 <span className="text-muted-foreground/60">{open}</span>
                 {!expanded && (
                     <>
@@ -437,8 +413,9 @@ function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, ini
             {/* Children - wrapped in a container that draws the indent guide */}
             {expanded && (
                 <div className="ml-[1ch] border-l border-muted-foreground/15 pl-[1ch]">
-                    {entries.map(([key, value], idx) => {
-                        const comma = idx < entries.length - 1 ? <span className="text-muted-foreground/40">,</span> : null;
+                    {renderedEntries.map(([key, value], idx) => {
+                        const comma = idx < renderedEntries.length - 1 ? <span className="text-muted-foreground/40">,</span> : null;
+                        const childPath = childNodePath(nodePath, key);
                         if (typeof value === 'object' && value !== null) {
                             const forceExpandChild = shouldForceExpandArrayChild(idx, value);
                             return (
@@ -453,14 +430,16 @@ function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, ini
                                     depth={depth + 1}
                                     expandMode={expandMode}
                                     searchTerm={searchTerm}
+                                    searchPlan={searchPlan}
+                                    nodePath={childPath}
                                 />
                             );
                         }
                         return (
                             <div key={key} className="flex items-start">
-                                {!isArray && <span className="text-violet-600 dark:text-violet-400 font-semibold mr-1 shrink-0">"<HighlightText text={key} searchTerm={searchTerm} />": </span>}
+                                {!isArray && <span className="text-violet-600 dark:text-violet-400 font-semibold mr-1 shrink-0">"<HighlightText text={key} searchTerm={searchTerm} maxMatches={getSearchMatchLimit(searchPlan, keySearchSlot(childPath))} />": </span>}
                                 <span className="flex-1 min-w-0 break-all">
-                                    <ValueNode value={value} searchTerm={searchTerm} />{comma}
+                                    <ValueNode value={value} searchTerm={searchTerm} searchPlan={searchPlan} nodePath={childPath} />{comma}
                                 </span>
                             </div>
                         );
@@ -480,10 +459,11 @@ function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, ini
 
 // ─── ValueNode: renders leaf values ──────────────────────────────────
 
-function ValueNode({ value, searchTerm }: { value: unknown; searchTerm?: string }) {
-    if (value === null) return <span className="text-rose-600 dark:text-rose-400 font-semibold"><HighlightText text="null" searchTerm={searchTerm} /></span>;
-    if (typeof value === 'boolean') return <span className="text-indigo-600 dark:text-indigo-400 font-semibold"><HighlightText text={value.toString()} searchTerm={searchTerm} /></span>;
-    if (typeof value === 'number') return <span className="text-orange-600 dark:text-orange-400"><HighlightText text={String(value)} searchTerm={searchTerm} /></span>;
+function ValueNode({ value, searchTerm, searchPlan, nodePath }: { value: unknown; searchTerm?: string; searchPlan?: JsonSearchPlan | null; nodePath: string }) {
+    const valueMatchLimit = getSearchMatchLimit(searchPlan, valueSearchSlot(nodePath));
+    if (value === null) return <span className="text-rose-600 dark:text-rose-400 font-semibold"><HighlightText text="null" searchTerm={searchTerm} maxMatches={valueMatchLimit} /></span>;
+    if (typeof value === 'boolean') return <span className="text-indigo-600 dark:text-indigo-400 font-semibold"><HighlightText text={value.toString()} searchTerm={searchTerm} maxMatches={valueMatchLimit} /></span>;
+    if (typeof value === 'number') return <span className="text-orange-600 dark:text-orange-400"><HighlightText text={String(value)} searchTerm={searchTerm} maxMatches={valueMatchLimit} /></span>;
 
     if (typeof value === 'string') {
         // Case 1: data URI → show prefix visibly, replace only base64 part
@@ -493,7 +473,7 @@ function ValueNode({ value, searchTerm }: { value: unknown; searchTerm?: string 
             const detection = det.isBase64 ? det : detectionFromMime(dataUri.mimeType);
             return (
                 <span className="text-emerald-600 dark:text-emerald-400 break-all leading-relaxed">
-                    "{dataUri.prefix}
+                    "<HighlightText text={dataUri.prefix} searchTerm={searchTerm} maxMatches={valueMatchLimit} />
                     <Base64Placeholder value={dataUri.base64Data} detection={detection} dataUriPrefix={dataUri.prefix} />
                     "
                 </span>
@@ -511,7 +491,7 @@ function ValueNode({ value, searchTerm }: { value: unknown; searchTerm?: string 
         }
 
         // Case 3: normal string
-        return <span className="text-emerald-600 dark:text-emerald-400 break-all leading-relaxed">"<HighlightText text={value} searchTerm={searchTerm} />"</span>;
+        return <span className="text-emerald-600 dark:text-emerald-400 break-all leading-relaxed">"<HighlightText text={value} searchTerm={searchTerm} maxMatches={valueMatchLimit} />"</span>;
     }
 
     return <span>{String(value)}</span>;
