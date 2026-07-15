@@ -27,6 +27,10 @@ func NewClientCache(maxIdleConns, maxIdleConnsPerHost int) *ClientCache {
 }
 
 func (c *ClientCache) Client(outboundProxy string) (*http.Client, error) {
+	return c.ClientWithResponseHeaderTimeout(outboundProxy, 0)
+}
+
+func (c *ClientCache) ClientWithResponseHeaderTimeout(outboundProxy string, timeout time.Duration) (*http.Client, error) {
 	normalizedProxy, err := config.NormalizeOutboundProxy(outboundProxy)
 	if err != nil {
 		return nil, err
@@ -35,19 +39,24 @@ func (c *ClientCache) Client(outboundProxy string) (*http.Client, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if client, ok := c.clients[normalizedProxy]; ok {
+	key := clientCacheKey(normalizedProxy, timeout)
+	if client, ok := c.clients[key]; ok {
 		return client, nil
 	}
 
-	client, err := c.newClient(normalizedProxy)
+	client, err := c.newClient(normalizedProxy, timeout)
 	if err != nil {
 		return nil, err
 	}
-	c.clients[normalizedProxy] = client
+	c.clients[key] = client
 	return client, nil
 }
 
-func (c *ClientCache) newClient(outboundProxy string) (*http.Client, error) {
+func clientCacheKey(outboundProxy string, timeout time.Duration) string {
+	return outboundProxy + "\x00" + timeout.String()
+}
+
+func (c *ClientCache) newClient(outboundProxy string, responseHeaderTimeout time.Duration) (*http.Client, error) {
 	proxyFunc := http.ProxyFromEnvironment
 	switch outboundProxy {
 	case "direct":
@@ -71,6 +80,7 @@ func (c *ClientCache) newClient(outboundProxy string) (*http.Client, error) {
 		MaxIdleConnsPerHost:   c.maxIdleConnsPerHost,
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: responseHeaderTimeout,
 		ExpectContinueTimeout: 1 * time.Second,
 	}
 

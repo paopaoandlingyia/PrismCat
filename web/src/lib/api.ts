@@ -94,6 +94,8 @@ export interface Upstream {
     name: string
     target: string
     timeout: number
+    response_header_timeout: number
+    stream_first_byte_timeout: number
     order: number
     outbound_proxy: string
     logging_enabled: boolean
@@ -285,6 +287,8 @@ export async function addUpstream(
     name: string,
     target: string,
     timeout: number = DEFAULT_UPSTREAM_TIMEOUT_SECONDS,
+    response_header_timeout: number = 0,
+    stream_first_byte_timeout: number = 0,
     order: number = 0,
     outbound_proxy: string = 'env',
     logging_enabled: boolean = true,
@@ -294,7 +298,7 @@ export async function addUpstream(
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name, target, timeout, order, outbound_proxy, logging_enabled }),
+        body: JSON.stringify({ name, target, timeout, response_header_timeout, stream_first_byte_timeout, order, outbound_proxy, logging_enabled }),
     })
     if (!response.ok) {
         const error = await response.json().catch(() => ({ error: '请求失败' }))

@@ -284,10 +284,14 @@ upstreams:
   openai:
     target: "https://api.openai.com"
     timeout: 120
+    response_header_timeout: 60 # 等待上游 HTTP 状态码和响应头；0 = 禁用
+    stream_first_byte_timeout: 30 # 仅流式响应：收到响应头后等待首个响应体字节的秒数；0 = 禁用
     outbound_proxy: "env"          # env、direct，或 http://127.0.0.1:7890 这样的代理 URL
   gemini:
     target: "https://generativelanguage.googleapis.com"
     timeout: 120
+    response_header_timeout: 0
+    stream_first_byte_timeout: 0  # 非流式响应不受影响
     outbound_proxy: "http://127.0.0.1:7890"
 
 # 请求参数覆盖（默认关闭）
