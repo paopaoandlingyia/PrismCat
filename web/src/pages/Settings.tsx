@@ -381,6 +381,7 @@ function InfoTooltip({ content }: { content: string }) {
             <TooltipTrigger asChild>
                 <button
                     type="button"
+                    onClick={event => event.stopPropagation()}
                     className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground/85 transition-colors hover:text-foreground"
                     aria-label="More info"
                 >
@@ -420,16 +421,14 @@ function AdvancedTimeoutSettings({ children }: { children: ReactNode }) {
     const { t } = useTranslation()
     return (
         <details className="group rounded-xl border border-border/50 bg-muted/20">
-            <summary className="flex cursor-pointer list-none items-start justify-between gap-4 px-4 py-3 marker:content-none [&::-webkit-details-marker]:hidden">
-                <div className="min-w-0">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 marker:content-none [&::-webkit-details-marker]:hidden">
+                <div className="flex min-w-0 items-center gap-2">
                     <div className="text-sm font-medium text-foreground">
                         {t('upstream_manager.advanced_timeout_settings')}
                     </div>
-                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                        {t('upstream_manager.advanced_timeout_settings_hint')}
-                    </p>
+                    <InfoTooltip content={t('upstream_manager.advanced_timeout_settings_hint')} />
                 </div>
-                <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
             </summary>
             <div className="grid grid-cols-1 gap-5 border-t border-border/40 px-4 py-4 sm:grid-cols-2">
                 {children}
@@ -1206,14 +1205,14 @@ export function Settings() {
     return (
         <div className="w-full">
             <Dialog open={!!editingUpstream} onOpenChange={(open) => !open && setEditingUpstream(null)}>
-                <DialogContent className="max-w-2xl rounded-2xl border border-border/60 bg-card p-0 shadow-2xl">
+                <DialogContent className="max-h-[calc(100vh-2rem)] max-w-2xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-2xl border border-border/60 bg-card p-0 shadow-2xl">
                     <DialogHeader className="border-b border-border/60 px-6 py-5">
                         <DialogTitle className="text-base font-bold">
                             {editingUpstream ? t('upstream_manager.edit_title', { name: editingUpstream.name }) : t('common.edit')}
                         </DialogTitle>
                     </DialogHeader>
                     {editingUpstream && (
-                        <div className="space-y-6 px-6 py-5">
+                        <div className="min-h-0 space-y-6 overflow-y-auto px-6 py-5">
                             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                                 <FieldBlock label={t('upstream_manager.name')}>
                                     <Input
