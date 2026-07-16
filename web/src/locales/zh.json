@@ -198,6 +198,7 @@
         "target": "目标地址 (URL)",
         "timeout": "总超时时间 (秒)",
         "advanced_timeout_settings": "高级超时设置",
+        "advanced_timeout_settings_configured": "已配置",
         "advanced_timeout_settings_hint": "默认无需设置。这两个超时都是总超时内的阶段限制，设为 0 表示禁用；总超时仍始终约束整个上游请求和响应过程。",
         "response_header_timeout": "响应头超时 (秒)",
         "response_header_timeout_hint": "限制 PrismCat 等待上游 HTTP 状态码和响应头的时间。设为 0 表示禁用；设为正数时通常应小于总超时，实际等待仍不会超过总超时。",

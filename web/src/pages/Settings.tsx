@@ -417,7 +417,13 @@ function FieldBlock({ label, hint, htmlFor, unit, children }: FieldBlockProps) {
     )
 }
 
-function AdvancedTimeoutSettings({ children }: { children: ReactNode }) {
+function AdvancedTimeoutSettings({
+    children,
+    configured = false,
+}: {
+    children: ReactNode
+    configured?: boolean
+}) {
     const { t } = useTranslation()
     return (
         <details className="group rounded-xl border border-border/50 bg-muted/20">
@@ -427,6 +433,11 @@ function AdvancedTimeoutSettings({ children }: { children: ReactNode }) {
                         {t('upstream_manager.advanced_timeout_settings')}
                     </div>
                     <InfoTooltip content={t('upstream_manager.advanced_timeout_settings_hint')} />
+                    {configured && (
+                        <Badge variant="outline" className="h-5 shrink-0 rounded-full border-primary/30 bg-primary/10 px-1.5 text-[10px] text-primary">
+                            {t('upstream_manager.advanced_timeout_settings_configured')}
+                        </Badge>
+                    )}
                 </div>
                 <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
             </summary>
@@ -1249,7 +1260,9 @@ export function Settings() {
                                     />
                                 </FieldBlock>
                                 <div className="sm:col-span-2">
-                                    <AdvancedTimeoutSettings>
+                                    <AdvancedTimeoutSettings
+                                        configured={editingUpstream.responseHeaderTimeout > 0 || editingUpstream.streamFirstByteTimeout > 0}
+                                    >
                                         <FieldBlock
                                             label={t('upstream_manager.response_header_timeout')}
                                             hint={t('upstream_manager.response_header_timeout_hint')}
@@ -1573,7 +1586,9 @@ export function Settings() {
                                                     </div>
 
                                                     <div className="w-full">
-                                                        <AdvancedTimeoutSettings>
+                                                        <AdvancedTimeoutSettings
+                                                            configured={newResponseHeaderTimeout > 0 || newStreamFirstByteTimeout > 0}
+                                                        >
                                                             <FieldBlock
                                                                 label={t('upstream_manager.response_header_timeout')}
                                                                 htmlFor="response-header-timeout"

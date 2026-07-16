@@ -198,6 +198,7 @@
         "target": "Target URL",
         "timeout": "Total timeout (s)",
         "advanced_timeout_settings": "Advanced timeout settings",
+        "advanced_timeout_settings_configured": "Configured",
         "advanced_timeout_settings_hint": "Usually no configuration is needed. Both values limit stages within the total timeout. Set either to 0 to disable it; the total timeout still bounds the entire upstream request and response.",
         "response_header_timeout": "Response-header timeout (s)",
         "response_header_timeout_hint": "Limits how long PrismCat waits for the upstream HTTP status and response headers. Set to 0 to disable. A positive value should usually be shorter than the total timeout, and the actual wait can never exceed the total timeout.",

@@ -401,8 +401,6 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// classify it as an upstream/proxy failure.
 		if isClientCanceledResponse(r.Context(), copyErr) {
 			logEntry.Truncated = true
-		} else if isStreamFirstByteTimeout(copyErr) {
-			logEntry.Error = copyErr.Error()
 		} else {
 			// The response may already be partially written; we can only record the error.
 			logEntry.Error = fmt.Sprintf("forward response failed: %v", copyErr)
