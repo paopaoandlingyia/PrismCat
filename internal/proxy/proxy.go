@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"mime"
+	"net"
 	"net/http"
 	"net/textproto"
 	"net/url"
@@ -226,8 +227,23 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if timeoutSeconds <= 0 {
 		timeoutSeconds = config.DefaultUpstreamTimeoutSeconds
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), time.Duration(timeoutSeconds)*time.Second)
+	webSocketUpgrade := isWebSocketUpgrade(r.Header)
+	var ctx context.Context
+	var cancel context.CancelFunc
+	var totalTimeoutTimer *time.Timer
+	if webSocketUpgrade {
+		// For an upgrade request, the normal timeout only bounds the handshake.
+		// Keeping a deadline on the request context would close a healthy upgraded
+		// connection when the ordinary HTTP request timeout expires.
+		ctx, cancel = context.WithCancel(r.Context())
+		totalTimeoutTimer = time.AfterFunc(time.Duration(timeoutSeconds)*time.Second, cancel)
+	} else {
+		ctx, cancel = context.WithTimeout(r.Context(), time.Duration(timeoutSeconds)*time.Second)
+	}
 	defer cancel()
+	if totalTimeoutTimer != nil {
+		defer totalTimeoutTimer.Stop()
+	}
 
 	// Capture request body for logging while streaming it to the upstream (no truncation of forwarding).
 	var reqCapture *limitedCapture
@@ -366,6 +382,12 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		logMu.Unlock()
 	}
+	if webSocketUpgrade {
+		// These hop-by-hop headers are intentionally restored only for the
+		// dedicated protocol-switching path.
+		upstreamReq.Header.Set("Connection", "Upgrade")
+		upstreamReq.Header.Set("Upgrade", r.Header.Get("Upgrade"))
+	}
 
 	resp, err := client.Do(upstreamReq)
 	if err != nil {
@@ -384,6 +406,43 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer resp.Body.Close()
+
+	if webSocketUpgrade && resp.StatusCode == http.StatusSwitchingProtocols {
+		if totalTimeoutTimer != nil {
+			totalTimeoutTimer.Stop()
+		}
+
+		onUpgraded := func() {
+			logMu.Lock()
+			logEntry.StatusCode = resp.StatusCode
+			logEntry.ResponseHeaders = p.headerToMap(resp.Header)
+			logEntry.Streaming = true
+			if loggingEnabled {
+				p.publishHeaders(logEntry)
+			}
+			logMu.Unlock()
+		}
+		hijacked, tunnelErr := p.handleWebSocketUpgrade(w, r, resp, onUpgraded)
+
+		logMu.Lock()
+		if tunnelErr != nil {
+			logEntry.Error = fmt.Sprintf("websocket proxy failed: %v", tunnelErr)
+		}
+		if !hijacked {
+			logEntry.StatusCode = http.StatusBadGateway
+			logEntry.ResponseHeaders = p.headerToMap(resp.Header)
+		}
+		if loggingEnabled {
+			p.finalizeAndSaveLog(logEntry, startTime, reqCapture, nil)
+			p.completeLive(logEntry)
+		}
+		logMu.Unlock()
+
+		if tunnelErr != nil && !hijacked {
+			http.Error(w, fmt.Sprintf("websocket upstream error: %v", tunnelErr), http.StatusBadGateway)
+		}
+		return
+	}
 
 	streaming := isStreaming(resp.Header)
 	var firstResponseChunk []byte
@@ -684,6 +743,100 @@ func (p *Proxy) copyResponseHeaders(dst, src http.Header) {
 			dst.Add(k, v)
 		}
 	}
+}
+
+func isWebSocketUpgrade(headers http.Header) bool {
+	connectionTokens := parseConnectionHeader(headers.Values("Connection"))
+	return connectionTokens["Upgrade"] && strings.EqualFold(strings.TrimSpace(headers.Get("Upgrade")), "websocket")
+}
+
+func (p *Proxy) handleWebSocketUpgrade(
+	w http.ResponseWriter,
+	r *http.Request,
+	resp *http.Response,
+	onUpgraded func(),
+) (bool, error) {
+	if !isWebSocketUpgrade(resp.Header) {
+		return false, fmt.Errorf("upstream returned 101 without a valid websocket upgrade")
+	}
+
+	upstreamConn, ok := resp.Body.(io.ReadWriteCloser)
+	if !ok {
+		return false, fmt.Errorf("upstream 101 response body is not writable")
+	}
+
+	clientConn, clientBuf, err := http.NewResponseController(w).Hijack()
+	if err != nil {
+		return false, fmt.Errorf("hijack client connection: %w", err)
+	}
+	hijacked := true
+	defer clientConn.Close()
+	defer upstreamConn.Close()
+
+	// Keep PrismCat's existing CORS policy, restore only the headers required
+	// for switching protocols, and preserve WebSocket headers such as
+	// Sec-WebSocket-Accept and Sec-WebSocket-Protocol.
+	p.copyResponseHeaders(w.Header(), resp.Header)
+	w.Header().Set("Connection", "Upgrade")
+	w.Header().Set("Upgrade", resp.Header.Get("Upgrade"))
+
+	upgradeResp := new(http.Response)
+	*upgradeResp = *resp
+	upgradeResp.Header = w.Header()
+	upgradeResp.Body = nil
+	upgradeResp.ContentLength = 0
+	upgradeResp.TransferEncoding = nil
+	if err := upgradeResp.Write(clientBuf); err != nil {
+		return hijacked, fmt.Errorf("write upgrade response: %w", err)
+	}
+	if err := clientBuf.Flush(); err != nil {
+		return hijacked, fmt.Errorf("flush upgrade response: %w", err)
+	}
+	if onUpgraded != nil {
+		onUpgraded()
+	}
+
+	type copyResult struct {
+		direction string
+		err       error
+	}
+	results := make(chan copyResult, 2)
+	go func() {
+		// Read through the hijacked buffer first so any bytes already received
+		// after the HTTP headers are not stranded there.
+		_, copyErr := io.Copy(upstreamConn, clientBuf)
+		results <- copyResult{direction: "client to upstream", err: copyErr}
+	}()
+	go func() {
+		_, copyErr := io.Copy(clientConn, upstreamConn)
+		results <- copyResult{direction: "upstream to client", err: copyErr}
+	}()
+
+	first := <-results
+	// Terminate the peer copy when either side closes, then wait for it so the
+	// tunnel cannot leave a blocked goroutine behind.
+	_ = clientConn.Close()
+	_ = upstreamConn.Close()
+	<-results
+
+	if isExpectedWebSocketClose(r.Context(), first.err) {
+		return hijacked, nil
+	}
+	return hijacked, fmt.Errorf("copy %s: %w", first.direction, first.err)
+}
+
+func isExpectedWebSocketClose(ctx context.Context, err error) bool {
+	if err == nil || errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
+		return true
+	}
+	if ctx != nil && ctx.Err() != nil {
+		return true
+	}
+	lower := strings.ToLower(err.Error())
+	return strings.Contains(lower, "closed network connection") ||
+		strings.Contains(lower, "connection reset by peer") ||
+		strings.Contains(lower, "broken pipe") ||
+		strings.Contains(lower, "forcibly closed")
 }
 
 func isAccessControlHeader(header string) bool {
