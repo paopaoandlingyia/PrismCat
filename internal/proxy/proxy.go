@@ -27,56 +27,106 @@ import (
 	"github.com/paopaoandlingyia/PrismCat/internal/trace"
 )
 
-type streamFirstByteTimeoutError struct {
+type responseBodyFirstByteTimeoutError struct {
 	timeout time.Duration
 }
 
-func (e *streamFirstByteTimeoutError) Error() string {
-	return fmt.Sprintf("stream first response body byte timeout after %s", e.timeout)
+func (e *responseBodyFirstByteTimeoutError) Error() string {
+	return fmt.Sprintf("response body first byte timeout after %s", e.timeout)
 }
 
-func (e *streamFirstByteTimeoutError) Timeout() bool   { return true }
-func (e *streamFirstByteTimeoutError) Temporary() bool { return true }
+func (e *responseBodyFirstByteTimeoutError) Timeout() bool   { return true }
+func (e *responseBodyFirstByteTimeoutError) Temporary() bool { return true }
 
-func readFirstResponseChunk(body io.ReadCloser, timeout time.Duration) ([]byte, error) {
+type responseBodyIdleTimeoutError struct {
+	timeout time.Duration
+}
+
+func (e *responseBodyIdleTimeoutError) Error() string {
+	return fmt.Sprintf("response body idle timeout after %s", e.timeout)
+}
+
+func (e *responseBodyIdleTimeoutError) Timeout() bool   { return true }
+func (e *responseBodyIdleTimeoutError) Temporary() bool { return true }
+
+func readResponseBodyChunkWithTimeout(body io.ReadCloser, buf []byte, timeout time.Duration, timeoutErr error) (int, error) {
+	if timeout <= 0 {
+		return body.Read(buf)
+	}
+
+	var stateMu sync.Mutex
+	completed := false
+	timedOut := false
+	timer := time.AfterFunc(timeout, func() {
+		stateMu.Lock()
+		if completed {
+			stateMu.Unlock()
+			return
+		}
+		timedOut = true
+		stateMu.Unlock()
+		_ = body.Close()
+	})
+
+	var n int
+	var err error
+	for n == 0 && err == nil {
+		n, err = body.Read(buf)
+	}
+
+	stateMu.Lock()
+	completed = true
+	didTimeout := timedOut
+	stateMu.Unlock()
+	timer.Stop()
+
+	if didTimeout {
+		return 0, timeoutErr
+	}
+	return n, err
+}
+
+func readFirstResponseBodyChunk(body io.ReadCloser, timeout time.Duration) ([]byte, error) {
 	if timeout <= 0 {
 		return nil, nil
 	}
 
-	type result struct {
-		buf []byte
-		err error
+	buf := make([]byte, copyBufferSize)
+	n, err := readResponseBodyChunkWithTimeout(
+		body,
+		buf,
+		timeout,
+		&responseBodyFirstByteTimeoutError{timeout: timeout},
+	)
+	if n > 0 {
+		return buf[:n], nil
 	}
-	resultCh := make(chan result, 1)
-	go func() {
-		buf := make([]byte, copyBufferSize)
-		for {
-			n, err := body.Read(buf)
-			if n > 0 {
-				resultCh <- result{buf: buf[:n]}
-				return
-			}
-			if err != nil {
-				if errors.Is(err, io.EOF) {
-					resultCh <- result{}
-				} else {
-					resultCh <- result{err: err}
-				}
-				return
-			}
+	if errors.Is(err, io.EOF) {
+		return nil, nil
+	}
+	return nil, err
+}
+
+type responseBodyIdleTimeoutReader struct {
+	body    io.ReadCloser
+	timeout time.Duration
+	active  bool
+}
+
+func (r *responseBodyIdleTimeoutReader) Read(buf []byte) (int, error) {
+	if !r.active {
+		n, err := r.body.Read(buf)
+		if n > 0 {
+			r.active = true
 		}
-	}()
-
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-
-	select {
-	case result := <-resultCh:
-		return result.buf, result.err
-	case <-timer.C:
-		_ = body.Close()
-		return nil, &streamFirstByteTimeoutError{timeout: timeout}
+		return n, err
 	}
+	return readResponseBodyChunkWithTimeout(
+		r.body,
+		buf,
+		r.timeout,
+		&responseBodyIdleTimeoutError{timeout: r.timeout},
+	)
 }
 
 // Proxy handles host-based upstream routing and request/response logging.
@@ -337,20 +387,20 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	streaming := isStreaming(resp.Header)
 	var firstResponseChunk []byte
-	if streaming && upstream.StreamFirstByteTimeout > 0 {
-		firstResponseChunk, err = readFirstResponseChunk(
+	if upstream.ResponseBodyFirstByteTimeout > 0 {
+		firstResponseChunk, err = readFirstResponseBodyChunk(
 			resp.Body,
-			time.Duration(upstream.StreamFirstByteTimeout)*time.Second,
+			time.Duration(upstream.ResponseBodyFirstByteTimeout)*time.Second,
 		)
 		if err != nil {
 			logMu.Lock()
 			logEntry.StatusCode = resp.StatusCode
 			logEntry.ResponseHeaders = p.headerToMap(resp.Header)
-			logEntry.Streaming = true
-			if isStreamFirstByteTimeout(err) {
+			logEntry.Streaming = streaming
+			if isResponseBodyFirstByteTimeout(err) {
 				logEntry.Error = err.Error()
 			} else {
-				logEntry.Error = fmt.Sprintf("read stream first response body byte failed: %v", err)
+				logEntry.Error = fmt.Sprintf("read response body first byte failed: %v", err)
 			}
 			if loggingEnabled {
 				p.finalizeAndSaveLog(logEntry, startTime, reqCapture, nil)
@@ -383,8 +433,15 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		respCaptureWriter = respCapture
 	}
 	var responseBodyReader io.Reader = resp.Body
+	if upstream.ResponseBodyIdleTimeout > 0 {
+		responseBodyReader = &responseBodyIdleTimeoutReader{
+			body:    resp.Body,
+			timeout: time.Duration(upstream.ResponseBodyIdleTimeout) * time.Second,
+			active:  len(firstResponseChunk) > 0,
+		}
+	}
 	if len(firstResponseChunk) > 0 {
-		responseBodyReader = io.MultiReader(bytes.NewReader(firstResponseChunk), resp.Body)
+		responseBodyReader = io.MultiReader(bytes.NewReader(firstResponseChunk), responseBodyReader)
 	}
 	copied, copyErr := copyWithOptionalFlush(
 		w,
@@ -401,6 +458,8 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// classify it as an upstream/proxy failure.
 		if isClientCanceledResponse(r.Context(), copyErr) {
 			logEntry.Truncated = true
+		} else if isResponseBodyIdleTimeout(copyErr) {
+			logEntry.Error = copyErr.Error()
 		} else {
 			// The response may already be partially written; we can only record the error.
 			logEntry.Error = fmt.Sprintf("forward response failed: %v", copyErr)
@@ -966,8 +1025,13 @@ func isResponseHeaderTimeout(err error) bool {
 	return errors.As(err, &netErr) && netErr.Timeout() && strings.Contains(strings.ToLower(err.Error()), "response headers")
 }
 
-func isStreamFirstByteTimeout(err error) bool {
-	var timeoutErr *streamFirstByteTimeoutError
+func isResponseBodyFirstByteTimeout(err error) bool {
+	var timeoutErr *responseBodyFirstByteTimeoutError
+	return errors.As(err, &timeoutErr)
+}
+
+func isResponseBodyIdleTimeout(err error) bool {
+	var timeoutErr *responseBodyIdleTimeoutError
 	return errors.As(err, &timeoutErr)
 }
 

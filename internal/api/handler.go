@@ -680,14 +680,15 @@ func (h *Handler) handleUpstreams(w http.ResponseWriter, r *http.Request) {
 		// Snapshot upstreams for safe iteration.
 		for name, upCfg := range h.cfg.ListUpstreams() {
 			upstreams = append(upstreams, map[string]interface{}{
-				"name":                      name,
-				"target":                    upCfg.Target,
-				"timeout":                   upCfg.Timeout,
-				"response_header_timeout":   upCfg.ResponseHeaderTimeout,
-				"stream_first_byte_timeout": upCfg.StreamFirstByteTimeout,
-				"order":                     upCfg.Order,
-				"outbound_proxy":            upCfg.OutboundProxy,
-				"logging_enabled":           !upCfg.LoggingDisabled,
+				"name":                             name,
+				"target":                           upCfg.Target,
+				"timeout":                          upCfg.Timeout,
+				"response_header_timeout":          upCfg.ResponseHeaderTimeout,
+				"response_body_first_byte_timeout": upCfg.ResponseBodyFirstByteTimeout,
+				"response_body_idle_timeout":       upCfg.ResponseBodyIdleTimeout,
+				"order":                            upCfg.Order,
+				"outbound_proxy":                   upCfg.OutboundProxy,
+				"logging_enabled":                  !upCfg.LoggingDisabled,
 			})
 		}
 		sort.Slice(upstreams, func(i, j int) bool {
@@ -705,14 +706,15 @@ func (h *Handler) handleUpstreams(w http.ResponseWriter, r *http.Request) {
 	// POST: 添加/更新
 	if r.Method == http.MethodPost {
 		var req struct {
-			Name                   string `json:"name"`
-			Target                 string `json:"target"`
-			Timeout                int    `json:"timeout"`
-			ResponseHeaderTimeout  int    `json:"response_header_timeout"`
-			StreamFirstByteTimeout int    `json:"stream_first_byte_timeout"`
-			Order                  int    `json:"order"`
-			OutboundProxy          string `json:"outbound_proxy"`
-			LoggingEnabled         *bool  `json:"logging_enabled"`
+			Name                         string `json:"name"`
+			Target                       string `json:"target"`
+			Timeout                      int    `json:"timeout"`
+			ResponseHeaderTimeout        int    `json:"response_header_timeout"`
+			ResponseBodyFirstByteTimeout int    `json:"response_body_first_byte_timeout"`
+			ResponseBodyIdleTimeout      int    `json:"response_body_idle_timeout"`
+			Order                        int    `json:"order"`
+			OutboundProxy                string `json:"outbound_proxy"`
+			LoggingEnabled               *bool  `json:"logging_enabled"`
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -733,13 +735,14 @@ func (h *Handler) handleUpstreams(w http.ResponseWriter, r *http.Request) {
 		}
 
 		err := h.cfg.AddUpstream(req.Name, config.UpstreamConfig{
-			Target:                 req.Target,
-			Timeout:                req.Timeout,
-			ResponseHeaderTimeout:  req.ResponseHeaderTimeout,
-			StreamFirstByteTimeout: req.StreamFirstByteTimeout,
-			Order:                  req.Order,
-			OutboundProxy:          req.OutboundProxy,
-			LoggingDisabled:        loggingDisabled,
+			Target:                       req.Target,
+			Timeout:                      req.Timeout,
+			ResponseHeaderTimeout:        req.ResponseHeaderTimeout,
+			ResponseBodyFirstByteTimeout: req.ResponseBodyFirstByteTimeout,
+			ResponseBodyIdleTimeout:      req.ResponseBodyIdleTimeout,
+			Order:                        req.Order,
+			OutboundProxy:                req.OutboundProxy,
+			LoggingDisabled:              loggingDisabled,
 		})
 		if err != nil {
 			h.jsonError(w, err.Error(), http.StatusInternalServerError)

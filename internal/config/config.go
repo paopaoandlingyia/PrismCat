@@ -66,13 +66,14 @@ type ServerConfig struct {
 
 // UpstreamConfig 上游配置
 type UpstreamConfig struct {
-	Target                 string `yaml:"target"`
-	Timeout                int    `yaml:"timeout"`                             // 秒
-	ResponseHeaderTimeout  int    `yaml:"response_header_timeout,omitempty"`   // 秒；0 = 禁用
-	StreamFirstByteTimeout int    `yaml:"stream_first_byte_timeout,omitempty"` // 秒；0 = 禁用
-	Order                  int    `yaml:"order,omitempty"`
-	OutboundProxy          string `yaml:"outbound_proxy,omitempty"`
-	LoggingDisabled        bool   `yaml:"logging_disabled,omitempty"`
+	Target                       string `yaml:"target"`
+	Timeout                      int    `yaml:"timeout"`                                    // 秒
+	ResponseHeaderTimeout        int    `yaml:"response_header_timeout,omitempty"`          // 秒；0 = 禁用
+	ResponseBodyFirstByteTimeout int    `yaml:"response_body_first_byte_timeout,omitempty"` // 秒；0 = 禁用
+	ResponseBodyIdleTimeout      int    `yaml:"response_body_idle_timeout,omitempty"`       // 秒；0 = 禁用
+	Order                        int    `yaml:"order,omitempty"`
+	OutboundProxy                string `yaml:"outbound_proxy,omitempty"`
+	LoggingDisabled              bool   `yaml:"logging_disabled,omitempty"`
 }
 
 type RequestOverridesConfig struct {
@@ -414,15 +415,22 @@ func normalizeUpstreams(in map[string]UpstreamConfig) (map[string]UpstreamConfig
 		if v.Timeout <= 0 {
 			v.Timeout = DefaultUpstreamTimeoutSeconds
 		}
-		if v.ResponseHeaderTimeout < 0 {
-			v.ResponseHeaderTimeout = 0
-		}
-		if v.StreamFirstByteTimeout < 0 {
-			v.StreamFirstByteTimeout = 0
-		}
+		normalizeUpstreamStageTimeouts(&v)
 		out[n] = v
 	}
 	return out, nil
+}
+
+func normalizeUpstreamStageTimeouts(upstream *UpstreamConfig) {
+	if upstream.ResponseHeaderTimeout < 0 {
+		upstream.ResponseHeaderTimeout = 0
+	}
+	if upstream.ResponseBodyFirstByteTimeout < 0 {
+		upstream.ResponseBodyFirstByteTimeout = 0
+	}
+	if upstream.ResponseBodyIdleTimeout < 0 {
+		upstream.ResponseBodyIdleTimeout = 0
+	}
 }
 
 func NormalizeOutboundProxy(value string) (string, error) {
@@ -912,12 +920,7 @@ func (c *Config) AddUpstream(name string, config UpstreamConfig) error {
 	if config.Timeout <= 0 {
 		config.Timeout = DefaultUpstreamTimeoutSeconds
 	}
-	if config.ResponseHeaderTimeout < 0 {
-		config.ResponseHeaderTimeout = 0
-	}
-	if config.StreamFirstByteTimeout < 0 {
-		config.StreamFirstByteTimeout = 0
-	}
+	normalizeUpstreamStageTimeouts(&config)
 	c.Upstreams[name] = config
 	return nil // 实际上应该由调用者决定是否立即 Save
 }

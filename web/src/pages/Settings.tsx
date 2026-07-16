@@ -205,7 +205,8 @@ type EditingUpstream = {
     target: string
     timeout: number
     responseHeaderTimeout: number
-    streamFirstByteTimeout: number
+    responseBodyFirstByteTimeout: number
+    responseBodyIdleTimeout: number
     order: number
     outboundProxy: string
     loggingEnabled: boolean
@@ -607,7 +608,8 @@ export function Settings() {
     const [newTarget, setNewTarget] = useState('')
     const [newTimeout, setNewTimeout] = useState(DEFAULT_UPSTREAM_TIMEOUT_SECONDS)
     const [newResponseHeaderTimeout, setNewResponseHeaderTimeout] = useState(0)
-    const [newStreamFirstByteTimeout, setNewStreamFirstByteTimeout] = useState(0)
+    const [newResponseBodyFirstByteTimeout, setNewResponseBodyFirstByteTimeout] = useState(0)
+    const [newResponseBodyIdleTimeout, setNewResponseBodyIdleTimeout] = useState(0)
     const [newOrder, setNewOrder] = useState(100)
     const [newOutboundProxy, setNewOutboundProxy] = useState('env')
     const [newLoggingEnabled, setNewLoggingEnabled] = useState(true)
@@ -887,7 +889,8 @@ export function Settings() {
                 newTarget,
                 newTimeout,
                 newResponseHeaderTimeout,
-                newStreamFirstByteTimeout,
+                newResponseBodyFirstByteTimeout,
+                newResponseBodyIdleTimeout,
                 newOrder,
                 normalizedOutboundProxy(newOutboundProxy),
                 newLoggingEnabled,
@@ -896,7 +899,8 @@ export function Settings() {
             setNewTarget('')
             setNewTimeout(DEFAULT_UPSTREAM_TIMEOUT_SECONDS)
             setNewResponseHeaderTimeout(0)
-            setNewStreamFirstByteTimeout(0)
+            setNewResponseBodyFirstByteTimeout(0)
+            setNewResponseBodyIdleTimeout(0)
             setNewOrder(prev => prev + 10)
             setNewOutboundProxy('env')
             setNewLoggingEnabled(true)
@@ -1140,7 +1144,8 @@ export function Settings() {
             target: upstream.target,
             timeout: upstream.timeout,
             responseHeaderTimeout: upstream.response_header_timeout || 0,
-            streamFirstByteTimeout: upstream.stream_first_byte_timeout || 0,
+            responseBodyFirstByteTimeout: upstream.response_body_first_byte_timeout || 0,
+            responseBodyIdleTimeout: upstream.response_body_idle_timeout || 0,
             order: upstream.order || 0,
             outboundProxy: upstream.outbound_proxy || 'env',
             loggingEnabled: upstream.logging_enabled !== false,
@@ -1196,7 +1201,8 @@ export function Settings() {
                 editingUpstream.target,
                 editingUpstream.timeout,
                 editingUpstream.responseHeaderTimeout,
-                editingUpstream.streamFirstByteTimeout,
+                editingUpstream.responseBodyFirstByteTimeout,
+                editingUpstream.responseBodyIdleTimeout,
                 editingUpstream.order,
                 normalizedOutboundProxy(editingUpstream.outboundProxy),
                 editingUpstream.loggingEnabled,
@@ -1329,7 +1335,8 @@ export function Settings() {
                                 <AdvancedSettings
                                     defaultOpen={
                                         editingUpstream.responseHeaderTimeout > 0 ||
-                                        editingUpstream.streamFirstByteTimeout > 0 ||
+                                        editingUpstream.responseBodyFirstByteTimeout > 0 ||
+                                        editingUpstream.responseBodyIdleTimeout > 0 ||
                                         !editingUpstream.loggingEnabled ||
                                         editingUpstream.overrideEnabled ||
                                         editingUpstream.usageEnabled ||
@@ -1355,14 +1362,26 @@ export function Settings() {
                                                 />
                                             </FieldBlock>
                                             <FieldBlock
-                                                label={t('upstream_manager.stream_first_byte_timeout')}
-                                                hint={t('upstream_manager.stream_first_byte_timeout_hint')}
+                                                label={t('upstream_manager.response_body_first_byte_timeout')}
+                                                hint={t('upstream_manager.response_body_first_byte_timeout_hint')}
                                             >
                                                 <Input
                                                     type="number"
                                                     min="0"
-                                                    value={editingUpstream.streamFirstByteTimeout}
-                                                    onChange={e => setEditingUpstream(current => current ? { ...current, streamFirstByteTimeout: Number(e.target.value) } : current)}
+                                                    value={editingUpstream.responseBodyFirstByteTimeout}
+                                                    onChange={e => setEditingUpstream(current => current ? { ...current, responseBodyFirstByteTimeout: Number(e.target.value) } : current)}
+                                                    className="h-10 rounded-xl border-border/30 bg-background/50 text-sm"
+                                                />
+                                            </FieldBlock>
+                                            <FieldBlock
+                                                label={t('upstream_manager.response_body_idle_timeout')}
+                                                hint={t('upstream_manager.response_body_idle_timeout_hint')}
+                                            >
+                                                <Input
+                                                    type="number"
+                                                    min="0"
+                                                    value={editingUpstream.responseBodyIdleTimeout}
+                                                    onChange={e => setEditingUpstream(current => current ? { ...current, responseBodyIdleTimeout: Number(e.target.value) } : current)}
                                                     className="h-10 rounded-xl border-border/30 bg-background/50 text-sm"
                                                 />
                                             </FieldBlock>
@@ -1716,16 +1735,31 @@ export function Settings() {
                                                                     </FieldBlock>
 
                                                                     <FieldBlock
-                                                                        label={t('upstream_manager.stream_first_byte_timeout')}
-                                                                        htmlFor="stream-first-byte-timeout"
-                                                                        hint={t('upstream_manager.stream_first_byte_timeout_hint')}
+                                                                        label={t('upstream_manager.response_body_first_byte_timeout')}
+                                                                        htmlFor="response-body-first-byte-timeout"
+                                                                        hint={t('upstream_manager.response_body_first_byte_timeout_hint')}
                                                                     >
                                                                         <Input
-                                                                            id="stream-first-byte-timeout"
+                                                                            id="response-body-first-byte-timeout"
                                                                             type="number"
                                                                             min="0"
-                                                                            value={newStreamFirstByteTimeout}
-                                                                            onChange={e => setNewStreamFirstByteTimeout(Number(e.target.value))}
+                                                                            value={newResponseBodyFirstByteTimeout}
+                                                                            onChange={e => setNewResponseBodyFirstByteTimeout(Number(e.target.value))}
+                                                                            className="h-11 rounded-xl border-border/30 bg-background/80 text-sm shadow-sm transition-colors focus-visible:bg-background"
+                                                                        />
+                                                                    </FieldBlock>
+
+                                                                    <FieldBlock
+                                                                        label={t('upstream_manager.response_body_idle_timeout')}
+                                                                        htmlFor="response-body-idle-timeout"
+                                                                        hint={t('upstream_manager.response_body_idle_timeout_hint')}
+                                                                    >
+                                                                        <Input
+                                                                            id="response-body-idle-timeout"
+                                                                            type="number"
+                                                                            min="0"
+                                                                            value={newResponseBodyIdleTimeout}
+                                                                            onChange={e => setNewResponseBodyIdleTimeout(Number(e.target.value))}
                                                                             className="h-11 rounded-xl border-border/30 bg-background/80 text-sm shadow-sm transition-colors focus-visible:bg-background"
                                                                         />
                                                                     </FieldBlock>

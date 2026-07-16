@@ -12,43 +12,111 @@ import (
 	"github.com/paopaoandlingyia/PrismCat/internal/storage"
 )
 
-func TestReadFirstResponseChunkTimesOut(t *testing.T) {
+func TestReadFirstResponseBodyChunkTimesOut(t *testing.T) {
 	reader, writer := io.Pipe()
 	defer writer.Close()
 
 	start := time.Now()
-	_, err := readFirstResponseChunk(reader, 30*time.Millisecond)
-	if !isStreamFirstByteTimeout(err) {
-		t.Fatalf("readFirstResponseChunk error = %v, want stream first response body byte timeout", err)
+	_, err := readFirstResponseBodyChunk(reader, 30*time.Millisecond)
+	if !isResponseBodyFirstByteTimeout(err) {
+		t.Fatalf("readFirstResponseBodyChunk error = %v, want response body first byte timeout", err)
 	}
 	if elapsed := time.Since(start); elapsed < 20*time.Millisecond || elapsed > 500*time.Millisecond {
 		t.Fatalf("timeout elapsed = %s", elapsed)
 	}
 }
 
-func TestReadFirstResponseChunkTreatsEOFAsEmptyResponse(t *testing.T) {
-	chunk, err := readFirstResponseChunk(io.NopCloser(strings.NewReader("")), 30*time.Millisecond)
+func TestReadFirstResponseBodyChunkTreatsEOFAsEmptyResponse(t *testing.T) {
+	chunk, err := readFirstResponseBodyChunk(io.NopCloser(strings.NewReader("")), 30*time.Millisecond)
 	if err != nil {
-		t.Fatalf("readFirstResponseChunk error = %v, want nil", err)
+		t.Fatalf("readFirstResponseBodyChunk error = %v, want nil", err)
 	}
 	if len(chunk) != 0 {
 		t.Fatalf("chunk = %q, want empty", string(chunk))
 	}
 }
 
-func TestReadFirstResponseChunkReturnsAvailableBytes(t *testing.T) {
+func TestReadFirstResponseBodyChunkReturnsAvailableBytes(t *testing.T) {
 	reader, writer := io.Pipe()
 	go func() {
 		_, _ = writer.Write([]byte("first"))
 		_ = writer.Close()
 	}()
 
-	chunk, err := readFirstResponseChunk(reader, 30*time.Millisecond)
+	chunk, err := readFirstResponseBodyChunk(reader, 30*time.Millisecond)
 	if err != nil {
-		t.Fatalf("readFirstResponseChunk error = %v", err)
+		t.Fatalf("readFirstResponseBodyChunk error = %v", err)
 	}
 	if string(chunk) != "first" {
 		t.Fatalf("chunk = %q, want first", string(chunk))
+	}
+}
+
+func TestResponseBodyIdleTimeoutReaderTimesOutAfterFirstChunk(t *testing.T) {
+	reader, writer := io.Pipe()
+	defer writer.Close()
+	go func() {
+		_, _ = writer.Write([]byte("first"))
+		time.Sleep(100 * time.Millisecond)
+		_, _ = writer.Write([]byte("late"))
+	}()
+
+	timeoutReader := &responseBodyIdleTimeoutReader{
+		body:    reader,
+		timeout: 30 * time.Millisecond,
+	}
+	buf := make([]byte, 16)
+	n, err := timeoutReader.Read(buf)
+	if err != nil || string(buf[:n]) != "first" {
+		t.Fatalf("first read = %q, %v", string(buf[:n]), err)
+	}
+	_, err = timeoutReader.Read(buf)
+	if !isResponseBodyIdleTimeout(err) {
+		t.Fatalf("second read error = %v, want response body idle timeout", err)
+	}
+}
+
+func TestResponseBodyIdleTimeoutReaderStartsAfterFirstChunk(t *testing.T) {
+	reader, writer := io.Pipe()
+	go func() {
+		time.Sleep(60 * time.Millisecond)
+		_, _ = writer.Write([]byte("first"))
+		_ = writer.Close()
+	}()
+
+	timeoutReader := &responseBodyIdleTimeoutReader{
+		body:    reader,
+		timeout: 20 * time.Millisecond,
+	}
+	got, err := io.ReadAll(timeoutReader)
+	if err != nil {
+		t.Fatalf("ReadAll error = %v", err)
+	}
+	if string(got) != "first" {
+		t.Fatalf("body = %q, want first", string(got))
+	}
+}
+
+func TestResponseBodyIdleTimeoutReaderResetsAfterEachChunk(t *testing.T) {
+	reader, writer := io.Pipe()
+	go func() {
+		_, _ = writer.Write([]byte("first"))
+		time.Sleep(20 * time.Millisecond)
+		_, _ = writer.Write([]byte("second"))
+		time.Sleep(20 * time.Millisecond)
+		_ = writer.Close()
+	}()
+
+	timeoutReader := &responseBodyIdleTimeoutReader{
+		body:    reader,
+		timeout: 50 * time.Millisecond,
+	}
+	got, err := io.ReadAll(timeoutReader)
+	if err != nil {
+		t.Fatalf("ReadAll error = %v", err)
+	}
+	if string(got) != "firstsecond" {
+		t.Fatalf("body = %q, want firstsecond", string(got))
 	}
 }
 
@@ -139,16 +207,16 @@ func TestProxyTotalTimeoutStillApplies(t *testing.T) {
 	}
 }
 
-func TestProxyStreamingFirstResponseBodyByteTimeout(t *testing.T) {
+func TestProxyResponseBodyFirstByteTimeoutAppliesToNonStreamingResponse(t *testing.T) {
 	release := make(chan struct{})
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		if flusher, ok := w.(http.Flusher); ok {
 			flusher.Flush()
 		}
 		<-release
-		_, _ = w.Write([]byte("data: late\n\n"))
+		_, _ = w.Write([]byte(`{"late":true}`))
 	}))
 	defer upstream.Close()
 	defer close(release)
@@ -156,10 +224,10 @@ func TestProxyStreamingFirstResponseBodyByteTimeout(t *testing.T) {
 	cfg := &config.Config{
 		Server: config.ServerConfig{ProxyDomains: []string{"localhost"}},
 		Upstreams: map[string]config.UpstreamConfig{
-			"stream": {
-				Target:                 upstream.URL,
-				Timeout:                5,
-				StreamFirstByteTimeout: 1,
+			"json": {
+				Target:                       upstream.URL,
+				Timeout:                      5,
+				ResponseBodyFirstByteTimeout: 1,
 			},
 		},
 		Logging: config.LoggingConfig{
@@ -171,8 +239,8 @@ func TestProxyStreamingFirstResponseBodyByteTimeout(t *testing.T) {
 
 	repo := newProxyTestRepo()
 	p := New(cfg, repo, nil, nil)
-	req := httptest.NewRequest(http.MethodGet, "http://stream.localhost/v1/events", nil)
-	req.Host = "stream.localhost"
+	req := httptest.NewRequest(http.MethodGet, "http://json.localhost/v1/data", nil)
+	req.Host = "json.localhost"
 	rr := httptest.NewRecorder()
 
 	start := time.Now()
@@ -183,12 +251,12 @@ func TestProxyStreamingFirstResponseBodyByteTimeout(t *testing.T) {
 	if rr.Code != http.StatusBadGateway {
 		t.Fatalf("status = %d, want 502", rr.Code)
 	}
-	if !strings.Contains(rr.Body.String(), "stream first response body byte timeout") {
+	if !strings.Contains(rr.Body.String(), "response body first byte timeout") {
 		t.Fatalf("body = %q, want timeout error", rr.Body.String())
 	}
 
 	finalLog := drainLatestProxyTestLog(t, repo)
-	if !strings.Contains(finalLog.Error, "stream first response body byte timeout") {
+	if !strings.Contains(finalLog.Error, "response body first byte timeout") {
 		t.Fatalf("log error = %q", finalLog.Error)
 	}
 }
@@ -205,9 +273,9 @@ func TestProxyEmptyStreamingResponsePreservesStatusAndHeaders(t *testing.T) {
 		Server: config.ServerConfig{ProxyDomains: []string{"localhost"}},
 		Upstreams: map[string]config.UpstreamConfig{
 			"stream": {
-				Target:                 upstream.URL,
-				Timeout:                5,
-				StreamFirstByteTimeout: 1,
+				Target:                       upstream.URL,
+				Timeout:                      5,
+				ResponseBodyFirstByteTimeout: 1,
 			},
 		},
 	}
@@ -254,9 +322,9 @@ func TestProxyNoContentIsNotRewritten(t *testing.T) {
 		Server: config.ServerConfig{ProxyDomains: []string{"localhost"}},
 		Upstreams: map[string]config.UpstreamConfig{
 			"stream": {
-				Target:                 upstream.URL,
-				Timeout:                5,
-				StreamFirstByteTimeout: 1,
+				Target:                       upstream.URL,
+				Timeout:                      5,
+				ResponseBodyFirstByteTimeout: 1,
 			},
 		},
 	}
@@ -301,9 +369,9 @@ func TestProxyStreamingFirstChunkIsForwardedExactlyOnce(t *testing.T) {
 		Server: config.ServerConfig{ProxyDomains: []string{"localhost"}},
 		Upstreams: map[string]config.UpstreamConfig{
 			"stream": {
-				Target:                 upstream.URL,
-				Timeout:                5,
-				StreamFirstByteTimeout: 1,
+				Target:                       upstream.URL,
+				Timeout:                      5,
+				ResponseBodyFirstByteTimeout: 1,
 			},
 		},
 	}
@@ -327,7 +395,7 @@ func TestProxyStreamingFirstChunkIsForwardedExactlyOnce(t *testing.T) {
 	}
 }
 
-func TestProxyNonStreamingResponseIgnoresFirstResponseBodyByteTimeout(t *testing.T) {
+func TestProxyNonStreamingResponseForwardsBodyWithinFirstByteTimeout(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -340,9 +408,9 @@ func TestProxyNonStreamingResponseIgnoresFirstResponseBodyByteTimeout(t *testing
 		Server: config.ServerConfig{ProxyDomains: []string{"localhost"}},
 		Upstreams: map[string]config.UpstreamConfig{
 			"json": {
-				Target:                 upstream.URL,
-				Timeout:                5,
-				StreamFirstByteTimeout: 1,
+				Target:                       upstream.URL,
+				Timeout:                      5,
+				ResponseBodyFirstByteTimeout: 1,
 			},
 		},
 	}
@@ -358,6 +426,61 @@ func TestProxyNonStreamingResponseIgnoresFirstResponseBodyByteTimeout(t *testing
 	}
 	if rr.Body.String() != `{"ok":true}` {
 		t.Fatalf("body = %q", rr.Body.String())
+	}
+}
+
+func TestProxyResponseBodyIdleTimeoutAppliesAfterFirstChunk(t *testing.T) {
+	release := make(chan struct{})
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"partial":`))
+		if flusher, ok := w.(http.Flusher); ok {
+			flusher.Flush()
+		}
+		<-release
+		_, _ = w.Write([]byte(`true}`))
+	}))
+	defer upstream.Close()
+	defer close(release)
+
+	cfg := &config.Config{
+		Server: config.ServerConfig{ProxyDomains: []string{"localhost"}},
+		Upstreams: map[string]config.UpstreamConfig{
+			"json": {
+				Target:                  upstream.URL,
+				Timeout:                 5,
+				ResponseBodyIdleTimeout: 1,
+			},
+		},
+		Logging: config.LoggingConfig{
+			MaxRequestBody:   1024,
+			MaxResponseBody:  1024,
+			BodyPreviewBytes: 1024,
+		},
+	}
+
+	repo := newProxyTestRepo()
+	p := New(cfg, repo, nil, nil)
+	req := httptest.NewRequest(http.MethodGet, "http://json.localhost/v1/data", nil)
+	req.Host = "json.localhost"
+	rr := httptest.NewRecorder()
+
+	start := time.Now()
+	p.ServeHTTP(rr, req)
+	if elapsed := time.Since(start); elapsed < 900*time.Millisecond || elapsed > 3*time.Second {
+		t.Fatalf("ServeHTTP elapsed = %s", elapsed)
+	}
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+	if rr.Body.String() != `{"partial":` {
+		t.Fatalf("body = %q, want partial response", rr.Body.String())
+	}
+
+	finalLog := drainLatestProxyTestLog(t, repo)
+	if !strings.Contains(finalLog.Error, "response body idle timeout after 1s") {
+		t.Fatalf("log error = %q, want response body idle timeout", finalLog.Error)
 	}
 }
 
