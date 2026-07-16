@@ -45,6 +45,7 @@ import {
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog'
@@ -335,25 +336,41 @@ function OutboundProxyControl({
     value,
     onChange,
     t,
+    className,
 }: {
     value: string
     onChange: (value: string) => void
     t: (key: string) => string
+    className?: string
 }) {
     const mode = outboundProxyMode(value)
+    const [customValue, setCustomValue] = useState(
+        mode === 'custom' ? value : customProxyPlaceholder,
+    )
+
     return (
-        <div className="space-y-2">
+        <div
+            className={cn(
+                "flex h-10 overflow-hidden rounded-xl border border-border/30 bg-background/50 transition-shadow focus-within:ring-2 focus-within:ring-ring/50",
+                className,
+            )}
+        >
             <Select
                 value={mode}
                 onValueChange={(nextMode: OutboundProxyMode) => {
                     if (nextMode === 'custom') {
-                        onChange(mode === 'custom' ? value : customProxyPlaceholder)
+                        onChange(mode === 'custom' ? value : customValue)
                         return
                     }
                     onChange(nextMode)
                 }}
             >
-                <SelectTrigger className="h-10 w-full rounded-xl border-border/30 bg-background/50 text-sm">
+                <SelectTrigger
+                    className={cn(
+                        "h-full rounded-none border-0 bg-transparent text-sm shadow-none focus:ring-0 focus:ring-offset-0",
+                        mode === 'custom' ? "w-[116px] shrink-0 border-r border-border/30" : "w-full",
+                    )}
+                >
                     <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -365,9 +382,13 @@ function OutboundProxyControl({
             {mode === 'custom' && (
                 <Input
                     value={value}
-                    onChange={e => onChange(e.target.value)}
+                    onChange={e => {
+                        setCustomValue(e.target.value)
+                        onChange(e.target.value)
+                    }}
                     placeholder={customProxyPlaceholder}
-                    className="h-10 rounded-xl border-border/30 bg-background/50 font-mono text-sm"
+                    aria-label={t('upstream_manager.outbound_proxy_custom_address')}
+                    className="h-full min-w-0 flex-1 rounded-none border-0 bg-transparent px-3 font-mono text-sm shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
                 />
             )}
         </div>
@@ -417,34 +438,54 @@ function FieldBlock({ label, hint, htmlFor, unit, children }: FieldBlockProps) {
     )
 }
 
-function AdvancedTimeoutSettings({
+function AdvancedSettings({
     children,
-    configured = false,
+    defaultOpen = false,
 }: {
     children: ReactNode
-    configured?: boolean
+    defaultOpen?: boolean
 }) {
     const { t } = useTranslation()
+    const [open, setOpen] = useState(defaultOpen)
     return (
-        <details className="group rounded-xl border border-border/50 bg-muted/20">
+        <details
+            open={open}
+            onToggle={event => setOpen(event.currentTarget.open)}
+            className="group rounded-xl border border-border/50 bg-muted/20"
+        >
             <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 marker:content-none [&::-webkit-details-marker]:hidden">
                 <div className="flex min-w-0 items-center gap-2">
                     <div className="text-sm font-medium text-foreground">
-                        {t('upstream_manager.advanced_timeout_settings')}
+                        {t('upstream_manager.advanced_settings')}
                     </div>
-                    <InfoTooltip content={t('upstream_manager.advanced_timeout_settings_hint')} />
-                    {configured && (
-                        <Badge variant="outline" className="h-5 shrink-0 rounded-full border-primary/30 bg-primary/10 px-1.5 text-[10px] text-primary">
-                            {t('upstream_manager.advanced_timeout_settings_configured')}
-                        </Badge>
-                    )}
+                    <InfoTooltip content={t('upstream_manager.advanced_settings_hint')} />
                 </div>
                 <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
             </summary>
-            <div className="grid grid-cols-1 gap-5 border-t border-border/40 px-4 py-4 sm:grid-cols-2">
+            <div className="space-y-6 border-t border-border/40 px-4 py-5">
                 {children}
             </div>
         </details>
+    )
+}
+
+function AdvancedSettingsGroup({
+    title,
+    description,
+    children,
+}: {
+    title: string
+    description?: string
+    children: ReactNode
+}) {
+    return (
+        <div className="space-y-4">
+            <div>
+                <div className="text-xs font-semibold uppercase tracking-wider text-foreground/65">{title}</div>
+                {description && <p className="mt-1.5 text-xs leading-5 text-muted-foreground">{description}</p>}
+            </div>
+            {children}
+        </div>
     )
 }
 
@@ -1216,198 +1257,230 @@ export function Settings() {
     return (
         <div className="w-full">
             <Dialog open={!!editingUpstream} onOpenChange={(open) => !open && setEditingUpstream(null)}>
-                <DialogContent className="max-h-[calc(100vh-2rem)] max-w-2xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-2xl border border-border/60 bg-card p-0 shadow-2xl">
+                <DialogContent className="max-h-[calc(100vh-2rem)] max-w-2xl grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-border/60 bg-card p-0 shadow-2xl">
                     <DialogHeader className="border-b border-border/60 px-6 py-5">
                         <DialogTitle className="text-base font-bold">
                             {editingUpstream ? t('upstream_manager.edit_title', { name: editingUpstream.name }) : t('common.edit')}
                         </DialogTitle>
+                        <DialogDescription className="sr-only">
+                            {t('upstream_manager.edit_description')}
+                        </DialogDescription>
                     </DialogHeader>
                     {editingUpstream && (
-                        <div className="min-h-0 space-y-6 overflow-y-auto px-6 py-5">
-                            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                                <FieldBlock label={t('upstream_manager.name')}>
-                                    <Input
-                                        value={editingUpstream.name}
-                                        readOnly
-                                        className="h-10 rounded-xl border-border/30 bg-muted/50 font-mono text-sm"
-                                    />
-                                </FieldBlock>
-                                <FieldBlock label={t('upstream_manager.order')}>
-                                    <Input
-                                        type="number"
-                                        min={0}
-                                        value={editingUpstream.order}
-                                        onChange={e => setEditingUpstream(current => current ? { ...current, order: Number(e.target.value) } : current)}
-                                        className="h-10 rounded-xl border-border/30 bg-background/50 text-sm"
-                                    />
-                                </FieldBlock>
-                                <div className="sm:col-span-2">
-                                    <FieldBlock label={t('upstream_manager.target')}>
+                        <>
+                            <div className="min-h-0 space-y-6 overflow-y-auto px-6 py-5">
+                                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                                    <FieldBlock label={t('upstream_manager.name')}>
                                         <Input
-                                            value={editingUpstream.target}
-                                            onChange={e => setEditingUpstream(current => current ? { ...current, target: e.target.value } : current)}
-                                            className="h-10 rounded-xl border-border/30 bg-background/50 font-mono text-sm"
+                                            value={editingUpstream.name}
+                                            readOnly
+                                            className="h-10 rounded-xl border-border/30 bg-muted/50 font-mono text-sm"
                                         />
                                     </FieldBlock>
-                                </div>
-                                <FieldBlock label={t('upstream_manager.timeout')}>
-                                    <Input
-                                        type="number"
-                                        min="1"
-                                        value={editingUpstream.timeout}
-                                        onChange={e => setEditingUpstream(current => current ? { ...current, timeout: Number(e.target.value) } : current)}
-                                        className="h-10 rounded-xl border-border/30 bg-background/50 text-sm"
-                                    />
-                                </FieldBlock>
-                                <div className="sm:col-span-2">
-                                    <AdvancedTimeoutSettings
-                                        configured={editingUpstream.responseHeaderTimeout > 0 || editingUpstream.streamFirstByteTimeout > 0}
-                                    >
-                                        <FieldBlock
-                                            label={t('upstream_manager.response_header_timeout')}
-                                            hint={t('upstream_manager.response_header_timeout_hint')}
-                                        >
+                                    <FieldBlock label={t('upstream_manager.order')}>
+                                        <Input
+                                            type="number"
+                                            min={0}
+                                            value={editingUpstream.order}
+                                            onChange={e => setEditingUpstream(current => current ? { ...current, order: Number(e.target.value) } : current)}
+                                            className="h-10 rounded-xl border-border/30 bg-background/50 text-sm"
+                                        />
+                                    </FieldBlock>
+                                    <div className="sm:col-span-2">
+                                        <FieldBlock label={t('upstream_manager.target')}>
+                                            <Input
+                                                value={editingUpstream.target}
+                                                onChange={e => setEditingUpstream(current => current ? { ...current, target: e.target.value } : current)}
+                                                className="h-10 rounded-xl border-border/30 bg-background/50 font-mono text-sm"
+                                            />
+                                        </FieldBlock>
+                                    </div>
+                                    <div className="grid grid-cols-1 gap-5 sm:col-span-2 sm:grid-cols-[minmax(120px,0.8fr)_minmax(0,2.2fr)]">
+                                        <FieldBlock label={t('upstream_manager.timeout')}>
                                             <Input
                                                 type="number"
-                                                min="0"
-                                                value={editingUpstream.responseHeaderTimeout}
-                                                onChange={e => setEditingUpstream(current => current ? { ...current, responseHeaderTimeout: Number(e.target.value) } : current)}
+                                                min="1"
+                                                value={editingUpstream.timeout}
+                                                onChange={e => setEditingUpstream(current => current ? { ...current, timeout: Number(e.target.value) } : current)}
                                                 className="h-10 rounded-xl border-border/30 bg-background/50 text-sm"
                                             />
                                         </FieldBlock>
                                         <FieldBlock
-                                            label={t('upstream_manager.stream_first_byte_timeout')}
-                                            hint={t('upstream_manager.stream_first_byte_timeout_hint')}
+                                            label={t('upstream_manager.outbound_proxy')}
+                                            hint={t('upstream_manager.outbound_proxy_hint')}
                                         >
-                                            <Input
-                                                type="number"
-                                                min="0"
-                                                value={editingUpstream.streamFirstByteTimeout}
-                                                onChange={e => setEditingUpstream(current => current ? { ...current, streamFirstByteTimeout: Number(e.target.value) } : current)}
-                                                className="h-10 rounded-xl border-border/30 bg-background/50 text-sm"
+                                            <OutboundProxyControl
+                                                value={editingUpstream.outboundProxy}
+                                                onChange={value => setEditingUpstream(current => current ? { ...current, outboundProxy: value } : current)}
+                                                t={t}
                                             />
                                         </FieldBlock>
-                                    </AdvancedTimeoutSettings>
+                                    </div>
                                 </div>
-                                <FieldBlock
-                                    label={t('upstream_manager.outbound_proxy')}
-                                    hint={t('upstream_manager.outbound_proxy_hint')}
+
+                                <AdvancedSettings
+                                    defaultOpen={
+                                        editingUpstream.responseHeaderTimeout > 0 ||
+                                        editingUpstream.streamFirstByteTimeout > 0 ||
+                                        !editingUpstream.loggingEnabled ||
+                                        editingUpstream.overrideEnabled ||
+                                        editingUpstream.usageEnabled ||
+                                        editingUpstream.ruleNames.length > 0 ||
+                                        editingUpstream.usageRuleNames.length > 0
+                                    }
                                 >
-                                    <OutboundProxyControl
-                                        value={editingUpstream.outboundProxy}
-                                        onChange={value => setEditingUpstream(current => current ? { ...current, outboundProxy: value } : current)}
-                                        t={t}
-                                    />
-                                </FieldBlock>
-                                <div className="sm:col-span-2">
-                                    <ToggleSetting
-                                        label={t('upstream_manager.logging_enabled')}
-                                        description={t('upstream_manager.logging_enabled_hint')}
-                                        checked={editingUpstream.loggingEnabled}
-                                        onCheckedChange={(checked) => setEditingUpstream(current => current ? { ...current, loggingEnabled: checked } : current)}
-                                    />
-                                </div>
-                            </div>
+                                    <AdvancedSettingsGroup
+                                        title={t('upstream_manager.timeout_strategy')}
+                                        description={t('upstream_manager.timeout_strategy_hint')}
+                                    >
+                                        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                                            <FieldBlock
+                                                label={t('upstream_manager.response_header_timeout')}
+                                                hint={t('upstream_manager.response_header_timeout_hint')}
+                                            >
+                                                <Input
+                                                    type="number"
+                                                    min="0"
+                                                    value={editingUpstream.responseHeaderTimeout}
+                                                    onChange={e => setEditingUpstream(current => current ? { ...current, responseHeaderTimeout: Number(e.target.value) } : current)}
+                                                    className="h-10 rounded-xl border-border/30 bg-background/50 text-sm"
+                                                />
+                                            </FieldBlock>
+                                            <FieldBlock
+                                                label={t('upstream_manager.stream_first_byte_timeout')}
+                                                hint={t('upstream_manager.stream_first_byte_timeout_hint')}
+                                            >
+                                                <Input
+                                                    type="number"
+                                                    min="0"
+                                                    value={editingUpstream.streamFirstByteTimeout}
+                                                    onChange={e => setEditingUpstream(current => current ? { ...current, streamFirstByteTimeout: Number(e.target.value) } : current)}
+                                                    className="h-10 rounded-xl border-border/30 bg-background/50 text-sm"
+                                                />
+                                            </FieldBlock>
+                                        </div>
+                                    </AdvancedSettingsGroup>
 
-                            <div className="rounded-xl border border-border/50 bg-muted/20 p-4">
-                                <ToggleSetting
-                                    label={t('upstream_manager.override_enabled')}
-                                    description={t('upstream_manager.override_enabled_hint')}
-                                    checked={editingUpstream.overrideEnabled}
-                                    onCheckedChange={(checked) => setEditingUpstream(current => current ? { ...current, overrideEnabled: checked } : current)}
-                                />
-                                <div className="mt-4 space-y-2">
-                                    <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                                        {t('upstream_manager.bound_rules')}
+                                    <div className="border-t border-border/40 pt-5">
+                                        <AdvancedSettingsGroup title={t('upstream_manager.request_logging')}>
+                                            <ToggleSetting
+                                                label={t('upstream_manager.logging_enabled')}
+                                                description={t('upstream_manager.logging_enabled_hint')}
+                                                checked={editingUpstream.loggingEnabled}
+                                                onCheckedChange={(checked) => setEditingUpstream(current => current ? { ...current, loggingEnabled: checked } : current)}
+                                            />
+                                        </AdvancedSettingsGroup>
                                     </div>
-                                    {parsedOverrideRules.length === 0 ? (
-                                        <div className="rounded-lg border border-dashed border-border/50 bg-background/50 px-3 py-4 text-xs text-muted-foreground">
-                                            {t('upstream_manager.no_rules')}
-                                        </div>
-                                    ) : (
-                                        <div className="grid gap-2 sm:grid-cols-2">
-                                            {parsedOverrideRules.map((ruleName, ruleIndex) => {
-                                                const rule = overrideRuleObjects[ruleIndex]
-                                                const ruleEnabled = getOverrideRuleEnabled(rule)
-                                                const checked = editingUpstream.ruleNames.includes(ruleName)
-                                                return (
-                                                    <label
-                                                        key={`${ruleName}-${ruleIndex}`}
-                                                        className={cn(
-                                                            "flex items-center gap-2 rounded-lg border border-border/40 bg-background/50 px-3 py-2 text-sm",
-                                                            !ruleEnabled && "opacity-70"
-                                                        )}
-                                                    >
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={checked}
-                                                            disabled={!ruleEnabled && !checked}
-                                                            onChange={e => toggleEditingRule(ruleName, e.target.checked)}
-                                                        />
-                                                        <span className="min-w-0 truncate font-mono text-xs">{ruleName}</span>
-                                                        {!ruleEnabled && (
-                                                            <Badge variant="outline" className="ml-auto h-5 shrink-0 rounded-full border-border/40 bg-muted/50 px-1.5 text-[10px] text-muted-foreground">
-                                                                {t('settings.rule_disabled')}
-                                                            </Badge>
-                                                        )}
-                                                    </label>
-                                                )
-                                            })}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
 
-                            <div className="rounded-xl border border-border/50 bg-muted/20 p-4">
-                                <ToggleSetting
-                                    label={t('upstream_manager.usage_enabled')}
-                                    description={t('upstream_manager.usage_enabled_hint')}
-                                    checked={editingUpstream.usageEnabled}
-                                    onCheckedChange={(checked) => setEditingUpstream(current => current ? { ...current, usageEnabled: checked } : current)}
-                                />
-                                <div className="mt-4 space-y-2">
-                                    <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                                        {t('upstream_manager.bound_usage_rules')}
+                                    <div className="border-t border-border/40 pt-5">
+                                        <AdvancedSettingsGroup title={t('upstream_manager.request_overrides')}>
+                                            <ToggleSetting
+                                                label={t('upstream_manager.override_enabled')}
+                                                description={t('upstream_manager.override_enabled_hint')}
+                                                checked={editingUpstream.overrideEnabled}
+                                                onCheckedChange={(checked) => setEditingUpstream(current => current ? { ...current, overrideEnabled: checked } : current)}
+                                            />
+                                            {editingUpstream.overrideEnabled && (
+                                                <div className="space-y-2">
+                                                    <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                                        {t('upstream_manager.bound_rules')}
+                                                    </div>
+                                                    {parsedOverrideRules.length === 0 ? (
+                                                        <div className="rounded-lg border border-dashed border-border/50 bg-background/50 px-3 py-4 text-xs text-muted-foreground">
+                                                            {t('upstream_manager.no_rules')}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="grid gap-2 sm:grid-cols-2">
+                                                            {parsedOverrideRules.map((ruleName, ruleIndex) => {
+                                                                const rule = overrideRuleObjects[ruleIndex]
+                                                                const ruleEnabled = getOverrideRuleEnabled(rule)
+                                                                const checked = editingUpstream.ruleNames.includes(ruleName)
+                                                                return (
+                                                                    <label
+                                                                        key={`${ruleName}-${ruleIndex}`}
+                                                                        className={cn(
+                                                                            "flex items-center gap-2 rounded-lg border border-border/40 bg-background/50 px-3 py-2 text-sm",
+                                                                            !ruleEnabled && "opacity-70"
+                                                                        )}
+                                                                    >
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={checked}
+                                                                            disabled={!ruleEnabled && !checked}
+                                                                            onChange={e => toggleEditingRule(ruleName, e.target.checked)}
+                                                                        />
+                                                                        <span className="min-w-0 truncate font-mono text-xs">{ruleName}</span>
+                                                                        {!ruleEnabled && (
+                                                                            <Badge variant="outline" className="ml-auto h-5 shrink-0 rounded-full border-border/40 bg-muted/50 px-1.5 text-[10px] text-muted-foreground">
+                                                                                {t('settings.rule_disabled')}
+                                                                            </Badge>
+                                                                        )}
+                                                                    </label>
+                                                                )
+                                                            })}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </AdvancedSettingsGroup>
                                     </div>
-                                    {parsedUsageRules.length === 0 ? (
-                                        <div className="rounded-lg border border-dashed border-border/50 bg-background/50 px-3 py-4 text-xs text-muted-foreground">
-                                            {t('upstream_manager.no_usage_rules')}
-                                        </div>
-                                    ) : (
-                                        <div className="grid gap-2 sm:grid-cols-2">
-                                            {parsedUsageRules.map((ruleName, ruleIndex) => {
-                                                const rule = usageRuleObjects[ruleIndex]
-                                                const ruleEnabled = getOverrideRuleEnabled(rule)
-                                                const checked = editingUpstream.usageRuleNames.includes(ruleName)
-                                                return (
-                                                    <label
-                                                        key={`${ruleName}-${ruleIndex}`}
-                                                        className={cn(
-                                                            "flex items-center gap-2 rounded-lg border border-border/40 bg-background/50 px-3 py-2 text-sm",
-                                                            !ruleEnabled && "opacity-70"
-                                                        )}
-                                                    >
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={checked}
-                                                            disabled={!ruleEnabled && !checked}
-                                                            onChange={e => toggleEditingUsageRule(ruleName, e.target.checked)}
-                                                        />
-                                                        <span className="min-w-0 truncate font-mono text-xs">{ruleName}</span>
-                                                        {!ruleEnabled && (
-                                                            <Badge variant="outline" className="ml-auto h-5 shrink-0 rounded-full border-border/40 bg-muted/50 px-1.5 text-[10px] text-muted-foreground">
-                                                                {t('settings.rule_disabled')}
-                                                            </Badge>
-                                                        )}
-                                                    </label>
-                                                )
-                                            })}
-                                        </div>
-                                    )}
-                                </div>
+
+                                    <div className="border-t border-border/40 pt-5">
+                                        <AdvancedSettingsGroup title={t('upstream_manager.usage_stats')}>
+                                            <ToggleSetting
+                                                label={t('upstream_manager.usage_enabled')}
+                                                description={t('upstream_manager.usage_enabled_hint')}
+                                                checked={editingUpstream.usageEnabled}
+                                                onCheckedChange={(checked) => setEditingUpstream(current => current ? { ...current, usageEnabled: checked } : current)}
+                                            />
+                                            {editingUpstream.usageEnabled && (
+                                                <div className="space-y-2">
+                                                    <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                                        {t('upstream_manager.bound_usage_rules')}
+                                                    </div>
+                                                    {parsedUsageRules.length === 0 ? (
+                                                        <div className="rounded-lg border border-dashed border-border/50 bg-background/50 px-3 py-4 text-xs text-muted-foreground">
+                                                            {t('upstream_manager.no_usage_rules')}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="grid gap-2 sm:grid-cols-2">
+                                                            {parsedUsageRules.map((ruleName, ruleIndex) => {
+                                                                const rule = usageRuleObjects[ruleIndex]
+                                                                const ruleEnabled = getOverrideRuleEnabled(rule)
+                                                                const checked = editingUpstream.usageRuleNames.includes(ruleName)
+                                                                return (
+                                                                    <label
+                                                                        key={`${ruleName}-${ruleIndex}`}
+                                                                        className={cn(
+                                                                            "flex items-center gap-2 rounded-lg border border-border/40 bg-background/50 px-3 py-2 text-sm",
+                                                                            !ruleEnabled && "opacity-70"
+                                                                        )}
+                                                                    >
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={checked}
+                                                                            disabled={!ruleEnabled && !checked}
+                                                                            onChange={e => toggleEditingUsageRule(ruleName, e.target.checked)}
+                                                                        />
+                                                                        <span className="min-w-0 truncate font-mono text-xs">{ruleName}</span>
+                                                                        {!ruleEnabled && (
+                                                                            <Badge variant="outline" className="ml-auto h-5 shrink-0 rounded-full border-border/40 bg-muted/50 px-1.5 text-[10px] text-muted-foreground">
+                                                                                {t('settings.rule_disabled')}
+                                                                            </Badge>
+                                                                        )}
+                                                                    </label>
+                                                                )
+                                                            })}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </AdvancedSettingsGroup>
+                                    </div>
+                                </AdvancedSettings>
                             </div>
 
-                            <div className="flex justify-end gap-2 border-t border-border/50 pt-4">
+                            <div className="flex justify-end gap-2 border-t border-border/50 bg-card px-6 py-4">
                                 <Button type="button" variant="ghost" onClick={() => setEditingUpstream(null)}>
                                     {t('common.cancel')}
                                 </Button>
@@ -1416,7 +1489,7 @@ export function Settings() {
                                     {t('common.save')}
                                 </Button>
                             </div>
-                        </div>
+                        </>
                     )}
                 </DialogContent>
             </Dialog>
@@ -1539,9 +1612,9 @@ export function Settings() {
                                     >
                                     <div className="w-full">
                                         {showAddForm && (
-                                            <div className="mb-8 rounded-2xl bg-background/40 p-6 ring-1 ring-border/20 backdrop-blur-sm w-fit">
-                                                <form onSubmit={handleAddUpstream} className="flex flex-wrap items-end gap-6">
-                                                    <div className="w-[240px]">
+                                            <div className="mb-8 w-full rounded-2xl bg-background/40 p-6 ring-1 ring-border/20 backdrop-blur-sm">
+                                                <form onSubmit={handleAddUpstream} className="grid grid-cols-1 gap-6 md:grid-cols-12 md:items-end">
+                                                    <div className="md:col-span-3">
                                                         <FieldBlock label={t('upstream_manager.name')} htmlFor="name">
                                                             <div className="relative">
                                                                 <Input
@@ -1559,7 +1632,7 @@ export function Settings() {
                                                         </FieldBlock>
                                                     </div>
 
-                                                    <div className="w-[320px] max-w-full">
+                                                    <div className="md:col-span-5">
                                                         <FieldBlock label={t('upstream_manager.target')} htmlFor="target">
                                                             <Input
                                                                 id="target"
@@ -1572,7 +1645,7 @@ export function Settings() {
                                                         </FieldBlock>
                                                     </div>
 
-                                                    <div className="w-[120px]">
+                                                    <div className="md:col-span-2">
                                                         <FieldBlock label={t('upstream_manager.timeout')} htmlFor="timeout">
                                                             <Input
                                                                 id="timeout"
@@ -1585,43 +1658,7 @@ export function Settings() {
                                                         </FieldBlock>
                                                     </div>
 
-                                                    <div className="w-full">
-                                                        <AdvancedTimeoutSettings
-                                                            configured={newResponseHeaderTimeout > 0 || newStreamFirstByteTimeout > 0}
-                                                        >
-                                                            <FieldBlock
-                                                                label={t('upstream_manager.response_header_timeout')}
-                                                                htmlFor="response-header-timeout"
-                                                                hint={t('upstream_manager.response_header_timeout_hint')}
-                                                            >
-                                                                <Input
-                                                                    id="response-header-timeout"
-                                                                    type="number"
-                                                                    min="0"
-                                                                    value={newResponseHeaderTimeout}
-                                                                    onChange={e => setNewResponseHeaderTimeout(Number(e.target.value))}
-                                                                    className="h-11 rounded-xl border-border/30 bg-background/80 text-sm shadow-sm transition-colors focus-visible:bg-background"
-                                                                />
-                                                            </FieldBlock>
-
-                                                            <FieldBlock
-                                                                label={t('upstream_manager.stream_first_byte_timeout')}
-                                                                htmlFor="stream-first-byte-timeout"
-                                                                hint={t('upstream_manager.stream_first_byte_timeout_hint')}
-                                                            >
-                                                                <Input
-                                                                    id="stream-first-byte-timeout"
-                                                                    type="number"
-                                                                    min="0"
-                                                                    value={newStreamFirstByteTimeout}
-                                                                    onChange={e => setNewStreamFirstByteTimeout(Number(e.target.value))}
-                                                                    className="h-11 rounded-xl border-border/30 bg-background/80 text-sm shadow-sm transition-colors focus-visible:bg-background"
-                                                                />
-                                                            </FieldBlock>
-                                                        </AdvancedTimeoutSettings>
-                                                    </div>
-
-                                                    <div className="w-[120px]">
+                                                    <div className="md:col-span-2">
                                                         <FieldBlock label={t('upstream_manager.order')} htmlFor="order">
                                                             <Input
                                                                 id="order"
@@ -1634,7 +1671,7 @@ export function Settings() {
                                                         </FieldBlock>
                                                     </div>
 
-                                                    <div className="w-[260px]">
+                                                    <div className="md:col-span-4">
                                                         <FieldBlock
                                                             label={t('upstream_manager.outbound_proxy')}
                                                             hint={t('upstream_manager.outbound_proxy_hint')}
@@ -1643,20 +1680,64 @@ export function Settings() {
                                                                 value={newOutboundProxy}
                                                                 onChange={setNewOutboundProxy}
                                                                 t={t}
+                                                                className="h-11 bg-background/80 shadow-sm"
                                                             />
                                                         </FieldBlock>
                                                     </div>
 
-                                                    <div className="flex h-11 items-center">
-                                                        <ToggleSetting
-                                                            label={t('upstream_manager.logging_enabled')}
-                                                            description={t('upstream_manager.logging_enabled_hint')}
-                                                            checked={newLoggingEnabled}
-                                                            onCheckedChange={setNewLoggingEnabled}
-                                                        />
+                                                    <div className="md:col-span-12">
+                                                        <AdvancedSettings>
+                                                            <AdvancedSettingsGroup
+                                                                title={t('upstream_manager.timeout_strategy')}
+                                                                description={t('upstream_manager.timeout_strategy_hint')}
+                                                            >
+                                                                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                                                                    <FieldBlock
+                                                                        label={t('upstream_manager.response_header_timeout')}
+                                                                        htmlFor="response-header-timeout"
+                                                                        hint={t('upstream_manager.response_header_timeout_hint')}
+                                                                    >
+                                                                        <Input
+                                                                            id="response-header-timeout"
+                                                                            type="number"
+                                                                            min="0"
+                                                                            value={newResponseHeaderTimeout}
+                                                                            onChange={e => setNewResponseHeaderTimeout(Number(e.target.value))}
+                                                                            className="h-11 rounded-xl border-border/30 bg-background/80 text-sm shadow-sm transition-colors focus-visible:bg-background"
+                                                                        />
+                                                                    </FieldBlock>
+
+                                                                    <FieldBlock
+                                                                        label={t('upstream_manager.stream_first_byte_timeout')}
+                                                                        htmlFor="stream-first-byte-timeout"
+                                                                        hint={t('upstream_manager.stream_first_byte_timeout_hint')}
+                                                                    >
+                                                                        <Input
+                                                                            id="stream-first-byte-timeout"
+                                                                            type="number"
+                                                                            min="0"
+                                                                            value={newStreamFirstByteTimeout}
+                                                                            onChange={e => setNewStreamFirstByteTimeout(Number(e.target.value))}
+                                                                            className="h-11 rounded-xl border-border/30 bg-background/80 text-sm shadow-sm transition-colors focus-visible:bg-background"
+                                                                        />
+                                                                    </FieldBlock>
+                                                                </div>
+                                                            </AdvancedSettingsGroup>
+
+                                                            <div className="border-t border-border/40 pt-5">
+                                                                <AdvancedSettingsGroup title={t('upstream_manager.request_logging')}>
+                                                                    <ToggleSetting
+                                                                        label={t('upstream_manager.logging_enabled')}
+                                                                        description={t('upstream_manager.logging_enabled_hint')}
+                                                                        checked={newLoggingEnabled}
+                                                                        onCheckedChange={setNewLoggingEnabled}
+                                                                    />
+                                                                </AdvancedSettingsGroup>
+                                                            </div>
+                                                        </AdvancedSettings>
                                                     </div>
 
-                                                    <div className="flex h-11 items-center">
+                                                    <div className="flex justify-end md:col-span-12">
                                                         <Button type="submit" variant="default" size="lg" className="h-11 rounded-xl min-w-[120px] font-medium shadow-sm whitespace-nowrap shrink-0">
                                                             <Save className="mr-1.5 h-4 w-4 shrink-0" />
                                                             {t('common.save')}
