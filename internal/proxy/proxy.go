@@ -32,7 +32,7 @@ type streamFirstByteTimeoutError struct {
 }
 
 func (e *streamFirstByteTimeoutError) Error() string {
-	return fmt.Sprintf("stream first byte timeout after %s", e.timeout)
+	return fmt.Sprintf("stream first response body byte timeout after %s", e.timeout)
 }
 
 func (e *streamFirstByteTimeoutError) Timeout() bool   { return true }
@@ -57,7 +57,11 @@ func readFirstResponseChunk(body io.ReadCloser, timeout time.Duration) ([]byte, 
 				return
 			}
 			if err != nil {
-				resultCh <- result{err: err}
+				if errors.Is(err, io.EOF) {
+					resultCh <- result{}
+				} else {
+					resultCh <- result{err: err}
+				}
 				return
 			}
 		}
@@ -346,7 +350,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if isStreamFirstByteTimeout(err) {
 				logEntry.Error = err.Error()
 			} else {
-				logEntry.Error = fmt.Sprintf("read stream first byte failed: %v", err)
+				logEntry.Error = fmt.Sprintf("read stream first response body byte failed: %v", err)
 			}
 			if loggingEnabled {
 				p.finalizeAndSaveLog(logEntry, startTime, reqCapture, nil)

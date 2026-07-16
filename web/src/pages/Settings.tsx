@@ -26,6 +26,7 @@ import {
     Database,
     Archive,
     FileCode,
+    ChevronDown,
 } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
@@ -412,6 +413,28 @@ function FieldBlock({ label, hint, htmlFor, unit, children }: FieldBlockProps) {
             </div>
             {children}
         </div>
+    )
+}
+
+function AdvancedTimeoutSettings({ children }: { children: ReactNode }) {
+    const { t } = useTranslation()
+    return (
+        <details className="group rounded-xl border border-border/50 bg-muted/20">
+            <summary className="flex cursor-pointer list-none items-start justify-between gap-4 px-4 py-3 marker:content-none [&::-webkit-details-marker]:hidden">
+                <div className="min-w-0">
+                    <div className="text-sm font-medium text-foreground">
+                        {t('upstream_manager.advanced_timeout_settings')}
+                    </div>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                        {t('upstream_manager.advanced_timeout_settings_hint')}
+                    </p>
+                </div>
+                <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="grid grid-cols-1 gap-5 border-t border-border/40 px-4 py-4 sm:grid-cols-2">
+                {children}
+            </div>
+        </details>
     )
 }
 
@@ -1226,30 +1249,34 @@ export function Settings() {
                                         className="h-10 rounded-xl border-border/30 bg-background/50 text-sm"
                                     />
                                 </FieldBlock>
-                                <FieldBlock
-                                    label={t('upstream_manager.response_header_timeout')}
-                                    hint={t('upstream_manager.response_header_timeout_hint')}
-                                >
-                                    <Input
-                                        type="number"
-                                        min="0"
-                                        value={editingUpstream.responseHeaderTimeout}
-                                        onChange={e => setEditingUpstream(current => current ? { ...current, responseHeaderTimeout: Number(e.target.value) } : current)}
-                                        className="h-10 rounded-xl border-border/30 bg-background/50 text-sm"
-                                    />
-                                </FieldBlock>
-                                <FieldBlock
-                                    label={t('upstream_manager.stream_first_byte_timeout')}
-                                    hint={t('upstream_manager.stream_first_byte_timeout_hint')}
-                                >
-                                    <Input
-                                        type="number"
-                                        min="0"
-                                        value={editingUpstream.streamFirstByteTimeout}
-                                        onChange={e => setEditingUpstream(current => current ? { ...current, streamFirstByteTimeout: Number(e.target.value) } : current)}
-                                        className="h-10 rounded-xl border-border/30 bg-background/50 text-sm"
-                                    />
-                                </FieldBlock>
+                                <div className="sm:col-span-2">
+                                    <AdvancedTimeoutSettings>
+                                        <FieldBlock
+                                            label={t('upstream_manager.response_header_timeout')}
+                                            hint={t('upstream_manager.response_header_timeout_hint')}
+                                        >
+                                            <Input
+                                                type="number"
+                                                min="0"
+                                                value={editingUpstream.responseHeaderTimeout}
+                                                onChange={e => setEditingUpstream(current => current ? { ...current, responseHeaderTimeout: Number(e.target.value) } : current)}
+                                                className="h-10 rounded-xl border-border/30 bg-background/50 text-sm"
+                                            />
+                                        </FieldBlock>
+                                        <FieldBlock
+                                            label={t('upstream_manager.stream_first_byte_timeout')}
+                                            hint={t('upstream_manager.stream_first_byte_timeout_hint')}
+                                        >
+                                            <Input
+                                                type="number"
+                                                min="0"
+                                                value={editingUpstream.streamFirstByteTimeout}
+                                                onChange={e => setEditingUpstream(current => current ? { ...current, streamFirstByteTimeout: Number(e.target.value) } : current)}
+                                                className="h-10 rounded-xl border-border/30 bg-background/50 text-sm"
+                                            />
+                                        </FieldBlock>
+                                    </AdvancedTimeoutSettings>
+                                </div>
                                 <FieldBlock
                                     label={t('upstream_manager.outbound_proxy')}
                                     hint={t('upstream_manager.outbound_proxy_hint')}
@@ -1546,38 +1573,38 @@ export function Settings() {
                                                         </FieldBlock>
                                                     </div>
 
-                                                    <div className="w-[150px]">
-                                                        <FieldBlock
-                                                            label={t('upstream_manager.response_header_timeout')}
-                                                            htmlFor="response-header-timeout"
-                                                            hint={t('upstream_manager.response_header_timeout_hint')}
-                                                        >
-                                                            <Input
-                                                                id="response-header-timeout"
-                                                                type="number"
-                                                                min="0"
-                                                                value={newResponseHeaderTimeout}
-                                                                onChange={e => setNewResponseHeaderTimeout(Number(e.target.value))}
-                                                                className="h-11 rounded-xl border-border/30 bg-background/80 text-sm shadow-sm transition-colors focus-visible:bg-background"
-                                                            />
-                                                        </FieldBlock>
-                                                    </div>
+                                                    <div className="w-full">
+                                                        <AdvancedTimeoutSettings>
+                                                            <FieldBlock
+                                                                label={t('upstream_manager.response_header_timeout')}
+                                                                htmlFor="response-header-timeout"
+                                                                hint={t('upstream_manager.response_header_timeout_hint')}
+                                                            >
+                                                                <Input
+                                                                    id="response-header-timeout"
+                                                                    type="number"
+                                                                    min="0"
+                                                                    value={newResponseHeaderTimeout}
+                                                                    onChange={e => setNewResponseHeaderTimeout(Number(e.target.value))}
+                                                                    className="h-11 rounded-xl border-border/30 bg-background/80 text-sm shadow-sm transition-colors focus-visible:bg-background"
+                                                                />
+                                                            </FieldBlock>
 
-                                                    <div className="w-[150px]">
-                                                        <FieldBlock
-                                                            label={t('upstream_manager.stream_first_byte_timeout')}
-                                                            htmlFor="stream-first-byte-timeout"
-                                                            hint={t('upstream_manager.stream_first_byte_timeout_hint')}
-                                                        >
-                                                            <Input
-                                                                id="stream-first-byte-timeout"
-                                                                type="number"
-                                                                min="0"
-                                                                value={newStreamFirstByteTimeout}
-                                                                onChange={e => setNewStreamFirstByteTimeout(Number(e.target.value))}
-                                                                className="h-11 rounded-xl border-border/30 bg-background/80 text-sm shadow-sm transition-colors focus-visible:bg-background"
-                                                            />
-                                                        </FieldBlock>
+                                                            <FieldBlock
+                                                                label={t('upstream_manager.stream_first_byte_timeout')}
+                                                                htmlFor="stream-first-byte-timeout"
+                                                                hint={t('upstream_manager.stream_first_byte_timeout_hint')}
+                                                            >
+                                                                <Input
+                                                                    id="stream-first-byte-timeout"
+                                                                    type="number"
+                                                                    min="0"
+                                                                    value={newStreamFirstByteTimeout}
+                                                                    onChange={e => setNewStreamFirstByteTimeout(Number(e.target.value))}
+                                                                    className="h-11 rounded-xl border-border/30 bg-background/80 text-sm shadow-sm transition-colors focus-visible:bg-background"
+                                                                />
+                                                            </FieldBlock>
+                                                        </AdvancedTimeoutSettings>
                                                     </div>
 
                                                     <div className="w-[120px]">
@@ -1634,13 +1661,11 @@ export function Settings() {
                                             </div>
                                         ) : (
                                             <div className="space-y-0">
-                                                <div className="hidden grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_140px_90px_105px_115px_96px] gap-5 border-b border-border/40 pb-3 px-2 lg:grid">
+                                                <div className="hidden grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_180px_110px_96px] gap-5 border-b border-border/40 pb-3 px-2 lg:grid">
                                                     <span className="text-xs font-semibold uppercase tracking-wider text-foreground/65">{t('upstream_manager.name')}</span>
                                                     <span className="text-xs font-semibold uppercase tracking-wider text-foreground/65">{t('upstream_manager.target')}</span>
                                                     <span className="text-xs font-semibold uppercase tracking-wider text-foreground/65">{t('upstream_manager.outbound_proxy')}</span>
                                                     <span className="text-xs font-semibold uppercase tracking-wider text-foreground/65">{t('upstream_manager.timeout')}</span>
-                                                    <span className="text-xs font-semibold uppercase tracking-wider text-foreground/65">{t('upstream_manager.response_header_timeout_short')}</span>
-                                                    <span className="text-xs font-semibold uppercase tracking-wider text-foreground/65">{t('upstream_manager.stream_first_byte_timeout_short')}</span>
                                                     <span className="text-xs font-semibold uppercase tracking-wider text-foreground/65">{t('upstream_manager.actions')}</span>
                                                 </div>
 
@@ -1648,7 +1673,7 @@ export function Settings() {
                                                     {sortedUpstreams.map(upstream => (
                                                         <div
                                                             key={upstream.name}
-                                                            className="group grid gap-5 py-5 px-2 transition-colors hover:bg-muted/20 rounded-xl lg:-mx-2 lg:px-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_140px_90px_105px_115px_96px] lg:items-start lg:gap-5"
+                                                            className="group grid gap-5 py-5 px-2 transition-colors hover:bg-muted/20 rounded-xl lg:-mx-2 lg:px-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_180px_110px_96px] lg:items-start lg:gap-5"
                                                         >
                                                             <div className="min-w-0 space-y-3">
                                                                 <div className="flex flex-wrap items-center gap-2">
@@ -1738,28 +1763,6 @@ export function Settings() {
                                                                 </p>
                                                                 <div className="text-[13px] font-medium text-foreground/80">
                                                                     {upstream.timeout}s
-                                                                </div>
-                                                            </div>
-
-                                                            <div>
-                                                                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-foreground/50 lg:hidden">
-                                                                    {t('upstream_manager.response_header_timeout')}
-                                                                </p>
-                                                                <div className="text-[13px] font-medium text-foreground/80">
-                                                                    {upstream.response_header_timeout > 0
-                                                                        ? `${upstream.response_header_timeout}s`
-                                                                        : t('upstream_manager.disabled')}
-                                                                </div>
-                                                            </div>
-
-                                                            <div>
-                                                                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-foreground/50 lg:hidden">
-                                                                    {t('upstream_manager.stream_first_byte_timeout')}
-                                                                </p>
-                                                                <div className="text-[13px] font-medium text-foreground/80">
-                                                                    {upstream.stream_first_byte_timeout > 0
-                                                                        ? `${upstream.stream_first_byte_timeout}s`
-                                                                        : t('upstream_manager.disabled')}
                                                                 </div>
                                                             </div>
 
