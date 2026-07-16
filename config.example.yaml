@@ -50,8 +50,14 @@ upstreams:
   openai:
     # 匹配 openai.localhost:8080
     target: "https://api.openai.com"
-    # 可选：超时设置（秒）
+    # 可选：整个上游请求和响应过程的总超时（秒），包含等待响应头、首个响应体字节和后续响应体。
     timeout: 120
+    # 高级：等待上游 HTTP 状态码和响应头的阶段超时（秒）。0 = 禁用。
+    # 设为正数时通常应小于 timeout；实际等待仍不会超过总超时。
+    response_header_timeout: 60
+    # 高级：仅流式响应生效；收到响应头后等待首个响应体字节的阶段超时（秒）。0 = 禁用。
+    # 实际等待仍不会超过剩余的总超时；非流式响应不受此项影响。
+    stream_first_byte_timeout: 30
     # 可选：出站代理策略。env=读取 HTTP_PROXY/HTTPS_PROXY，direct=强制直连，也可填写代理 URL。
     outbound_proxy: "env"
     # 可选：关闭此上游的日志记录，仅作为透明反代。默认 false（记录日志）。
@@ -61,6 +67,9 @@ upstreams:
     # 匹配 gemini.localhost:8080
     target: "https://generativelanguage.googleapis.com"
     timeout: 120
+    response_header_timeout: 0
+    # 0 表示禁用流式首个响应体字节阶段超时；非流式响应不受此设置影响。
+    stream_first_byte_timeout: 0
     # 例如通过 Clash 本地 HTTP 代理访问 Gemini:
     # outbound_proxy: "http://127.0.0.1:7890"
 

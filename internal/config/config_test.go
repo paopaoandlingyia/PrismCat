@@ -194,13 +194,49 @@ func TestNormalizeOutboundProxy(t *testing.T) {
 
 func TestNormalizeUpstreamsDefaultsTimeout(t *testing.T) {
 	got, err := normalizeUpstreams(map[string]UpstreamConfig{
-		"openai": {Target: "https://api.openai.com"},
+		"openai": {
+			Target:                 "https://api.openai.com",
+			ResponseHeaderTimeout:  -1,
+			StreamFirstByteTimeout: -1,
+		},
 	})
 	if err != nil {
 		t.Fatalf("normalizeUpstreams returned error: %v", err)
 	}
 	if got["openai"].Timeout != DefaultUpstreamTimeoutSeconds {
 		t.Fatalf("Timeout = %d, want %d", got["openai"].Timeout, DefaultUpstreamTimeoutSeconds)
+	}
+	if got["openai"].ResponseHeaderTimeout != 0 {
+		t.Fatalf("ResponseHeaderTimeout = %d, want 0", got["openai"].ResponseHeaderTimeout)
+	}
+	if got["openai"].StreamFirstByteTimeout != 0 {
+		t.Fatalf("StreamFirstByteTimeout = %d, want 0", got["openai"].StreamFirstByteTimeout)
+	}
+}
+
+func TestLoadStreamFirstByteTimeout(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.yaml")
+	dbPath := filepath.Join(dir, "data", "prismcat.db")
+	blobDir := filepath.Join(dir, "data", "blobs")
+	content := "upstreams:\n  openai:\n    target: https://api.openai.com\n    response_header_timeout: 20\n    stream_first_byte_timeout: 15\nstorage:\n  database: " + strconvQuote(dbPath) + "\n  blob_dir: " + strconvQuote(blobDir) + "\n"
+	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	upstream, ok := cfg.GetUpstream("openai")
+	if !ok {
+		t.Fatal("openai upstream missing")
+	}
+	if upstream.ResponseHeaderTimeout != 20 {
+		t.Fatalf("ResponseHeaderTimeout = %d, want 20", upstream.ResponseHeaderTimeout)
+	}
+	if upstream.StreamFirstByteTimeout != 15 {
+		t.Fatalf("StreamFirstByteTimeout = %d, want 15", upstream.StreamFirstByteTimeout)
 	}
 }
 

@@ -27,6 +27,58 @@ import (
 	"github.com/paopaoandlingyia/PrismCat/internal/trace"
 )
 
+type streamFirstByteTimeoutError struct {
+	timeout time.Duration
+}
+
+func (e *streamFirstByteTimeoutError) Error() string {
+	return fmt.Sprintf("stream first response body byte timeout after %s", e.timeout)
+}
+
+func (e *streamFirstByteTimeoutError) Timeout() bool   { return true }
+func (e *streamFirstByteTimeoutError) Temporary() bool { return true }
+
+func readFirstResponseChunk(body io.ReadCloser, timeout time.Duration) ([]byte, error) {
+	if timeout <= 0 {
+		return nil, nil
+	}
+
+	type result struct {
+		buf []byte
+		err error
+	}
+	resultCh := make(chan result, 1)
+	go func() {
+		buf := make([]byte, copyBufferSize)
+		for {
+			n, err := body.Read(buf)
+			if n > 0 {
+				resultCh <- result{buf: buf[:n]}
+				return
+			}
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					resultCh <- result{}
+				} else {
+					resultCh <- result{err: err}
+				}
+				return
+			}
+		}
+	}()
+
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	select {
+	case result := <-resultCh:
+		return result.buf, result.err
+	case <-timer.C:
+		_ = body.Close()
+		return nil, &streamFirstByteTimeoutError{timeout: timeout}
+	}
+}
+
 // Proxy handles host-based upstream routing and request/response logging.
 type Proxy struct {
 	cfg      *config.Config
@@ -75,7 +127,8 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("unknown upstream: %s", upstreamName), http.StatusBadGateway)
 		return
 	}
-	client, err := p.clients.Client(upstream.OutboundProxy)
+	responseHeaderTimeout := time.Duration(upstream.ResponseHeaderTimeout) * time.Second
+	client, err := p.clients.ClientWithResponseHeaderTimeout(upstream.OutboundProxy, responseHeaderTimeout)
 	if err != nil {
 		http.Error(w, "invalid upstream outbound proxy config", http.StatusInternalServerError)
 		return
@@ -267,7 +320,11 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	resp, err := client.Do(upstreamReq)
 	if err != nil {
 		logMu.Lock()
-		logEntry.Error = fmt.Sprintf("upstream request failed: %v", err)
+		if isResponseHeaderTimeout(err) && upstream.ResponseHeaderTimeout > 0 {
+			logEntry.Error = fmt.Sprintf("upstream response header timeout after %ds", upstream.ResponseHeaderTimeout)
+		} else {
+			logEntry.Error = fmt.Sprintf("upstream request failed: %v", err)
+		}
 		if loggingEnabled {
 			p.finalizeAndSaveLog(logEntry, startTime, reqCapture, nil)
 			p.completeLive(logEntry)
@@ -278,10 +335,37 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
+	streaming := isStreaming(resp.Header)
+	var firstResponseChunk []byte
+	if streaming && upstream.StreamFirstByteTimeout > 0 {
+		firstResponseChunk, err = readFirstResponseChunk(
+			resp.Body,
+			time.Duration(upstream.StreamFirstByteTimeout)*time.Second,
+		)
+		if err != nil {
+			logMu.Lock()
+			logEntry.StatusCode = resp.StatusCode
+			logEntry.ResponseHeaders = p.headerToMap(resp.Header)
+			logEntry.Streaming = true
+			if isStreamFirstByteTimeout(err) {
+				logEntry.Error = err.Error()
+			} else {
+				logEntry.Error = fmt.Sprintf("read stream first response body byte failed: %v", err)
+			}
+			if loggingEnabled {
+				p.finalizeAndSaveLog(logEntry, startTime, reqCapture, nil)
+				p.completeLive(logEntry)
+			}
+			logMu.Unlock()
+			http.Error(w, fmt.Sprintf("upstream error: %v", err), http.StatusBadGateway)
+			return
+		}
+	}
+
 	logMu.Lock()
 	logEntry.StatusCode = resp.StatusCode
 	logEntry.ResponseHeaders = p.headerToMap(resp.Header)
-	logEntry.Streaming = isStreaming(resp.Header)
+	logEntry.Streaming = streaming
 	if loggingEnabled {
 		p.publishHeaders(logEntry)
 	}
@@ -298,9 +382,13 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		respCapture = newLimitedCapture(loggingCfg.MaxResponseBody)
 		respCaptureWriter = respCapture
 	}
+	var responseBodyReader io.Reader = resp.Body
+	if len(firstResponseChunk) > 0 {
+		responseBodyReader = io.MultiReader(bytes.NewReader(firstResponseChunk), resp.Body)
+	}
 	copied, copyErr := copyWithOptionalFlush(
 		w,
-		resp.Body,
+		responseBodyReader,
 		respCaptureWriter,
 		logEntry.Streaming,
 		p.makeLiveChunkPublisherIfEnabled(loggingEnabled, logEntry, resp.Header),
@@ -313,6 +401,8 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// classify it as an upstream/proxy failure.
 		if isClientCanceledResponse(r.Context(), copyErr) {
 			logEntry.Truncated = true
+		} else if isStreamFirstByteTimeout(copyErr) {
+			logEntry.Error = copyErr.Error()
 		} else {
 			// The response may already be partially written; we can only record the error.
 			logEntry.Error = fmt.Sprintf("forward response failed: %v", copyErr)
@@ -871,6 +961,16 @@ func copyWithOptionalFlush(dst http.ResponseWriter, src io.Reader, capture io.Wr
 			return total, err
 		}
 	}
+}
+
+func isResponseHeaderTimeout(err error) bool {
+	var netErr interface{ Timeout() bool }
+	return errors.As(err, &netErr) && netErr.Timeout() && strings.Contains(strings.ToLower(err.Error()), "response headers")
+}
+
+func isStreamFirstByteTimeout(err error) bool {
+	var timeoutErr *streamFirstByteTimeoutError
+	return errors.As(err, &timeoutErr)
 }
 
 func isClientCanceledResponse(ctx context.Context, err error) bool {

@@ -283,11 +283,15 @@ storage:
 upstreams:
   openai:
     target: "https://api.openai.com"
-    timeout: 120
+    timeout: 120 # Total timeout for the entire upstream request and response
+    response_header_timeout: 60 # Advanced: wait for HTTP status/headers; 0 disables; always bounded by total timeout
+    stream_first_byte_timeout: 30 # Advanced, streaming only: wait for the first response body byte; 0 disables; bounded by remaining total timeout
     outbound_proxy: "env"          # env, direct, or a proxy URL such as http://127.0.0.1:7890
   gemini:
     target: "https://generativelanguage.googleapis.com"
     timeout: 120
+    response_header_timeout: 0
+    stream_first_byte_timeout: 0  # 0 disables the first streaming response body byte stage timeout; non-streaming responses are unaffected
     outbound_proxy: "http://127.0.0.1:7890"
 
 # Request override (opt-in, off by default)
