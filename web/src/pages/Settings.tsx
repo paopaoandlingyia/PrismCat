@@ -351,10 +351,22 @@ function OutboundProxyControl({
     return (
         <div
             className={cn(
-                "flex h-10 overflow-hidden rounded-xl border border-border/30 bg-background/50 transition-shadow focus-within:ring-2 focus-within:ring-ring/50",
+                "relative flex h-10 overflow-hidden rounded-xl border border-border/30 bg-background/50 transition-shadow focus-within:ring-2 focus-within:ring-ring/50",
                 className,
             )}
         >
+            {mode === 'custom' && (
+                <Input
+                    value={value}
+                    onChange={e => {
+                        setCustomValue(e.target.value)
+                        onChange(e.target.value)
+                    }}
+                    placeholder={customProxyPlaceholder}
+                    aria-label={t('upstream_manager.outbound_proxy_custom_address')}
+                    className="h-full min-w-0 flex-1 rounded-none border-0 bg-transparent px-3 pr-11 font-mono text-sm shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                />
+            )}
             <Select
                 value={mode}
                 onValueChange={(nextMode: OutboundProxyMode) => {
@@ -368,10 +380,18 @@ function OutboundProxyControl({
                 <SelectTrigger
                     className={cn(
                         "h-full rounded-none border-0 bg-transparent text-sm shadow-none focus:ring-0 focus:ring-offset-0",
-                        mode === 'custom' ? "w-[116px] shrink-0 border-r border-border/30" : "w-full",
+                        mode === 'custom'
+                            ? "absolute inset-y-0 right-0 z-10 w-10 justify-center px-0 hover:bg-muted/40"
+                            : "w-full",
                     )}
                 >
-                    <SelectValue />
+                    {mode === 'custom' ? (
+                        <span className="sr-only">
+                            <SelectValue />
+                        </span>
+                    ) : (
+                        <SelectValue />
+                    )}
                 </SelectTrigger>
                 <SelectContent>
                     <SelectItem value="env">{t('upstream_manager.outbound_proxy_env')}</SelectItem>
@@ -379,18 +399,6 @@ function OutboundProxyControl({
                     <SelectItem value="custom">{t('upstream_manager.outbound_proxy_custom')}</SelectItem>
                 </SelectContent>
             </Select>
-            {mode === 'custom' && (
-                <Input
-                    value={value}
-                    onChange={e => {
-                        setCustomValue(e.target.value)
-                        onChange(e.target.value)
-                    }}
-                    placeholder={customProxyPlaceholder}
-                    aria-label={t('upstream_manager.outbound_proxy_custom_address')}
-                    className="h-full min-w-0 flex-1 rounded-none border-0 bg-transparent px-3 font-mono text-sm shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                />
-            )}
         </div>
     )
 }
