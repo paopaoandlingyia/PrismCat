@@ -747,7 +747,7 @@ function appendGeminiParts(target: Array<Record<string, unknown>>, parts: unknow
         }
 
         const lastPart = target[target.length - 1]
-        if (lastPart && asString(lastPart.text) !== undefined) {
+        if (lastPart && canMergeGeminiTextParts(lastPart, partValue)) {
             lastPart.text = `${asString(lastPart.text) ?? ''}${text}`
             for (const [key, value] of Object.entries(partValue)) {
                 if (key === 'text' || value === undefined) continue
@@ -758,6 +758,22 @@ function appendGeminiParts(target: Array<Record<string, unknown>>, parts: unknow
 
         target.push({ ...partValue })
     }
+}
+
+function canMergeGeminiTextParts(
+    previous: Record<string, unknown>,
+    next: Record<string, unknown>
+): boolean {
+    if (asString(previous.text) === undefined || asString(next.text) === undefined) {
+        return false
+    }
+
+    // Gemini streams thought summaries and the final answer as separate logical
+    // parts. A thought flag change is therefore a part boundary, even when both
+    // deltas contain text.
+    const previousIsThought = previous.thought === true
+    const nextIsThought = next.thought === true
+    return previousIsThought === nextIsThought
 }
 
 function mergeResponseEnvelope(

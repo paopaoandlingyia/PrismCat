@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "test": "node --test tests/json-search.test.mjs",
+    "test": "node --test tests/json-search.test.mjs tests/stream-merge.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
