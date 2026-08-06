@@ -1,4 +1,6 @@
+import { toast } from 'sonner'
 import { cn, formatDate, formatLatency, formatSize, getStatusColor, getMethodColor } from '@/lib/utils'
+import { copyText } from '@/lib/clipboard'
 import { Copy, Check, Zap, AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsDownUp, ChevronsUpDown, FileCode, ListTree, Globe, Layers, RotateCcw, Maximize2, Minimize2, ExternalLink, Terminal, Bookmark, BookmarkCheck, CheckCircle2, CircleDot, Tags, Search, X } from 'lucide-react'
 import { fetchBlob, fetchLogBody, updateLogAnnotation } from '@/lib/api'
 import type { LiveLogEvent, RequestLog } from '@/lib/api'
@@ -445,7 +447,10 @@ export function LogDetail({
     }, [effectiveResponseSearchTerm, responseViewMode])
 
     const copyToClipboard = async (text: string, field: string) => {
-        await navigator.clipboard.writeText(text)
+        if (!(await copyText(text))) {
+            toast.error(t('log_detail.copy_failed'))
+            return
+        }
         setCopiedField(field)
         setTimeout(() => setCopiedField(null), 2000)
     }

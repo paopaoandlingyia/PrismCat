@@ -2,7 +2,9 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation } from 'react-router-dom'
 import { Send, Plus, Trash2, Loader2, Copy, Check, ChevronDown, Braces } from 'lucide-react'
+import { toast } from 'sonner'
 import { cn, getStatusColor, formatSize, generateId } from '@/lib/utils'
+import { copyText } from '@/lib/clipboard'
 import { fetchUpstreams, sendReplay } from '@/lib/api'
 import type { Upstream, ReplayResponse } from '@/lib/api'
 import { JsonViewer } from '@/components/JsonViewer'
@@ -177,7 +179,10 @@ export function Playground() {
     }
 
     const copyToClipboard = async (text: string, field: string) => {
-        await navigator.clipboard.writeText(text)
+        if (!(await copyText(text))) {
+            toast.error(t('log_detail.copy_failed'))
+            return
+        }
         setCopiedField(field)
         setTimeout(() => setCopiedField(null), 2000)
     }

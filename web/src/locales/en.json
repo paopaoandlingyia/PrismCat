@@ -103,6 +103,7 @@
         "body": "Body",
         "url": "Target URL",
         "copy_success": "Copied to clipboard",
+        "copy_failed": "Copy failed, please select and copy manually",
         "binary_content": "[Binary content omitted]",
         "streaming": "Streaming",
         "no_body": "No content",

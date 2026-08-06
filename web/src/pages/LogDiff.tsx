@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { fetchLog, type RequestLog } from '@/lib/api'
 import { cn, formatDate, formatSize, getMethodColor, getStatusColor } from '@/lib/utils'
+import { copyText } from '@/lib/clipboard'
 
 interface LogDiffState {
     id?: string
@@ -76,8 +77,11 @@ export function LogDiff() {
     }, [log])
 
     const copyFinalBody = async () => {
-        await navigator.clipboard.writeText(finalBody)
-        toast.success(t('log_detail.copy_success'))
+        if (await copyText(finalBody)) {
+            toast.success(t('log_detail.copy_success'))
+        } else {
+            toast.error(t('log_detail.copy_failed'))
+        }
     }
 
     if (loading) {

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Copy, Eye, Image as ImageIcon, FileCode } from 'lucide-react';
 import { Button } from './ui/button';
 import { formatSize } from '@/lib/utils';
+import { copyText } from '@/lib/clipboard';
 import {
     buildSmartTextSegments,
     detectionFromMime,
@@ -152,7 +153,7 @@ function LargeTextPreview({ text, searchTerm, maxMatches }: { text: string; sear
     );
 
     const copyToClipboard = () => {
-        void navigator.clipboard.writeText(text);
+        void copyText(text);
     };
 
     return (
@@ -516,7 +517,7 @@ function Base64Placeholder({ value, detection, dataUriPrefix }: {
         return null;
     }, [value, detection, dataUriPrefix]);
 
-    const copyToClipboard = () => { navigator.clipboard.writeText(value); };
+    const copyToClipboard = () => { void copyText(value); };
 
     if (showFull) {
         return (

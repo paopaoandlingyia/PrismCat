@@ -59,6 +59,7 @@ import type { Upstream, AppConfig, SystemMetrics, UpdateInfo, StorageUsage } fro
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { copyText } from '@/lib/clipboard'
 
 type FieldBlockProps = {
     label: string
@@ -741,9 +742,12 @@ export function Settings() {
         return `${proxyBase.proto}//${proxyBase.hostname}${proxyBase.portSuffix}${normalizedPrefix}/${name}`
     }, [pathRoutingPrefix, proxyBase])
 
-    const handleCopy = useCallback((value: string) => {
-        navigator.clipboard.writeText(value)
-        toast.success(t('log_detail.copy_success'))
+    const handleCopy = useCallback(async (value: string) => {
+        if (await copyText(value)) {
+            toast.success(t('log_detail.copy_success'))
+        } else {
+            toast.error(t('log_detail.copy_failed'))
+        }
     }, [t])
 
     useEffect(() => {

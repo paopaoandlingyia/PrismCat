@@ -103,6 +103,7 @@
         "body": "内容",
         "url": "目标 URL",
         "copy_success": "已复制到剪贴板",
+        "copy_failed": "复制失败，请手动选中复制",
         "binary_content": "[二进制内容，已省略]",
         "streaming": "流式",
         "no_body": "无内容",
