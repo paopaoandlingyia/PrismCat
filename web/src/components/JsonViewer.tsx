@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Copy, Eye, Image as ImageIcon, FileCode } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from './ui/button';
 import { formatSize } from '@/lib/utils';
 import { copyText } from '@/lib/clipboard';
@@ -152,8 +153,12 @@ function LargeTextPreview({ text, searchTerm, maxMatches }: { text: string; sear
         [maxMatches, searchTerm, text],
     );
 
-    const copyToClipboard = () => {
-        void copyText(text);
+    const copyToClipboard = async () => {
+        if (await copyText(text)) {
+            toast.success(t('log_detail.copy_success'));
+        } else {
+            toast.error(t('log_detail.copy_failed'));
+        }
     };
 
     return (
@@ -517,7 +522,13 @@ function Base64Placeholder({ value, detection, dataUriPrefix }: {
         return null;
     }, [value, detection, dataUriPrefix]);
 
-    const copyToClipboard = () => { void copyText(value); };
+    const copyToClipboard = async () => {
+        if (await copyText(value)) {
+            toast.success(t('log_detail.copy_success'));
+        } else {
+            toast.error(t('log_detail.copy_failed'));
+        }
+    };
 
     if (showFull) {
         return (

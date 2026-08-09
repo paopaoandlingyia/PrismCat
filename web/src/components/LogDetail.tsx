@@ -455,20 +455,6 @@ export function LogDetail({
         setTimeout(() => setCopiedField(null), 2000)
     }
 
-    const copyCurlCommand = async () => {
-        const currentLog = displayLog
-        if (!currentLog) return
-
-        let body = currentLog.request_body_final || fullRequestBody || currentLog.request_body || ''
-        if (!currentLog.request_body_final && currentLog.request_body_ref && !fullRequestBody) {
-            body = (await fetchLogBody(currentLog.id, 'request')).body
-            startTransition(() => setFullRequestBody(body))
-        } else if (!body && currentLog.request_override_error) {
-            body = currentLog.request_body_original || ''
-        }
-        await copyToClipboard(buildCurlCommand(currentLog, body), 'curl')
-    }
-
     const toggleSection = (section: keyof typeof expandedSections) => {
         setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }))
     }
@@ -490,6 +476,25 @@ export function LogDetail({
             setBlobLoading(prev => ({ ...prev, [kind]: false }))
         }
     }, [displayLog?.id])
+
+    const copyCurlCommand = () => {
+        const currentLog = displayLog
+        if (!currentLog) return
+
+        if (!currentLog.request_body_final && currentLog.request_body_ref && !fullRequestBody) {
+            if (!blobLoading.request) {
+                void loadBlob('request', currentLog.request_body_ref)
+            }
+            toast.info(t('log_detail.curl_body_loading'))
+            return
+        }
+
+        let body = currentLog.request_body_final || fullRequestBody || currentLog.request_body || ''
+        if (!body && currentLog.request_override_error) {
+            body = currentLog.request_body_original || ''
+        }
+        void copyToClipboard(buildCurlCommand(currentLog, body), 'curl')
+    }
 
     const saveAnnotation = useCallback(async (update: Parameters<typeof updateLogAnnotation>[1]) => {
         if (!displayLog || annotationSaving) return

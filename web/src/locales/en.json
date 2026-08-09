@@ -104,6 +104,7 @@
         "url": "Target URL",
         "copy_success": "Copied to clipboard",
         "copy_failed": "Copy failed, please select and copy manually",
+        "curl_body_loading": "Loading the full request body; click copy again when it is ready",
         "binary_content": "[Binary content omitted]",
         "streaming": "Streaming",
         "no_body": "No content",
