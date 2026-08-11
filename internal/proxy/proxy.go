@@ -173,7 +173,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	upstream, ok := p.cfg.GetUpstream(upstreamName)
+	upstream, overrideCfg, ok := p.cfg.ResolveUpstreamSnapshot(upstreamName)
 	if !ok {
 		http.Error(w, fmt.Sprintf("unknown upstream: %s", upstreamName), http.StatusBadGateway)
 		return
@@ -202,16 +202,17 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	logEntry := &storage.RequestLog{
-		ID:        uuid.NewString(),
-		CreatedAt: startTime,
-		Upstream:  upstreamName,
-		Method:    r.Method,
-		Path:      requestURL.Path,
-		Query:     requestURL.RawQuery,
-		TargetURL: upstreamURL.String(),
-		Tag:       r.Header.Get("X-PrismCat-Tag"),
-		TraceID:   traceID,
-		TraceSeq:  traceSeq,
+		ID:             uuid.NewString(),
+		CreatedAt:      startTime,
+		Upstream:       upstreamName,
+		UpstreamTarget: upstream.TargetName,
+		Method:         r.Method,
+		Path:           requestURL.Path,
+		Query:          requestURL.RawQuery,
+		TargetURL:      upstreamURL.String(),
+		Tag:            r.Header.Get("X-PrismCat-Tag"),
+		TraceID:        traceID,
+		TraceSeq:       traceSeq,
 
 		RequestHeaders: p.sanitizeHeaders(r.Header, loggingCfg.SensitiveHeaders),
 	}
@@ -254,7 +255,6 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var contentLength = r.ContentLength
 	requestBodySource := r.Body
 
-	overrideCfg := p.cfg.RequestOverridesSnapshot()
 	overrideInfo := requestoverride.RequestInfo{
 		Upstream:        upstreamName,
 		Method:          r.Method,

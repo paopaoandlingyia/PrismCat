@@ -13,8 +13,9 @@ type RequestLog struct {
 	CreatedAt time.Time `json:"created_at"`
 
 	// 上游信息
-	Upstream  string `json:"upstream"`   // 上游名称 (openai, gemini 等)
-	TargetURL string `json:"target_url"` // 实际请求的上游 URL
+	Upstream       string `json:"upstream"`                  // 上游名称 (openai, gemini 等)
+	UpstreamTarget string `json:"upstream_target,omitempty"` // 请求开始时选中的目标预设
+	TargetURL      string `json:"target_url"`                // 实际请求的上游 URL
 
 	// 请求信息
 	Method              string              `json:"method"`

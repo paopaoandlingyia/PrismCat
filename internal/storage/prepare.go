@@ -21,7 +21,7 @@ func PrepareLogForPersistence(logEntry *RequestLog, cfg *config.Config, blobs ..
 
 	if len(logEntry.ResponseBodyRaw) > 0 {
 		usageResult := usage.Extract(
-			cfg.UsageExtractionSnapshot(),
+			cfg.UsageExtractionSnapshotForTarget(logEntry.Upstream, logEntry.UpstreamTarget),
 			logEntry.Upstream,
 			FirstHeaderValue(logEntry.ResponseHeaders, "Content-Type"),
 			FirstHeaderValue(logEntry.ResponseHeaders, "Content-Encoding"),

@@ -201,7 +201,7 @@ export function TraceDetail() {
 
                   {/* Upstream */}
                   <span className="text-[10px] font-bold text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
-                    {req.upstream}
+                    {req.upstream}{req.upstream_target ? ` / ${req.upstream_target}` : ''}
                   </span>
 
                   {req.streaming && (

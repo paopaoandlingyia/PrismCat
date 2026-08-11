@@ -126,7 +126,7 @@ export function LogDiff() {
                         <div className="min-w-0 space-y-1">
                             <div className="break-all font-mono text-sm font-semibold text-foreground">{targetPath}</div>
                             <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-medium text-muted-foreground">
-                                <span>{log.upstream}</span>
+                                <span>{log.upstream}{log.upstream_target ? ` / ${log.upstream_target}` : ''}</span>
                                 <span>{formatDate(log.created_at, i18n.language)}</span>
                                 <span>{formatSize(log.request_body_size)}</span>
                             </div>

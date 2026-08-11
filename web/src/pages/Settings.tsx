@@ -56,8 +56,8 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { DEFAULT_UPSTREAM_TIMEOUT_SECONDS, fetchUpstreams, addUpstream, removeUpstream, fetchConfig, updateConfig, fetchSystemMetrics, fetchUpdateInfo, fetchStorageUsage } from '@/lib/api'
-import type { Upstream, AppConfig, SystemMetrics, UpdateInfo, StorageUsage } from '@/lib/api'
+import { DEFAULT_UPSTREAM_TIMEOUT_SECONDS, fetchUpstreams, addUpstream, removeUpstream, activateUpstreamTarget, fetchConfig, updateConfig, fetchSystemMetrics, fetchUpdateInfo, fetchStorageUsage } from '@/lib/api'
+import type { Upstream, UpstreamTarget, AppConfig, SystemMetrics, UpdateInfo, StorageUsage } from '@/lib/api'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -168,6 +168,10 @@ type EditingUpstream = {
     ruleNames: string[]
     usageEnabled: boolean
     usageRuleNames: string[]
+    usesTargetPresets: boolean
+    activeTarget: string
+    selectedTarget: string
+    targets: Record<string, UpstreamTarget>
 }
 
 type OutboundProxyMode = 'env' | 'direct' | 'custom'
@@ -177,6 +181,60 @@ type OverrideRuleObject = Record<string, unknown>
 type HeaderOp = { op: string; name: string; value?: string }
 
 const customProxyPlaceholder = 'http://127.0.0.1:7890'
+
+function editingBufferAsTarget(upstream: EditingUpstream): UpstreamTarget {
+    return {
+        url: upstream.target,
+        timeout: upstream.timeout,
+        response_header_timeout: upstream.responseHeaderTimeout,
+        response_body_first_byte_timeout: upstream.responseBodyFirstByteTimeout,
+        response_body_idle_timeout: upstream.responseBodyIdleTimeout,
+        outbound_proxy: upstream.outboundProxy,
+        request_overrides: {
+            enabled: upstream.overrideEnabled,
+            rule_names: upstream.ruleNames,
+        },
+        usage_extraction: {
+            enabled: upstream.usageEnabled,
+            rule_names: upstream.usageRuleNames,
+        },
+    }
+}
+
+function commitSelectedTarget(upstream: EditingUpstream): EditingUpstream {
+    if (!upstream.usesTargetPresets || !upstream.selectedTarget) return upstream
+    return {
+        ...upstream,
+        targets: {
+            ...upstream.targets,
+            [upstream.selectedTarget]: editingBufferAsTarget(upstream),
+        },
+    }
+}
+
+function loadTargetBuffer(upstream: EditingUpstream, targetName: string): EditingUpstream {
+    const target = upstream.targets[targetName]
+    if (!target) return upstream
+    return {
+        ...upstream,
+        selectedTarget: targetName,
+        target: target.url || '',
+        timeout: target.timeout || DEFAULT_UPSTREAM_TIMEOUT_SECONDS,
+        responseHeaderTimeout: target.response_header_timeout || 0,
+        responseBodyFirstByteTimeout: target.response_body_first_byte_timeout || 0,
+        responseBodyIdleTimeout: target.response_body_idle_timeout || 0,
+        outboundProxy: target.outbound_proxy || 'env',
+        overrideEnabled: target.request_overrides?.enabled ?? false,
+        ruleNames: target.request_overrides?.rule_names || [],
+        usageEnabled: target.usage_extraction?.enabled ?? false,
+        usageRuleNames: target.usage_extraction?.rule_names || [],
+    }
+}
+
+function activeTargetConfig(upstream: Upstream): UpstreamTarget | undefined {
+    if (!upstream.active_target) return undefined
+    return upstream.targets?.[upstream.active_target]
+}
 
 function getOverrideRuleName(rule: unknown, fallback: string) {
     if (!rule || typeof rule !== 'object') return fallback
@@ -687,6 +745,8 @@ export function Settings() {
     const [newLoggingEnabled, setNewLoggingEnabled] = useState(true)
     const [editingUpstream, setEditingUpstream] = useState<EditingUpstream | null>(null)
     const [upstreamAdvancedOpen, setUpstreamAdvancedOpen] = useState(false)
+    const [newTargetPresetName, setNewTargetPresetName] = useState('')
+    const [switchingTarget, setSwitchingTarget] = useState('')
 
     const [enablePathRouting, setEnablePathRouting] = useState(false)
     const [pathRoutingPrefix, setPathRoutingPrefix] = useState('/_proxy')
@@ -1113,6 +1173,19 @@ export function Settings() {
         setSelectedOverridePatchText(selectedRule ? JSON.stringify(selectedRule.patch ?? [], null, 2) : '')
     }
 
+    const handleActivateTarget = async (upstreamName: string, targetName: string) => {
+        setSwitchingTarget(upstreamName)
+        try {
+            await activateUpstreamTarget(upstreamName, targetName)
+            await loadData()
+            toast.success(t('upstream_manager.target_switched', { target: targetName }))
+        } catch (err: unknown) {
+            toast.error(getErrorMessage(err, t('common.error')))
+        } finally {
+            setSwitchingTarget('')
+        }
+    }
+
     const handleSelectOverrideRule = (index: number) => {
         const rule = overrideRuleObjects[index]
         if (!rule) return
@@ -1376,6 +1449,11 @@ export function Settings() {
     const handleEditUpstream = (upstream: Upstream) => {
         const binding = overrideBindings[upstream.name]
         const usageBinding = usageBindings[upstream.name]
+        const targets = upstream.targets || {}
+        const usesTargetPresets = Object.keys(targets).length > 0
+        const selectedTarget = usesTargetPresets
+            ? (upstream.active_target && targets[upstream.active_target] ? upstream.active_target : Object.keys(targets)[0])
+            : ''
         setUpstreamAdvancedOpen(
             (upstream.response_header_timeout || 0) > 0 ||
             (upstream.response_body_first_byte_timeout || 0) > 0 ||
@@ -1386,7 +1464,7 @@ export function Settings() {
             getBindingRuleNames(binding).length > 0 ||
             getBindingRuleNames(usageBinding).length > 0,
         )
-        setEditingUpstream({
+        const editing: EditingUpstream = {
             name: upstream.name,
             target: upstream.target,
             timeout: upstream.timeout,
@@ -1396,10 +1474,79 @@ export function Settings() {
             order: upstream.order || 0,
             outboundProxy: upstream.outbound_proxy || 'env',
             loggingEnabled: upstream.logging_enabled !== false,
-            overrideEnabled: binding?.enabled ?? false,
-            ruleNames: getBindingRuleNames(binding),
-            usageEnabled: usageBinding?.enabled ?? false,
-            usageRuleNames: getBindingRuleNames(usageBinding),
+            overrideEnabled: usesTargetPresets ? false : (binding?.enabled ?? false),
+            ruleNames: usesTargetPresets ? [] : getBindingRuleNames(binding),
+            usageEnabled: usesTargetPresets ? false : (usageBinding?.enabled ?? false),
+            usageRuleNames: usesTargetPresets ? [] : getBindingRuleNames(usageBinding),
+            usesTargetPresets,
+            activeTarget: upstream.active_target || selectedTarget,
+            selectedTarget,
+            targets,
+        }
+        setNewTargetPresetName('')
+        setEditingUpstream(usesTargetPresets ? loadTargetBuffer(editing, selectedTarget) : editing)
+    }
+
+    const handleEnableTargetPresets = () => {
+        setEditingUpstream(current => {
+            if (!current || current.usesTargetPresets) return current
+            const next = {
+                ...current,
+                usesTargetPresets: true,
+                activeTarget: 'default',
+                selectedTarget: 'default',
+                targets: { default: editingBufferAsTarget(current) },
+            }
+            return next
+        })
+    }
+
+    const handleSelectTargetPreset = (targetName: string) => {
+        setEditingUpstream(current => {
+            if (!current) return current
+            const committed = commitSelectedTarget(current)
+            return loadTargetBuffer(committed, targetName)
+        })
+    }
+
+    const handleAddTargetPreset = () => {
+        const name = newTargetPresetName.trim().toLowerCase()
+        if (!name) return
+        setEditingUpstream(current => {
+            if (!current) return current
+            const committed = commitSelectedTarget(current)
+            if (committed.targets[name]) {
+                toast.error(t('upstream_manager.target_name_duplicate'))
+                return current
+            }
+            const target: UpstreamTarget = {
+                url: '',
+                timeout: current.timeout,
+                response_header_timeout: current.responseHeaderTimeout,
+                response_body_first_byte_timeout: current.responseBodyFirstByteTimeout,
+                response_body_idle_timeout: current.responseBodyIdleTimeout,
+                outbound_proxy: current.outboundProxy,
+                request_overrides: { enabled: false, rule_names: [] },
+                usage_extraction: {
+                    enabled: false,
+                    rule_names: [],
+                },
+            }
+            const next = { ...committed, targets: { ...committed.targets, [name]: target } }
+            return loadTargetBuffer(next, name)
+        })
+        setNewTargetPresetName('')
+    }
+
+    const handleRemoveTargetPreset = () => {
+        setEditingUpstream(current => {
+            if (!current || !current.usesTargetPresets || Object.keys(current.targets).length <= 1) return current
+            const committed = commitSelectedTarget(current)
+            const targets = { ...committed.targets }
+            delete targets[committed.selectedTarget]
+            const nextName = Object.keys(targets)[0]
+            const activeTarget = committed.activeTarget === committed.selectedTarget ? nextName : committed.activeTarget
+            return loadTargetBuffer({ ...committed, targets, activeTarget }, nextName)
         })
     }
 
@@ -1427,32 +1574,39 @@ export function Settings() {
         if (!editingUpstream) return
         setSaving(true)
         try {
+            const committed = commitSelectedTarget(editingUpstream)
             const overrideRules = parseOverrideRules()
             const usageRules = parseUsageRules()
-            const nextBindings = {
-                ...overrideBindings,
-                [editingUpstream.name]: {
-                    enabled: editingUpstream.overrideEnabled,
-                    rule_names: editingUpstream.ruleNames,
-                },
-            }
-            const nextUsageBindings = {
-                ...usageBindings,
-                [editingUpstream.name]: {
-                    enabled: editingUpstream.usageEnabled,
-                    rule_names: editingUpstream.usageRuleNames,
-                },
+            const nextBindings = { ...overrideBindings }
+            const nextUsageBindings = { ...usageBindings }
+            if (committed.usesTargetPresets) {
+                delete nextBindings[committed.name]
+                delete nextUsageBindings[committed.name]
+                if (Object.values(committed.targets).some(target => !target.url.trim())) {
+                    throw new Error(t('upstream_manager.target_url_required'))
+                }
+            } else {
+                nextBindings[committed.name] = {
+                    enabled: committed.overrideEnabled,
+                    rule_names: committed.ruleNames,
+                }
+                nextUsageBindings[committed.name] = {
+                    enabled: committed.usageEnabled,
+                    rule_names: committed.usageRuleNames,
+                }
             }
             await addUpstream(
-                editingUpstream.name,
-                editingUpstream.target,
-                editingUpstream.timeout,
-                editingUpstream.responseHeaderTimeout,
-                editingUpstream.responseBodyFirstByteTimeout,
-                editingUpstream.responseBodyIdleTimeout,
-                editingUpstream.order,
-                normalizedOutboundProxy(editingUpstream.outboundProxy),
-                editingUpstream.loggingEnabled,
+                committed.name,
+                committed.usesTargetPresets ? '' : committed.target,
+                committed.usesTargetPresets ? 0 : committed.timeout,
+                committed.usesTargetPresets ? 0 : committed.responseHeaderTimeout,
+                committed.usesTargetPresets ? 0 : committed.responseBodyFirstByteTimeout,
+                committed.usesTargetPresets ? 0 : committed.responseBodyIdleTimeout,
+                committed.order,
+                committed.usesTargetPresets ? '' : normalizedOutboundProxy(committed.outboundProxy),
+                committed.loggingEnabled,
+                committed.usesTargetPresets ? committed.activeTarget : '',
+                committed.usesTargetPresets ? committed.targets : undefined,
             )
             await updateConfig({
                 request_overrides: buildOverridesPayload(nextBindings, overrideRules),
@@ -1556,6 +1710,78 @@ export function Settings() {
                                             className="h-10 rounded-xl border-border/30 bg-background/50 text-sm"
                                         />
                                     </FieldBlock>
+                                    <div className="sm:col-span-2 rounded-xl border border-border/40 bg-muted/15 p-4">
+                                        <div className="flex flex-wrap items-start justify-between gap-3">
+                                            <div>
+                                                <div className="text-sm font-semibold">{t('upstream_manager.target_presets')}</div>
+                                                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                                                    {t('upstream_manager.target_presets_hint')}
+                                                </p>
+                                            </div>
+                                            {!editingUpstream.usesTargetPresets && (
+                                                <Button type="button" variant="outline" size="sm" onClick={handleEnableTargetPresets}>
+                                                    <Plus className="mr-1.5 h-3.5 w-3.5" />
+                                                    {t('upstream_manager.enable_target_presets')}
+                                                </Button>
+                                            )}
+                                        </div>
+                                        {editingUpstream.usesTargetPresets && (
+                                            <div className="mt-4 space-y-3">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <Select value={editingUpstream.selectedTarget} onValueChange={handleSelectTargetPreset}>
+                                                        <SelectTrigger className="h-9 min-w-[180px] flex-1 rounded-lg bg-background/70">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {Object.keys(editingUpstream.targets).map(name => (
+                                                                <SelectItem key={name} value={name}>
+                                                                    {name}{name === editingUpstream.activeTarget ? ` · ${t('upstream_manager.active_target')}` : ''}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        disabled={editingUpstream.selectedTarget === editingUpstream.activeTarget}
+                                                        onClick={() => setEditingUpstream(current => current ? { ...commitSelectedTarget(current), activeTarget: current.selectedTarget } : current)}
+                                                    >
+                                                        {t('upstream_manager.set_active_target')}
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        disabled={Object.keys(editingUpstream.targets).length <= 1}
+                                                        onClick={handleRemoveTargetPreset}
+                                                        aria-label={t('upstream_manager.remove_target')}
+                                                        className="h-9 w-9 text-muted-foreground hover:text-destructive"
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <Input
+                                                        value={newTargetPresetName}
+                                                        onChange={event => setNewTargetPresetName(event.target.value)}
+                                                        onKeyDown={event => {
+                                                            if (event.key === 'Enter') {
+                                                                event.preventDefault()
+                                                                handleAddTargetPreset()
+                                                            }
+                                                        }}
+                                                        placeholder={t('upstream_manager.new_target_name')}
+                                                        className="h-9 rounded-lg bg-background/70"
+                                                    />
+                                                    <Button type="button" variant="secondary" size="sm" onClick={handleAddTargetPreset} disabled={!newTargetPresetName.trim()}>
+                                                        <Plus className="mr-1.5 h-3.5 w-3.5" />
+                                                        {t('common.add')}
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
                                     <div className="sm:col-span-2">
                                         <FieldBlock label={t('upstream_manager.target')}>
                                             <Input
@@ -2064,11 +2290,11 @@ export function Settings() {
                                                                     <Badge variant="outline" className="rounded-full border-border/40 bg-background/50 px-2 py-0.5 text-[11px] font-medium text-foreground/80">
                                                                         .{domainSuffix}
                                                                     </Badge>
-                                                                    {overrideBindings[upstream.name]?.enabled && (
+                                                                    {(activeTargetConfig(upstream)?.request_overrides?.enabled || overrideBindings[upstream.name]?.enabled) && (
                                                                         <Badge variant="outline" className="rounded-full border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
                                                                             {t('log_detail.request_override')}
-                                                                            {getBindingRuleNames(overrideBindings[upstream.name]).length
-                                                                                ? ` · ${getBindingRuleNames(overrideBindings[upstream.name]).length}`
+                                                                            {getBindingRuleNames(activeTargetConfig(upstream)?.request_overrides || overrideBindings[upstream.name]).length
+                                                                                ? ` · ${getBindingRuleNames(activeTargetConfig(upstream)?.request_overrides || overrideBindings[upstream.name]).length}`
                                                                                 : ''}
                                                                         </Badge>
                                                                     )}
@@ -2106,6 +2332,22 @@ export function Settings() {
                                                                 <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-foreground/60 lg:hidden">
                                                                     {t('upstream_manager.target')}
                                                                 </p>
+                                                                {upstream.targets && upstream.active_target && Object.keys(upstream.targets).length > 0 && (
+                                                                    <Select
+                                                                        value={upstream.active_target}
+                                                                        onValueChange={value => handleActivateTarget(upstream.name, value)}
+                                                                        disabled={switchingTarget === upstream.name}
+                                                                    >
+                                                                        <SelectTrigger className="mb-2 h-8 w-full rounded-lg border-primary/20 bg-primary/5 text-xs font-medium">
+                                                                            <SelectValue />
+                                                                        </SelectTrigger>
+                                                                        <SelectContent>
+                                                                            {Object.keys(upstream.targets).map(name => (
+                                                                                <SelectItem key={name} value={name}>{name}</SelectItem>
+                                                                            ))}
+                                                                        </SelectContent>
+                                                                    </Select>
+                                                                )}
                                                                 <div className="text-[13px] leading-relaxed">
                                                                     <button
                                                                         type="button"

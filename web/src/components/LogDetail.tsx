@@ -746,7 +746,10 @@ export function LogDetail({
                             </Badge>
                         )}
                         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-xs font-semibold text-muted-foreground">
-                            <span className="truncate text-foreground">{displayLog.upstream}</span>
+                            <span className="truncate text-foreground">
+                                {displayLog.upstream}
+                                {displayLog.upstream_target ? ` / ${displayLog.upstream_target}` : ''}
+                            </span>
                             <span className="text-border">/</span>
                             <span className="font-mono">{formatLatency(displayLog.latency_ms)}</span>
                             <span className="text-border">/</span>

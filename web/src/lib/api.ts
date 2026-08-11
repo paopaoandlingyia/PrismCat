@@ -3,6 +3,7 @@ export interface RequestLog {
     id: string
     created_at: string
     upstream: string
+    upstream_target?: string
     target_url: string
     method: string
     path: string
@@ -100,6 +101,24 @@ export interface Upstream {
     order: number
     outbound_proxy: string
     logging_enabled: boolean
+    active_target?: string
+    targets?: Record<string, UpstreamTarget>
+}
+
+export interface RuleBinding {
+    enabled: boolean
+    rule_names: string[]
+}
+
+export interface UpstreamTarget {
+    url: string
+    timeout?: number
+    response_header_timeout?: number
+    response_body_first_byte_timeout?: number
+    response_body_idle_timeout?: number
+    outbound_proxy?: string
+    request_overrides?: RuleBinding
+    usage_extraction?: RuleBinding
 }
 
 // 查询过滤参数
@@ -294,17 +313,31 @@ export async function addUpstream(
     order: number = 0,
     outbound_proxy: string = 'env',
     logging_enabled: boolean = true,
+    active_target: string = '',
+    targets?: Record<string, UpstreamTarget>,
 ): Promise<void> {
     const response = await fetch(`${API_BASE}/upstreams`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name, target, timeout, response_header_timeout, response_body_first_byte_timeout, response_body_idle_timeout, order, outbound_proxy, logging_enabled }),
+        body: JSON.stringify({ name, target, timeout, response_header_timeout, response_body_first_byte_timeout, response_body_idle_timeout, order, outbound_proxy, logging_enabled, active_target, targets }),
     })
     if (!response.ok) {
         const error = await response.json().catch(() => ({ error: '请求失败' }))
         throw new Error(error.error || '添加上游失败')
+    }
+}
+
+export async function activateUpstreamTarget(upstream: string, target: string): Promise<void> {
+    const response = await fetch(`${API_BASE}/upstreams/active-target`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ upstream, target }),
+    })
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: '请求失败' }))
+        throw new Error(error.error || '切换目标失败')
     }
 }
 

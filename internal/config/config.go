@@ -66,14 +66,49 @@ type ServerConfig struct {
 
 // UpstreamConfig 上游配置
 type UpstreamConfig struct {
-	Target                       string `yaml:"target"`
-	Timeout                      int    `yaml:"timeout"`                                    // 秒
-	ResponseHeaderTimeout        int    `yaml:"response_header_timeout,omitempty"`          // 秒；0 = 禁用
-	ResponseBodyFirstByteTimeout int    `yaml:"response_body_first_byte_timeout,omitempty"` // 秒；0 = 禁用
-	ResponseBodyIdleTimeout      int    `yaml:"response_body_idle_timeout,omitempty"`       // 秒；0 = 禁用
-	Order                        int    `yaml:"order,omitempty"`
-	OutboundProxy                string `yaml:"outbound_proxy,omitempty"`
-	LoggingDisabled              bool   `yaml:"logging_disabled,omitempty"`
+	// Target and the network fields below are the legacy single-target form.
+	// When Targets is non-empty, ActiveTarget selects the complete target preset
+	// used for new requests and the legacy destination fields must be empty.
+	Target                       string                          `yaml:"target,omitempty"`
+	Timeout                      int                             `yaml:"timeout,omitempty"`                          // 秒
+	ResponseHeaderTimeout        int                             `yaml:"response_header_timeout,omitempty"`          // 秒；0 = 禁用
+	ResponseBodyFirstByteTimeout int                             `yaml:"response_body_first_byte_timeout,omitempty"` // 秒；0 = 禁用
+	ResponseBodyIdleTimeout      int                             `yaml:"response_body_idle_timeout,omitempty"`       // 秒；0 = 禁用
+	Order                        int                             `yaml:"order,omitempty"`
+	OutboundProxy                string                          `yaml:"outbound_proxy,omitempty"`
+	LoggingDisabled              bool                            `yaml:"logging_disabled,omitempty"`
+	ActiveTarget                 string                          `yaml:"active_target,omitempty"`
+	Targets                      map[string]UpstreamTargetConfig `yaml:"targets,omitempty"`
+}
+
+// UpstreamTargetConfig is a complete, manually selectable destination preset
+// behind one stable upstream route. Rule definitions remain in the global
+// libraries; a target only stores the bindings that must switch with its URL.
+type UpstreamTargetConfig struct {
+	URL                          string                          `yaml:"url" json:"url"`
+	Timeout                      int                             `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	ResponseHeaderTimeout        int                             `yaml:"response_header_timeout,omitempty" json:"response_header_timeout,omitempty"`
+	ResponseBodyFirstByteTimeout int                             `yaml:"response_body_first_byte_timeout,omitempty" json:"response_body_first_byte_timeout,omitempty"`
+	ResponseBodyIdleTimeout      int                             `yaml:"response_body_idle_timeout,omitempty" json:"response_body_idle_timeout,omitempty"`
+	OutboundProxy                string                          `yaml:"outbound_proxy,omitempty" json:"outbound_proxy,omitempty"`
+	RequestOverrides             *RequestOverrideUpstreamBinding `yaml:"request_overrides,omitempty" json:"request_overrides,omitempty"`
+	UsageExtraction              *UsageExtractionUpstreamBinding `yaml:"usage_extraction,omitempty" json:"usage_extraction,omitempty"`
+}
+
+// ResolvedUpstream is an immutable per-request routing snapshot. It keeps the
+// selected destination and its rule bindings together so a concurrent target
+// switch cannot combine a new URL with old credentials.
+type ResolvedUpstream struct {
+	Name                         string
+	TargetName                   string
+	Target                       string
+	Timeout                      int
+	ResponseHeaderTimeout        int
+	ResponseBodyFirstByteTimeout int
+	ResponseBodyIdleTimeout      int
+	Order                        int
+	OutboundProxy                string
+	LoggingDisabled              bool
 }
 
 type RequestOverridesConfig struct {
@@ -405,20 +440,105 @@ func normalizeUpstreams(in map[string]UpstreamConfig) (map[string]UpstreamConfig
 		if _, exists := out[n]; exists {
 			return nil, fmt.Errorf("重复的 upstream 名称（大小写不敏感）: %q", n)
 		}
-		if strings.TrimSpace(v.OutboundProxy) != "" {
+		if len(v.Targets) > 0 {
+			if strings.TrimSpace(v.Target) != "" {
+				return nil, fmt.Errorf("upstream %q cannot define both target and targets", n)
+			}
+			targets, err := normalizeUpstreamTargets(n, v.Targets)
+			if err != nil {
+				return nil, err
+			}
+			v.Targets = targets
+			v.ActiveTarget = normalizeLower(v.ActiveTarget)
+			if v.ActiveTarget == "" {
+				return nil, fmt.Errorf("upstream %q: active_target is required when targets are configured", n)
+			}
+			if _, ok := targets[v.ActiveTarget]; !ok {
+				return nil, fmt.Errorf("upstream %q: active_target %q does not exist", n, v.ActiveTarget)
+			}
+			// Destination-specific values live only in the selected target form.
+			v.Timeout = 0
+			v.ResponseHeaderTimeout = 0
+			v.ResponseBodyFirstByteTimeout = 0
+			v.ResponseBodyIdleTimeout = 0
+			v.OutboundProxy = ""
+		} else if strings.TrimSpace(v.OutboundProxy) != "" {
 			outboundProxy, err := NormalizeOutboundProxy(v.OutboundProxy)
 			if err != nil {
 				return nil, fmt.Errorf("upstream %q: %w", n, err)
 			}
 			v.OutboundProxy = outboundProxy
 		}
-		if v.Timeout <= 0 {
-			v.Timeout = DefaultUpstreamTimeoutSeconds
+		if len(v.Targets) == 0 {
+			if strings.TrimSpace(v.Target) == "" {
+				return nil, fmt.Errorf("upstream %q: target is required", n)
+			}
+			v.ActiveTarget = ""
+			if v.Timeout <= 0 {
+				v.Timeout = DefaultUpstreamTimeoutSeconds
+			}
+			normalizeUpstreamStageTimeouts(&v)
 		}
-		normalizeUpstreamStageTimeouts(&v)
 		out[n] = v
 	}
 	return out, nil
+}
+
+func normalizeUpstreamTargets(upstreamName string, in map[string]UpstreamTargetConfig) (map[string]UpstreamTargetConfig, error) {
+	out := make(map[string]UpstreamTargetConfig, len(in))
+	for name, target := range in {
+		n := normalizeLower(name)
+		if n == "" {
+			continue
+		}
+		if _, exists := out[n]; exists {
+			return nil, fmt.Errorf("upstream %q has duplicate target name %q (case-insensitive)", upstreamName, n)
+		}
+		target.URL = strings.TrimSpace(target.URL)
+		if target.URL == "" {
+			return nil, fmt.Errorf("upstream %q target %q: url is required", upstreamName, n)
+		}
+		if target.Timeout <= 0 {
+			target.Timeout = DefaultUpstreamTimeoutSeconds
+		}
+		normalizeTargetStageTimeouts(&target)
+		if strings.TrimSpace(target.OutboundProxy) != "" {
+			outboundProxy, err := NormalizeOutboundProxy(target.OutboundProxy)
+			if err != nil {
+				return nil, fmt.Errorf("upstream %q target %q: %w", upstreamName, n, err)
+			}
+			target.OutboundProxy = outboundProxy
+		} else {
+			target.OutboundProxy = "env"
+		}
+		if target.RequestOverrides != nil {
+			binding := *target.RequestOverrides
+			binding.RuleNames = normalizeNameList(binding.RuleNames)
+			target.RequestOverrides = &binding
+		}
+		if target.UsageExtraction != nil {
+			binding := *target.UsageExtraction
+			binding.RuleNames = normalizeNameList(binding.RuleNames)
+			target.UsageExtraction = &binding
+		}
+		out[n] = target
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("upstream %q: targets must contain at least one valid target", upstreamName)
+	}
+	return out, nil
+}
+
+func normalizeTargetStageTimeouts(target *UpstreamTargetConfig) {
+	if target.ResponseHeaderTimeout < 0 {
+		target.ResponseHeaderTimeout = 0
+	}
+	if target.ResponseBodyFirstByteTimeout < 0 {
+		target.ResponseBodyFirstByteTimeout = 0
+	}
+	if target.ResponseBodyIdleTimeout < 0 {
+		target.ResponseBodyIdleTimeout = 0
+	}
 }
 
 func normalizeUpstreamStageTimeouts(upstream *UpstreamConfig) {
@@ -875,7 +995,10 @@ func (c *Config) Save() error {
 	// Save writes the config file; it must be exclusive to avoid concurrent writes.
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	return c.saveLocked()
+}
 
+func (c *Config) saveLocked() error {
 	saved := *c
 	if c.envUIPassword {
 		saved.Server.UIPassword = c.fileUIPassword
@@ -886,8 +1009,39 @@ func (c *Config) Save() error {
 		return fmt.Errorf("序列化配置失败: %w", err)
 	}
 
-	if err := os.WriteFile(c.configPath, data, 0644); err != nil {
+	if err := writeFileAtomic(c.configPath, data, 0644); err != nil {
 		return fmt.Errorf("写入配置文件失败: %w", err)
+	}
+	return nil
+}
+
+func writeFileAtomic(path string, data []byte, mode os.FileMode) error {
+	dir := filepath.Dir(path)
+	temp, err := os.CreateTemp(dir, ".prismcat-config-*")
+	if err != nil {
+		return err
+	}
+	tempPath := temp.Name()
+	cleanup := func() { _ = os.Remove(tempPath) }
+	defer cleanup()
+
+	if err := temp.Chmod(mode); err != nil {
+		_ = temp.Close()
+		return err
+	}
+	if _, err := temp.Write(data); err != nil {
+		_ = temp.Close()
+		return err
+	}
+	if err := temp.Sync(); err != nil {
+		_ = temp.Close()
+		return err
+	}
+	if err := temp.Close(); err != nil {
+		return err
+	}
+	if err := replaceConfigFile(tempPath, path); err != nil {
+		return err
 	}
 	return nil
 }
@@ -910,18 +1064,11 @@ func (c *Config) AddUpstream(name string, config UpstreamConfig) error {
 	if name == "" {
 		return fmt.Errorf("upstream name is empty")
 	}
-	if strings.TrimSpace(config.OutboundProxy) != "" {
-		outboundProxy, err := NormalizeOutboundProxy(config.OutboundProxy)
-		if err != nil {
-			return err
-		}
-		config.OutboundProxy = outboundProxy
+	normalized, err := normalizeUpstreams(map[string]UpstreamConfig{name: config})
+	if err != nil {
+		return err
 	}
-	if config.Timeout <= 0 {
-		config.Timeout = DefaultUpstreamTimeoutSeconds
-	}
-	normalizeUpstreamStageTimeouts(&config)
-	c.Upstreams[name] = config
+	c.Upstreams[name] = normalized[name]
 	return nil // 实际上应该由调用者决定是否立即 Save
 }
 
@@ -989,7 +1136,8 @@ func (c *Config) GetUpstream(subdomain string) (*UpstreamConfig, bool) {
 	if !ok {
 		return nil, false
 	}
-	return &up, true
+	copy := cloneUpstreamConfig(up)
+	return &copy, true
 }
 
 // ListUpstreams returns a copy of upstream configs for safe iteration.
@@ -999,9 +1147,141 @@ func (c *Config) ListUpstreams() map[string]UpstreamConfig {
 
 	out := make(map[string]UpstreamConfig, len(c.Upstreams))
 	for k, v := range c.Upstreams {
-		out[k] = v
+		out[k] = cloneUpstreamConfig(v)
 	}
 	return out
+}
+
+func cloneUpstreamConfig(in UpstreamConfig) UpstreamConfig {
+	out := in
+	if len(in.Targets) > 0 {
+		out.Targets = make(map[string]UpstreamTargetConfig, len(in.Targets))
+		for name, target := range in.Targets {
+			next := target
+			if target.RequestOverrides != nil {
+				binding := *target.RequestOverrides
+				binding.RuleNames = append([]string(nil), binding.RuleNames...)
+				next.RequestOverrides = &binding
+			}
+			if target.UsageExtraction != nil {
+				binding := *target.UsageExtraction
+				binding.RuleNames = append([]string(nil), binding.RuleNames...)
+				next.UsageExtraction = &binding
+			}
+			out.Targets[name] = next
+		}
+	}
+	return out
+}
+
+// ResolveUpstreamSnapshot selects one destination and its bindings under the
+// same read lock. New requests keep this immutable snapshot even if the active
+// target changes while they are streaming.
+func (c *Config) ResolveUpstreamSnapshot(name string) (ResolvedUpstream, RequestOverridesConfig, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	name = normalizeLower(name)
+	upstream, ok := c.Upstreams[name]
+	if !ok {
+		return ResolvedUpstream{}, RequestOverridesConfig{}, false
+	}
+
+	resolved := ResolvedUpstream{
+		Name:            name,
+		Order:           upstream.Order,
+		LoggingDisabled: upstream.LoggingDisabled,
+	}
+	overrides := cloneRequestOverridesConfig(c.Overrides)
+
+	if len(upstream.Targets) == 0 {
+		resolved.Target = upstream.Target
+		resolved.Timeout = upstream.Timeout
+		resolved.ResponseHeaderTimeout = upstream.ResponseHeaderTimeout
+		resolved.ResponseBodyFirstByteTimeout = upstream.ResponseBodyFirstByteTimeout
+		resolved.ResponseBodyIdleTimeout = upstream.ResponseBodyIdleTimeout
+		resolved.OutboundProxy = upstream.OutboundProxy
+		return resolved, NormalizeRequestOverrides(overrides), true
+	}
+
+	targetName := normalizeLower(upstream.ActiveTarget)
+	target, ok := upstream.Targets[targetName]
+	if !ok {
+		return ResolvedUpstream{}, RequestOverridesConfig{}, false
+	}
+	resolved.TargetName = targetName
+	resolved.Target = target.URL
+	resolved.Timeout = target.Timeout
+	resolved.ResponseHeaderTimeout = target.ResponseHeaderTimeout
+	resolved.ResponseBodyFirstByteTimeout = target.ResponseBodyFirstByteTimeout
+	resolved.ResponseBodyIdleTimeout = target.ResponseBodyIdleTimeout
+	resolved.OutboundProxy = target.OutboundProxy
+	if target.RequestOverrides == nil {
+		delete(overrides.Upstreams, name)
+	} else {
+		binding := *target.RequestOverrides
+		binding.RuleNames = append([]string(nil), binding.RuleNames...)
+		overrides.Upstreams[name] = binding
+	}
+	return resolved, NormalizeRequestOverrides(overrides), true
+}
+
+// UsageExtractionSnapshotForTarget resolves the binding for the target name
+// recorded at request start, rather than whichever target happens to be active
+// when an async log is persisted later.
+func (c *Config) UsageExtractionSnapshotForTarget(upstreamName, targetName string) UsageExtractionConfig {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	out := cloneUsageExtractionConfig(c.Usage)
+	upstreamName = normalizeLower(upstreamName)
+	targetName = normalizeLower(targetName)
+	if targetName == "" {
+		return NormalizeUsageExtraction(out)
+	}
+	upstream, ok := c.Upstreams[upstreamName]
+	if !ok {
+		delete(out.Upstreams, upstreamName)
+		return NormalizeUsageExtraction(out)
+	}
+	target, ok := upstream.Targets[targetName]
+	if !ok || target.UsageExtraction == nil {
+		delete(out.Upstreams, upstreamName)
+		return NormalizeUsageExtraction(out)
+	}
+	binding := *target.UsageExtraction
+	binding.RuleNames = append([]string(nil), binding.RuleNames...)
+	out.Upstreams[upstreamName] = binding
+	return NormalizeUsageExtraction(out)
+}
+
+// ActivateUpstreamTarget validates and persists a single pointer change. The
+// in-memory value is rolled back if the config file cannot be replaced.
+func (c *Config) ActivateUpstreamTarget(upstreamName, targetName string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	upstreamName = normalizeLower(upstreamName)
+	targetName = normalizeLower(targetName)
+	upstream, ok := c.Upstreams[upstreamName]
+	if !ok {
+		return fmt.Errorf("unknown upstream: %s", upstreamName)
+	}
+	if len(upstream.Targets) == 0 {
+		return fmt.Errorf("upstream %q does not use target presets", upstreamName)
+	}
+	if _, ok := upstream.Targets[targetName]; !ok {
+		return fmt.Errorf("upstream %q has no target %q", upstreamName, targetName)
+	}
+	previous := upstream.ActiveTarget
+	upstream.ActiveTarget = targetName
+	c.Upstreams[upstreamName] = upstream
+	if err := c.saveLocked(); err != nil {
+		upstream.ActiveTarget = previous
+		c.Upstreams[upstreamName] = upstream
+		return err
+	}
+	return nil
 }
 
 // ExtractSubdomain 从 Host 中提取子域名

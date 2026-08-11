@@ -54,6 +54,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/logs/", h.handleLogDetail)
 	mux.HandleFunc("/api/stats", h.handleStats)
 	mux.HandleFunc("/api/upstreams", h.handleUpstreams)
+	mux.HandleFunc("/api/upstreams/active-target", h.handleUpstreamActiveTarget)
 	mux.HandleFunc("/api/config", h.handleConfig)
 	mux.HandleFunc("/api/health", h.handleHealth)
 	mux.HandleFunc("/api/system/metrics", h.handleSystemMetrics)
@@ -679,16 +680,22 @@ func (h *Handler) handleUpstreams(w http.ResponseWriter, r *http.Request) {
 		upstreams := make([]map[string]interface{}, 0)
 		// Snapshot upstreams for safe iteration.
 		for name, upCfg := range h.cfg.ListUpstreams() {
+			resolved, _, ok := h.cfg.ResolveUpstreamSnapshot(name)
+			if !ok {
+				continue
+			}
 			upstreams = append(upstreams, map[string]interface{}{
 				"name":                             name,
-				"target":                           upCfg.Target,
-				"timeout":                          upCfg.Timeout,
-				"response_header_timeout":          upCfg.ResponseHeaderTimeout,
-				"response_body_first_byte_timeout": upCfg.ResponseBodyFirstByteTimeout,
-				"response_body_idle_timeout":       upCfg.ResponseBodyIdleTimeout,
+				"target":                           resolved.Target,
+				"timeout":                          resolved.Timeout,
+				"response_header_timeout":          resolved.ResponseHeaderTimeout,
+				"response_body_first_byte_timeout": resolved.ResponseBodyFirstByteTimeout,
+				"response_body_idle_timeout":       resolved.ResponseBodyIdleTimeout,
 				"order":                            upCfg.Order,
-				"outbound_proxy":                   upCfg.OutboundProxy,
+				"outbound_proxy":                   resolved.OutboundProxy,
 				"logging_enabled":                  !upCfg.LoggingDisabled,
+				"active_target":                    upCfg.ActiveTarget,
+				"targets":                          upCfg.Targets,
 			})
 		}
 		sort.Slice(upstreams, func(i, j int) bool {
@@ -706,22 +713,24 @@ func (h *Handler) handleUpstreams(w http.ResponseWriter, r *http.Request) {
 	// POST: 添加/更新
 	if r.Method == http.MethodPost {
 		var req struct {
-			Name                         string `json:"name"`
-			Target                       string `json:"target"`
-			Timeout                      int    `json:"timeout"`
-			ResponseHeaderTimeout        int    `json:"response_header_timeout"`
-			ResponseBodyFirstByteTimeout int    `json:"response_body_first_byte_timeout"`
-			ResponseBodyIdleTimeout      int    `json:"response_body_idle_timeout"`
-			Order                        int    `json:"order"`
-			OutboundProxy                string `json:"outbound_proxy"`
-			LoggingEnabled               *bool  `json:"logging_enabled"`
+			Name                         string                                 `json:"name"`
+			Target                       string                                 `json:"target"`
+			Timeout                      int                                    `json:"timeout"`
+			ResponseHeaderTimeout        int                                    `json:"response_header_timeout"`
+			ResponseBodyFirstByteTimeout int                                    `json:"response_body_first_byte_timeout"`
+			ResponseBodyIdleTimeout      int                                    `json:"response_body_idle_timeout"`
+			Order                        int                                    `json:"order"`
+			OutboundProxy                string                                 `json:"outbound_proxy"`
+			LoggingEnabled               *bool                                  `json:"logging_enabled"`
+			ActiveTarget                 string                                 `json:"active_target"`
+			Targets                      map[string]config.UpstreamTargetConfig `json:"targets"`
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			h.jsonError(w, "无效的请求体", http.StatusBadRequest)
 			return
 		}
-		if req.Name == "" || req.Target == "" {
+		if req.Name == "" || (req.Target == "" && len(req.Targets) == 0) {
 			h.jsonError(w, "名称和目标必填", http.StatusBadRequest)
 			return
 		}
@@ -743,6 +752,8 @@ func (h *Handler) handleUpstreams(w http.ResponseWriter, r *http.Request) {
 			Order:                        req.Order,
 			OutboundProxy:                req.OutboundProxy,
 			LoggingDisabled:              loggingDisabled,
+			ActiveTarget:                 req.ActiveTarget,
+			Targets:                      req.Targets,
 		})
 		if err != nil {
 			h.jsonError(w, err.Error(), http.StatusInternalServerError)
@@ -776,6 +787,31 @@ func (h *Handler) handleUpstreams(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
+}
+
+func (h *Handler) handleUpstreamActiveTarget(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPatch {
+		h.jsonError(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Upstream string `json:"upstream"`
+		Target   string `json:"target"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.jsonError(w, "无效的请求体", http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(req.Upstream) == "" || strings.TrimSpace(req.Target) == "" {
+		h.jsonError(w, "上游和目标必填", http.StatusBadRequest)
+		return
+	}
+	if err := h.cfg.ActivateUpstreamTarget(req.Upstream, req.Target); err != nil {
+		h.jsonError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	h.jsonResponse(w, map[string]string{"status": "ok", "active_target": strings.ToLower(strings.TrimSpace(req.Target))})
 }
 
 // handleHealth 健康检查

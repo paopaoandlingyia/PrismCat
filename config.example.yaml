@@ -45,7 +45,7 @@ server:
     - "Authorization"
 
 # 上游路由配置
-# 格式: 子域名 -> 上游地址
+# 格式: 子域名 -> 单个上游地址，或一组可切换的目标预设
 upstreams:
   openai:
     # 匹配 openai.localhost:8080
@@ -74,6 +74,36 @@ upstreams:
     response_body_idle_timeout: 0
     # 例如通过 Clash 本地 HTTP 代理访问 Gemini:
     # outbound_proxy: "http://127.0.0.1:7890"
+
+  # 可选：为同一个稳定入口保存多个完整目标预设。
+  # 客户端始终使用 codex.localhost:8080；只需在 UI 切换当前目标。
+  # URL、超时、出站代理、参数覆盖绑定和 Usage 绑定会作为一个整体切换。
+  # 切换只影响新请求，已经开始的请求会继续使用启动时的目标快照。
+  codex:
+    active_target: primary
+    targets:
+      primary:
+        url: "https://api.openai.com"
+        timeout: 120
+        outbound_proxy: "env"
+        request_overrides:
+          enabled: false
+          rule_names: []
+        usage_extraction:
+          enabled: false
+          rule_names: []
+      backup:
+        url: "https://api.example.com"
+        timeout: 120
+        outbound_proxy: "direct"
+        request_overrides:
+          enabled: false
+          rule_names: []
+        usage_extraction:
+          enabled: false
+          rule_names: []
+
+    # target 与 targets 是两种互斥格式；旧的单目标配置无需迁移。
 
 # 日志配置
 logging:

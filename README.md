@@ -97,6 +97,11 @@ See a failed request? Hit **Replay**, tweak the prompt or parameters right in yo
 ### 📈 Trace & Usage Tracking
 Automatically correlate related requests into traces, and extract token usage from responses. Built-in extraction rules for OpenAI, Anthropic, and Gemini — or define your own.
 
+### 🔀 Target Presets
+Keep multiple complete target presets behind one stable proxy endpoint and switch between them manually from Settings. Each preset keeps its target URL, timeouts, outbound proxy, request-override bindings, and Usage bindings together, preventing mismatches such as a new URL being used with an old key.
+
+Beyond LLM providers, this is useful for production/staging, direct/proxied routes, regional endpoints, tenant credentials, and switching between a live service and a mock/replay server. The client URL stays unchanged; a switch affects new requests only, while in-flight streams continue with the snapshot they started with.
+
 ### 🛠️ Request Override (Opt-In)
 Rewrite outbound requests without touching your code — set, remove, or conditionally default JSON body fields, append/prepend to arrays, and set or strip HTTP headers. Each rule is matched by method / path / JSON content; the log detail page shows a side-by-side diff of the original vs. final request.
 
@@ -129,6 +134,7 @@ PrismCat is designed to run as a **silent, 24/7 LLM black box**. You don't need 
 | "My Agent went rogue and I have no idea what it did" | PrismCat silently logs every API call — review the full behavior chain anytime |
 | "How many tokens is each upstream actually using?" | Built-in **Usage Tracking** extracts token counts from OpenAI / Claude / Gemini responses automatically |
 | "I want to cap `max_tokens` globally / strip a field LangChain auto-injects" | Write a rule in **Request Override** to set, remove, or default any JSON field (opt-in; transparent by default) |
+| "I need to switch routes/credentials without changing the client URL" | Create multiple **Target Presets** under one upstream and switch URL, proxy, and rule bindings as one unit |
 
 ---
 
@@ -295,6 +301,25 @@ upstreams:
     response_body_first_byte_timeout: 0
     response_body_idle_timeout: 0 # 0 disables the corresponding stage timeout
     outbound_proxy: "http://127.0.0.1:7890"
+  # Optional: multiple complete target presets behind one stable endpoint.
+  # target and targets are mutually exclusive; the legacy single-target form remains supported.
+  codex:
+    active_target: primary
+    targets:
+      primary:
+        url: "https://api.openai.com"
+        timeout: 120
+        outbound_proxy: "env"
+        request_overrides:
+          enabled: false
+          rule_names: []
+      backup:
+        url: "https://api.example.com"
+        timeout: 120
+        outbound_proxy: "direct"
+        request_overrides:
+          enabled: false
+          rule_names: []
 
 # Request override (opt-in, off by default)
 # Supports ops: set, remove, default, append, prepend for JSON body; set, remove for headers.

@@ -391,3 +391,95 @@ func TestExtractPathUpstream(t *testing.T) {
 		})
 	}
 }
+
+func TestTargetPresetSnapshotAndActivation(t *testing.T) {
+	cfg := &Config{
+		Upstreams: make(map[string]UpstreamConfig),
+		Overrides: RequestOverridesConfig{
+			Enabled: true,
+			Upstreams: map[string]RequestOverrideUpstreamBinding{
+				"codex": {Enabled: true, RuleNames: []string{"legacy"}},
+			},
+			Rules: []RequestOverrideRule{{Name: "a-key", Enabled: true}, {Name: "b-key", Enabled: true}},
+		},
+		Usage: UsageExtractionConfig{
+			Enabled:   true,
+			Upstreams: map[string]UsageExtractionUpstreamBinding{},
+			Rules: []UsageExtractionRule{
+				{Name: "a-usage", Enabled: true},
+				{Name: "b-usage", Enabled: true},
+			},
+		},
+		configPath: filepath.Join(t.TempDir(), "config.yaml"),
+	}
+	if err := cfg.AddUpstream("codex", UpstreamConfig{
+		ActiveTarget: "a",
+		Targets: map[string]UpstreamTargetConfig{
+			"a": {
+				URL:              "https://a.example.test",
+				OutboundProxy:    "direct",
+				RequestOverrides: &RequestOverrideUpstreamBinding{Enabled: true, RuleNames: []string{"a-key"}},
+				UsageExtraction:  &UsageExtractionUpstreamBinding{Enabled: true, RuleNames: []string{"a-usage"}},
+			},
+			"b": {
+				URL:              "https://b.example.test",
+				OutboundProxy:    "env",
+				RequestOverrides: &RequestOverrideUpstreamBinding{Enabled: true, RuleNames: []string{"b-key"}},
+				UsageExtraction:  &UsageExtractionUpstreamBinding{Enabled: true, RuleNames: []string{"b-usage"}},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("AddUpstream() error = %v", err)
+	}
+
+	before, beforeOverrides, ok := cfg.ResolveUpstreamSnapshot("codex")
+	if !ok || before.TargetName != "a" || before.Target != "https://a.example.test" || before.OutboundProxy != "direct" {
+		t.Fatalf("unexpected target A snapshot: %#v, ok=%v", before, ok)
+	}
+	if got := beforeOverrides.Upstreams["codex"].RuleNames; len(got) != 1 || got[0] != "a-key" {
+		t.Fatalf("target A override binding = %v, want [a-key]", got)
+	}
+
+	if err := cfg.ActivateUpstreamTarget("codex", "b"); err != nil {
+		t.Fatalf("ActivateUpstreamTarget() error = %v", err)
+	}
+	after, afterOverrides, ok := cfg.ResolveUpstreamSnapshot("codex")
+	if !ok || after.TargetName != "b" || after.Target != "https://b.example.test" || after.OutboundProxy != "env" {
+		t.Fatalf("unexpected target B snapshot: %#v, ok=%v", after, ok)
+	}
+	if got := afterOverrides.Upstreams["codex"].RuleNames; len(got) != 1 || got[0] != "b-key" {
+		t.Fatalf("target B override binding = %v, want [b-key]", got)
+	}
+	if got := cfg.UsageExtractionSnapshotForTarget("codex", "a").Upstreams["codex"].RuleNames; len(got) != 1 || got[0] != "a-usage" {
+		t.Fatalf("recorded target A usage binding = %v, want [a-usage]", got)
+	}
+	if got := cfg.UsageExtractionSnapshotForTarget("codex", "b").Upstreams["codex"].RuleNames; len(got) != 1 || got[0] != "b-usage" {
+		t.Fatalf("target B usage binding = %v, want [b-usage]", got)
+	}
+	if before.TargetName != "a" || before.Target != "https://a.example.test" {
+		t.Fatalf("prior request snapshot changed after activation: %#v", before)
+	}
+
+	saved, err := os.ReadFile(cfg.configPath)
+	if err != nil {
+		t.Fatalf("ReadFile(saved config) error = %v", err)
+	}
+	if !strings.Contains(string(saved), "active_target: b") {
+		t.Fatalf("saved config does not contain activated target:\n%s", saved)
+	}
+}
+
+func TestTargetPresetsRejectLegacyDestinationFields(t *testing.T) {
+	_, err := normalizeUpstreams(map[string]UpstreamConfig{
+		"codex": {
+			Target:       "https://legacy.example.test",
+			ActiveTarget: "new",
+			Targets: map[string]UpstreamTargetConfig{
+				"new": {URL: "https://new.example.test"},
+			},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "both target and targets") {
+		t.Fatalf("normalizeUpstreams() error = %v, want mixed-form validation error", err)
+	}
+}

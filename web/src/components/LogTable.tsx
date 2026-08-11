@@ -153,7 +153,9 @@ function MobileLogCard({
                         </span>
                         <span className="inline-flex items-center gap-1 rounded-full bg-background/60 px-2.5 py-1 text-[10px] font-semibold text-muted-foreground">
                             <Server className="h-3 w-3" />
-                            <span className="truncate max-w-[120px]">{log.upstream}</span>
+                            <span className="truncate max-w-[160px]">
+                                {log.upstream}{log.upstream_target ? ` / ${log.upstream_target}` : ''}
+                            </span>
                         </span>
                         {log.streaming && (
                             <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-violet-600 dark:text-violet-400">
@@ -326,8 +328,8 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                                     </span>
                                 </TableCell>
                                 <TableCell>
-                                    <span className="block max-w-[90px] truncate text-[11px] font-semibold text-muted-foreground/85">
-                                        {log.upstream}
+                                    <span className="block max-w-[110px] truncate text-[11px] font-semibold text-muted-foreground/85">
+                                        {log.upstream}{log.upstream_target ? ` / ${log.upstream_target}` : ''}
                                     </span>
                                 </TableCell>
                                 <TableCell className="max-w-0">

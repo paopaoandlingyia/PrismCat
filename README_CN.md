@@ -97,6 +97,11 @@ PrismCat 使用**子域名路由**实现透明代理。当你在 Settings 里添
 ### 📈 Trace 关联 & 用量追踪
 自动将相关请求关联为 Trace 链路，并从响应中提取 Token 用量。内置 OpenAI、Anthropic、Gemini 提取规则，也支持自定义。
 
+### 🔀 目标预设
+一个代理入口可以保存多个完整目标预设，并在 Settings 中手动一键切换。每个预设将目标 URL、超时、出站代理、参数覆盖规则绑定和 Usage 规则绑定放在一起，避免切换线路时出现“新地址配旧 Key”之类的错配。
+
+它不只适合切换 LLM 供应商，也适合生产/预发、直连/代理线路、地域节点、不同租户凭据，以及真实服务与 mock/replay 服务之间的切换。客户端地址始终不变；切换只影响新请求，正在进行的流式请求会继续使用开始时的目标快照。
+
 ### 🛠️ 参数覆盖（需手动启用）
 无需改动业务代码即可改写外发请求——对 JSON Body 执行 set / remove / default / append / prepend，还可 set 或 remove 请求头。每条规则按 method / path / JSON 内容匹配命中，日志详情页可看到原始请求 vs. 最终请求的逐字段 diff。
 
@@ -129,6 +134,7 @@ PrismCat 设计为 **7×24 小时静默运行的 LLM 黑匣子**。你不需要�
 | "Agent 跑着跑着就失控了，不知道它中间干了什么" | PrismCat 常驻记录每一次 API 调用，随时回溯 Agent 的完整行为链路 |
 | "每个上游到底消耗了多少 Token？" | 内置 **用量追踪** 自动从 OpenAI / Claude / Gemini 响应中提取 Token 数 |
 | "我想全局封顶 `max_tokens` / 剔除 LangChain 偷塞的某个字段" | 在 **参数覆盖** 里写一条规则，set / remove / default 任意 JSON 字段（需手动启用，默认透明转发） |
+| "我需要在两套线路/凭据间切换，但不想改客户端地址" | 为同一个上游建立多个 **目标预设**，将 URL、代理和规则绑定作为一个整体切换 |
 
 ---
 
@@ -295,6 +301,25 @@ upstreams:
     response_body_first_byte_timeout: 0
     response_body_idle_timeout: 0 # 0 = 禁用对应阶段超时
     outbound_proxy: "http://127.0.0.1:7890"
+  # 可选：同一稳定入口下的多个完整目标预设。
+  # target 与 targets 互斥；旧的单目标格式仍然兼容。
+  codex:
+    active_target: primary
+    targets:
+      primary:
+        url: "https://api.openai.com"
+        timeout: 120
+        outbound_proxy: "env"
+        request_overrides:
+          enabled: false
+          rule_names: []
+      backup:
+        url: "https://api.example.com"
+        timeout: 120
+        outbound_proxy: "direct"
+        request_overrides:
+          enabled: false
+          rule_names: []
 
 # 请求参数覆盖（默认关闭）
 # 支持的操作：JSON Body set / remove / default / append / prepend；Header set / remove

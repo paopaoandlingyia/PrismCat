@@ -69,6 +69,7 @@ func (r *SQLiteRepository) migrate() error {
 		created_at DATETIME NOT NULL,
 		created_at_unix_ms INTEGER NOT NULL,
 		upstream TEXT NOT NULL,
+		upstream_target TEXT DEFAULT '',
 		target_url TEXT NOT NULL,
 		method TEXT NOT NULL,
 		path TEXT NOT NULL,
@@ -126,6 +127,9 @@ func (r *SQLiteRepository) migrate() error {
 		return err
 	}
 	if err := r.ensureLogColumn("created_at_unix_ms", "created_at_unix_ms INTEGER DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := r.ensureLogColumn("upstream_target", "upstream_target TEXT DEFAULT ''"); err != nil {
 		return err
 	}
 	if err := r.ensureLogColumn("tag", "tag TEXT DEFAULT ''"); err != nil {
@@ -379,7 +383,7 @@ func (r *SQLiteRepository) SaveLog(log *RequestLog) error {
 
 	query := `
 	INSERT INTO request_logs (
-		id, created_at, created_at_unix_ms, upstream, target_url, method, path, query,
+		id, created_at, created_at_unix_ms, upstream, upstream_target, target_url, method, path, query,
 		request_headers, request_body, request_body_original, request_body_final, request_body_ref, request_body_size,
 		status_code, response_headers, response_body, response_body_ref, response_body_size,
 		streaming, latency_ms, error, truncated, tag,
@@ -387,11 +391,12 @@ func (r *SQLiteRepository) SaveLog(log *RequestLog) error {
 		request_header_override_applied, request_header_override_changes, request_headers_original,
 		trace_id, parent_log_id, trace_seq,
 		usage_input_tokens, usage_output_tokens, usage_total_tokens, usage_raw, usage_source
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(id) DO UPDATE SET
 		created_at = excluded.created_at,
 		created_at_unix_ms = excluded.created_at_unix_ms,
 		upstream = excluded.upstream,
+		upstream_target = excluded.upstream_target,
 		target_url = excluded.target_url,
 		method = excluded.method,
 		path = excluded.path,
@@ -429,7 +434,7 @@ func (r *SQLiteRepository) SaveLog(log *RequestLog) error {
 	`
 
 	_, err := r.db.Exec(query,
-		log.ID, log.CreatedAt, log.CreatedAt.UnixMilli(), log.Upstream, log.TargetURL, log.Method, log.Path, log.Query,
+		log.ID, log.CreatedAt, log.CreatedAt.UnixMilli(), log.Upstream, log.UpstreamTarget, log.TargetURL, log.Method, log.Path, log.Query,
 		string(reqHeaders), log.RequestBody, log.RequestBodyOriginal, log.RequestBodyFinal, log.RequestBodyRef, log.RequestBodySize,
 		log.StatusCode, string(respHeaders), log.ResponseBody, log.ResponseBodyRef, log.ResponseBodySize,
 		log.Streaming, log.Latency, log.Error, log.Truncated, log.Tag,
@@ -443,7 +448,7 @@ func (r *SQLiteRepository) SaveLog(log *RequestLog) error {
 
 func (r *SQLiteRepository) GetLog(id string) (*RequestLog, error) {
 	query := `
-	SELECT id, created_at, upstream, target_url, method, path, query,
+	SELECT id, created_at, upstream, upstream_target, target_url, method, path, query,
 		request_headers, request_body, request_body_original, request_body_final, request_body_ref, request_body_size,
 		status_code, response_headers, response_body, response_body_ref, response_body_size,
 		streaming, latency_ms, error, truncated, tag,
@@ -484,7 +489,7 @@ func (r *SQLiteRepository) ListLogs(filter LogFilter) ([]*RequestLog, int64, err
 	}
 
 	query := fmt.Sprintf(`
-	SELECT l.id, l.created_at, l.upstream, l.target_url, l.method, l.path, l.query,
+	SELECT l.id, l.created_at, l.upstream, l.upstream_target, l.target_url, l.method, l.path, l.query,
 		l.request_body_size, l.status_code, l.response_body_size,
 		l.streaming, l.latency_ms, l.error, l.truncated, l.tag, l.request_override_applied,
 		COALESCE(a.saved, 0), COALESCE(a.status, 'none'), COALESCE(a.note, ''), COALESCE(a.labels, '[]'),
@@ -596,7 +601,7 @@ func (r *SQLiteRepository) ExportLogs(ctx context.Context, filter LogFilter, eac
 
 	where, args := buildLogWhereClause(filter)
 	query := fmt.Sprintf(`
-	SELECT l.id, l.created_at, l.upstream, l.target_url, l.method, l.path, l.query,
+	SELECT l.id, l.created_at, l.upstream, l.upstream_target, l.target_url, l.method, l.path, l.query,
 		l.request_headers, l.request_body, l.request_body_original, l.request_body_final, l.request_body_ref, l.request_body_size,
 		l.status_code, l.response_headers, l.response_body, l.response_body_ref, l.response_body_size,
 		l.streaming, l.latency_ms, l.error, l.truncated, l.tag,
@@ -1004,7 +1009,7 @@ func (r *SQLiteRepository) ListTraces(filter TraceFilter) ([]TraceSummary, int64
 
 func (r *SQLiteRepository) GetTraceRequests(traceID string) ([]*RequestLog, error) {
 	query := `
-	SELECT id, created_at, upstream, target_url, method, path, query,
+	SELECT id, created_at, upstream, upstream_target, target_url, method, path, query,
 		request_headers, request_body, request_body_original, request_body_final, request_body_ref, request_body_size,
 		status_code, response_headers, response_body, response_body_ref, response_body_size,
 		streaming, latency_ms, error, truncated, tag,
@@ -1085,7 +1090,7 @@ func (r *SQLiteRepository) scanLogSummary(scanner interface{ Scan(...interface{}
 	var usageInput, usageOutput, usageTotal sql.NullInt64
 
 	err := scanner.Scan(
-		&log.ID, &log.CreatedAt, &log.Upstream, &log.TargetURL, &log.Method, &log.Path, &log.Query,
+		&log.ID, &log.CreatedAt, &log.Upstream, &log.UpstreamTarget, &log.TargetURL, &log.Method, &log.Path, &log.Query,
 		&log.RequestBodySize, &log.StatusCode, &log.ResponseBodySize,
 		&streaming, &log.Latency, &log.Error, &truncated, &log.Tag, &overrideApplied,
 		&annotationSaved, &log.Annotation.Status, &log.Annotation.Note, &annotationLabels,
@@ -1127,7 +1132,7 @@ func (r *SQLiteRepository) scanLog(scanner interface{ Scan(...interface{}) error
 	var usageRaw, usageSource sql.NullString
 
 	err := scanner.Scan(
-		&log.ID, &log.CreatedAt, &log.Upstream, &log.TargetURL, &log.Method, &log.Path, &log.Query,
+		&log.ID, &log.CreatedAt, &log.Upstream, &log.UpstreamTarget, &log.TargetURL, &log.Method, &log.Path, &log.Query,
 		&reqHeaders, &log.RequestBody, &log.RequestBodyOriginal, &log.RequestBodyFinal, &log.RequestBodyRef, &log.RequestBodySize,
 		&log.StatusCode, &respHeaders, &log.ResponseBody, &log.ResponseBodyRef, &log.ResponseBodySize,
 		&streaming, &log.Latency, &log.Error, &truncated, &log.Tag,
@@ -1187,7 +1192,7 @@ func (r *SQLiteRepository) scanLogWithAnnotation(scanner interface{ Scan(...inte
 	var annotationCreatedMS, annotationUpdatedMS int64
 
 	err := scanner.Scan(
-		&log.ID, &log.CreatedAt, &log.Upstream, &log.TargetURL, &log.Method, &log.Path, &log.Query,
+		&log.ID, &log.CreatedAt, &log.Upstream, &log.UpstreamTarget, &log.TargetURL, &log.Method, &log.Path, &log.Query,
 		&reqHeaders, &log.RequestBody, &log.RequestBodyOriginal, &log.RequestBodyFinal, &log.RequestBodyRef, &log.RequestBodySize,
 		&log.StatusCode, &respHeaders, &log.ResponseBody, &log.ResponseBodyRef, &log.ResponseBodySize,
 		&streaming, &log.Latency, &log.Error, &truncated, &log.Tag,
