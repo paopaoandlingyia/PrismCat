@@ -590,7 +590,6 @@ function HeaderValueInput({
                     onClick={() => setRevealed(current => !current)}
                     className="absolute inset-y-0 right-0 flex w-9 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
                     aria-label={revealed ? hideLabel : showLabel}
-                    title={revealed ? hideLabel : showLabel}
                 >
                     {revealed ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                 </button>

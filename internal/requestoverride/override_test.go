@@ -222,6 +222,20 @@ func TestApplySkipsWhenJSONConditionDoesNotMatch(t *testing.T) {
 	}
 }
 
+func TestJSONConditionsMatchMissingPath(t *testing.T) {
+	wantMissing := false
+	conditions := []config.RequestOverrideJSONCondition{
+		{Path: "metadata.user_id", Exists: &wantMissing},
+	}
+
+	if !jsonConditionsMatch(conditions, `{}`) {
+		t.Fatal("missing path should satisfy exists: false")
+	}
+	if jsonConditionsMatch(conditions, `{"metadata":{"user_id":"u1"}}`) {
+		t.Fatal("existing path should not satisfy exists: false")
+	}
+}
+
 func TestApplySkipsRulesNotBoundToUpstream(t *testing.T) {
 	cfg := config.RequestOverridesConfig{
 		Enabled: true,

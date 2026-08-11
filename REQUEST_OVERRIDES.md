@@ -56,15 +56,13 @@ or `path_prefixes` are alternatives (OR). Every item in `json` must match.
 A JSON condition supports:
 
 - `exists: true`: the path must exist.
+- `exists: false`: the path must not exist.
 - `equals`: the JSON value must deeply equal the supplied value.
 - `starts_with`: the value must be a string with this prefix.
 - `in`: the value must deeply equal one member of the supplied array.
 
 Body conditions are evaluated immediately before each rule, so they see
 changes made by earlier body rules.
-
-> Current limitation: `exists: false` is not supported. Omit the condition or
-> use another positive condition until missing-value matching is implemented.
 
 ## Body operations
 

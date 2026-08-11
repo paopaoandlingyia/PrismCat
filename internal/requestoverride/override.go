@@ -293,8 +293,13 @@ func jsonConditionsMatch(conditions []config.RequestOverrideJSONCondition, jsonS
 	for _, condition := range conditions {
 		result := gjson.Get(jsonStr, condition.Path)
 		exists := result.Exists()
-		if condition.Exists != nil && *condition.Exists != exists {
-			return false
+		if condition.Exists != nil {
+			if *condition.Exists != exists {
+				return false
+			}
+			if !*condition.Exists {
+				continue
+			}
 		}
 		if !exists {
 			return false
