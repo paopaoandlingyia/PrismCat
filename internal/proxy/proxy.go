@@ -369,7 +369,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		logEntry.RequestHeaderOverrideApplied = true
 		logEntry.RequestHeadersOriginal = logEntry.RequestHeaders
 		logEntry.RequestHeaders = p.sanitizeHeaders(upstreamReq.Header, loggingCfg.SensitiveHeaders)
-		if raw, err := json.Marshal(headerChanges); err == nil {
+		if raw, err := json.Marshal(sanitizeHeaderChanges(headerChanges, loggingCfg.SensitiveHeaders)); err == nil {
 			logEntry.RequestHeaderOverrideChanges = raw
 		}
 		if !logEntry.RequestOverrideApplied {
@@ -843,6 +843,39 @@ func isAccessControlHeader(header string) bool {
 	return strings.HasPrefix(strings.ToLower(header), "access-control-")
 }
 
+func isSensitiveHeader(name string, sensitiveHeaders []string) bool {
+	for _, sensitive := range sensitiveHeaders {
+		if strings.EqualFold(name, sensitive) {
+			return true
+		}
+	}
+	return false
+}
+
+func maskSensitiveHeaderValue(value string) string {
+	if len(value) > 10 {
+		return value[:5] + "***" + value[len(value)-3:]
+	}
+	return "***"
+}
+
+func sanitizeHeaderChanges(changes []requestoverride.HeaderChange, sensitiveHeaders []string) []requestoverride.HeaderChange {
+	sanitized := make([]requestoverride.HeaderChange, len(changes))
+	copy(sanitized, changes)
+	for i := range sanitized {
+		if !isSensitiveHeader(sanitized[i].Name, sensitiveHeaders) {
+			continue
+		}
+		if sanitized[i].Value != "" {
+			sanitized[i].Value = maskSensitiveHeaderValue(sanitized[i].Value)
+		}
+		if sanitized[i].OldValue != "" {
+			sanitized[i].OldValue = maskSensitiveHeaderValue(sanitized[i].OldValue)
+		}
+	}
+	return sanitized
+}
+
 // sanitizeHeaders masks configured sensitive headers.
 func (p *Proxy) sanitizeHeaders(headers http.Header, sensitiveHeaders []string) map[string][]string {
 	result := make(map[string][]string)
@@ -853,20 +886,8 @@ func (p *Proxy) sanitizeHeaders(headers http.Header, sensitiveHeaders []string) 
 
 		newValues := make([]string, len(vv))
 		for i, value := range vv {
-			isSensitive := false
-			for _, sensitive := range sensitiveHeaders {
-				if strings.EqualFold(k, sensitive) {
-					isSensitive = true
-					break
-				}
-			}
-
-			if isSensitive {
-				if len(value) > 10 {
-					newValues[i] = value[:5] + "***" + value[len(value)-3:]
-				} else {
-					newValues[i] = "***"
-				}
+			if isSensitiveHeader(k, sensitiveHeaders) {
+				newValues[i] = maskSensitiveHeaderValue(value)
 			} else {
 				newValues[i] = value
 			}
