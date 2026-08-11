@@ -27,6 +27,8 @@ import {
     Archive,
     FileCode,
     ChevronDown,
+    Eye,
+    EyeOff,
 } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
@@ -507,6 +509,35 @@ function AdvancedSettings({
     )
 }
 
+function isSensitiveHeaderName(name: string, configuredHeaders: string) {
+    const normalized = name.trim().toLowerCase()
+    if (!normalized) return false
+    const defaults = ['authorization', 'proxy-authorization', 'x-api-key', 'api-key']
+    const configured = configuredHeaders
+        .split('\n')
+        .map(value => value.trim().toLowerCase())
+        .filter(Boolean)
+    return defaults.includes(normalized) || configured.includes(normalized)
+}
+
+function redactSensitiveRuleHeaders(rule: OverrideRuleObject, configuredHeaders: string) {
+    const headers = Array.isArray(rule.headers) ? rule.headers : []
+    return {
+        ...rule,
+        ...(headers.length > 0
+            ? {
+                headers: headers.map(header => {
+                    if (!header || typeof header !== 'object' || Array.isArray(header)) return header
+                    const item = header as Record<string, unknown>
+                    const name = typeof item.name === 'string' ? item.name : ''
+                    if (!isSensitiveHeaderName(name, configuredHeaders) || typeof item.value !== 'string') return item
+                    return { ...item, value: '••••••••' }
+                }),
+            }
+            : {}),
+    }
+}
+
 function AdvancedSettingsGroup({
     title,
     description,
@@ -556,6 +587,55 @@ function ToggleSetting({
                 </Label>
                 <InfoTooltip content={description} />
             </div>
+        </div>
+    )
+}
+
+function HeaderValueInput({
+    value,
+    onChange,
+    placeholder,
+    disabled,
+    sensitive,
+    showLabel,
+    hideLabel,
+}: {
+    value: string
+    onChange: (value: string) => void
+    placeholder: string
+    disabled: boolean
+    sensitive: boolean
+    showLabel: string
+    hideLabel: string
+}) {
+    const [revealed, setRevealed] = useState(false)
+    const masked = sensitive && !revealed
+
+    return (
+        <div className="relative min-w-0 flex-[2]">
+            <Input
+                type={masked ? 'password' : 'text'}
+                value={value}
+                onChange={event => onChange(event.target.value)}
+                placeholder={placeholder}
+                disabled={disabled}
+                autoComplete="off"
+                className={cn(
+                    "h-9 w-full rounded-lg border-border/30 bg-background/50 text-xs disabled:opacity-40",
+                    sensitive && !disabled && "pr-9",
+                )}
+            />
+            {sensitive && !disabled && (
+                <button
+                    type="button"
+                    onClick={() => setRevealed(current => !current)}
+                    className="absolute inset-y-0 right-0 flex w-9 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
+                    aria-label={revealed ? hideLabel : showLabel}
+                    title={revealed ? hideLabel : showLabel}
+                >
+                    {revealed ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                </button>
+            )}
         </div>
     )
 }
@@ -668,6 +748,10 @@ export function Settings() {
     const [overrideRulesText, setOverrideRulesText] = useState('')
     const [selectedOverrideRuleIndex, setSelectedOverrideRuleIndex] = useState(0)
     const [selectedOverrideRuleText, setSelectedOverrideRuleText] = useState('')
+    const [selectedOverrideRuleName, setSelectedOverrideRuleName] = useState('')
+    const [selectedOverrideMatchText, setSelectedOverrideMatchText] = useState('')
+    const [selectedOverridePatchText, setSelectedOverridePatchText] = useState('')
+    const [selectedRuleAdvancedOpen, setSelectedRuleAdvancedOpen] = useState(false)
     const [advancedRulesOpen, setAdvancedRulesOpen] = useState(false)
     const [overrideBindings, setOverrideBindings] = useState<Record<string, OverrideBinding>>({})
     const [usageExtractionEnabled, setUsageExtractionEnabled] = useState(false)
@@ -711,11 +795,53 @@ export function Settings() {
             if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
                 return t('settings.request_override_rule_must_be_object')
             }
+            const name = typeof parsed.name === 'string' ? parsed.name.trim() : ''
+            if (!name) return t('settings.request_override_rule_name_required')
+            if (overrideRuleObjects.some((rule, index) => (
+                index !== selectedOverrideRuleIndex && getOverrideRuleName(rule, '') === name
+            ))) {
+                return t('settings.request_override_rule_name_duplicate')
+            }
             return ''
         } catch {
             return t('settings.request_override_rule_invalid')
         }
-    }, [selectedOverrideRuleText, t])
+    }, [overrideRuleObjects, selectedOverrideRuleIndex, selectedOverrideRuleText, t])
+    const selectedOverrideRuleNameError = useMemo(() => {
+        const name = selectedOverrideRuleName.trim()
+        if (!name) return t('settings.request_override_rule_name_required')
+        if (overrideRuleObjects.some((rule, index) => (
+            index !== selectedOverrideRuleIndex && getOverrideRuleName(rule, '') === name
+        ))) {
+            return t('settings.request_override_rule_name_duplicate')
+        }
+        return ''
+    }, [overrideRuleObjects, selectedOverrideRuleIndex, selectedOverrideRuleName, t])
+    const selectedOverrideMatchError = useMemo(() => {
+        try {
+            const parsed = JSON.parse(selectedOverrideMatchText)
+            return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+                ? ''
+                : t('settings.request_override_match_must_be_object')
+        } catch {
+            return t('settings.request_override_match_invalid')
+        }
+    }, [selectedOverrideMatchText, t])
+    const selectedOverridePatchError = useMemo(() => {
+        try {
+            return Array.isArray(JSON.parse(selectedOverridePatchText))
+                ? ''
+                : t('settings.request_override_patch_must_be_array')
+        } catch {
+            return t('settings.request_override_patch_invalid')
+        }
+    }, [selectedOverridePatchText, t])
+    const selectedOverrideRulePreview = useMemo(() => {
+        const rule = overrideRuleObjects[selectedOverrideRuleIndex]
+        return rule
+            ? JSON.stringify(redactSensitiveRuleHeaders(rule, sensitiveHeaders), null, 2)
+            : ''
+    }, [overrideRuleObjects, selectedOverrideRuleIndex, sensitiveHeaders])
     const usageRulesParse = useMemo((): { rules: OverrideRuleObject[]; error: string } => {
         try {
             const parsed = usageRulesText.trim() ? JSON.parse(usageRulesText) : []
@@ -788,6 +914,9 @@ export function Settings() {
         if (overrideRulesParse.error || overrideRuleObjects.length === 0) {
             setSelectedOverrideRuleIndex(0)
             setSelectedOverrideRuleText('')
+            setSelectedOverrideRuleName('')
+            setSelectedOverrideMatchText('')
+            setSelectedOverridePatchText('')
             return
         }
 
@@ -795,7 +924,11 @@ export function Settings() {
         if (nextIndex !== selectedOverrideRuleIndex) {
             setSelectedOverrideRuleIndex(nextIndex)
         }
-        setSelectedOverrideRuleText(JSON.stringify(overrideRuleObjects[nextIndex], null, 2))
+        const nextRule = overrideRuleObjects[nextIndex]
+        setSelectedOverrideRuleText(JSON.stringify(nextRule, null, 2))
+        setSelectedOverrideRuleName(getOverrideRuleName(nextRule, `rule-${nextIndex + 1}`))
+        setSelectedOverrideMatchText(JSON.stringify(nextRule.match ?? {}, null, 2))
+        setSelectedOverridePatchText(JSON.stringify(nextRule.patch ?? [], null, 2))
     }, [overrideRulesParse.error, overrideRuleObjects, selectedOverrideRuleIndex])
 
     useEffect(() => {
@@ -975,14 +1108,25 @@ export function Settings() {
     })
 
     const parseOverrideRules = () => {
-        if (selectedOverrideRuleError) {
-            throw new Error(selectedOverrideRuleError)
+        const selectedRuleExists = Boolean(overrideRuleObjects[selectedOverrideRuleIndex])
+        const editorError = selectedRuleExists
+            ? selectedOverrideRuleNameError || selectedOverrideMatchError || selectedOverridePatchError || selectedOverrideRuleError
+            : ''
+        if (editorError) {
+            throw new Error(editorError)
         }
         const trimmedRules = overrideRulesText.trim()
         if (!trimmedRules) return []
         const parsed = JSON.parse(trimmedRules)
         if (!Array.isArray(parsed)) {
             throw new Error(t('settings.request_overrides_rules_must_be_array'))
+        }
+        const names = new Set<string>()
+        for (const rule of parsed) {
+            const name = getOverrideRuleName(rule, '')
+            if (!name) throw new Error(t('settings.request_override_rule_name_required'))
+            if (names.has(name)) throw new Error(t('settings.request_override_rule_name_duplicate'))
+            names.add(name)
         }
         return parsed
     }
@@ -1001,15 +1145,87 @@ export function Settings() {
     }
 
     const setOverrideRulesArray = (rules: OverrideRuleObject[], nextIndex = 0) => {
+        const safeIndex = Math.max(0, Math.min(nextIndex, Math.max(0, rules.length - 1)))
+        const selectedRule = rules[safeIndex]
         setOverrideRulesText(rules.length ? JSON.stringify(rules, null, 2) : '')
-        setSelectedOverrideRuleIndex(Math.max(0, Math.min(nextIndex, Math.max(0, rules.length - 1))))
-        setSelectedOverrideRuleText(rules[nextIndex] ? JSON.stringify(rules[nextIndex], null, 2) : '')
+        setSelectedOverrideRuleIndex(safeIndex)
+        setSelectedOverrideRuleText(selectedRule ? JSON.stringify(selectedRule, null, 2) : '')
+        setSelectedOverrideRuleName(selectedRule ? getOverrideRuleName(selectedRule, `rule-${safeIndex + 1}`) : '')
+        setSelectedOverrideMatchText(selectedRule ? JSON.stringify(selectedRule.match ?? {}, null, 2) : '')
+        setSelectedOverridePatchText(selectedRule ? JSON.stringify(selectedRule.patch ?? [], null, 2) : '')
     }
 
     const handleSelectOverrideRule = (index: number) => {
-        if (!overrideRuleObjects[index]) return
+        const rule = overrideRuleObjects[index]
+        if (!rule) return
         setSelectedOverrideRuleIndex(index)
-        setSelectedOverrideRuleText(JSON.stringify(overrideRuleObjects[index], null, 2))
+        setSelectedOverrideRuleText(JSON.stringify(rule, null, 2))
+        setSelectedOverrideRuleName(getOverrideRuleName(rule, `rule-${index + 1}`))
+        setSelectedOverrideMatchText(JSON.stringify(rule.match ?? {}, null, 2))
+        setSelectedOverridePatchText(JSON.stringify(rule.patch ?? [], null, 2))
+        setSelectedRuleAdvancedOpen(false)
+    }
+
+    const replaceSelectedOverrideRule = (nextRule: OverrideRuleObject, syncBindingName = false) => {
+        const currentRule = overrideRuleObjects[selectedOverrideRuleIndex]
+        if (!currentRule) return
+        const previousName = getOverrideRuleName(currentRule, '')
+        const nextName = getOverrideRuleName(nextRule, '')
+        const nextRules = [...overrideRuleObjects]
+        nextRules[selectedOverrideRuleIndex] = nextRule
+        setOverrideRulesText(JSON.stringify(nextRules, null, 2))
+        setSelectedOverrideRuleText(JSON.stringify(nextRule, null, 2))
+
+        if (syncBindingName && previousName && nextName && previousName !== nextName) {
+            setOverrideBindings(current => Object.fromEntries(
+                Object.entries(current).map(([upstream, binding]) => [
+                    upstream,
+                    {
+                        ...binding,
+                        rule_names: getBindingRuleNames(binding).map(name => name === previousName ? nextName : name),
+                    },
+                ]),
+            ))
+        }
+    }
+
+    const handleOverrideRuleNameChange = (value: string) => {
+        setSelectedOverrideRuleName(value)
+    }
+
+    const handleCommitOverrideRuleName = () => {
+        const name = selectedOverrideRuleName.trim()
+        if (!name || overrideRuleObjects.some((rule, index) => (
+            index !== selectedOverrideRuleIndex && getOverrideRuleName(rule, '') === name
+        ))) return
+        const rule = overrideRuleObjects[selectedOverrideRuleIndex]
+        if (!rule) return
+        setSelectedOverrideRuleName(name)
+        replaceSelectedOverrideRule({ ...rule, name }, true)
+    }
+
+    const handleOverrideMatchTextChange = (value: string) => {
+        setSelectedOverrideMatchText(value)
+        try {
+            const match = JSON.parse(value)
+            if (!match || typeof match !== 'object' || Array.isArray(match)) return
+            const rule = overrideRuleObjects[selectedOverrideRuleIndex]
+            if (rule) replaceSelectedOverrideRule({ ...rule, match })
+        } catch {
+            // Keep the local editor text so users can finish typing valid JSON.
+        }
+    }
+
+    const handleOverridePatchTextChange = (value: string) => {
+        setSelectedOverridePatchText(value)
+        try {
+            const patch = JSON.parse(value)
+            if (!Array.isArray(patch)) return
+            const rule = overrideRuleObjects[selectedOverrideRuleIndex]
+            if (rule) replaceSelectedOverrideRule({ ...rule, patch })
+        } catch {
+            // Keep the local editor text so users can finish typing valid JSON.
+        }
     }
 
     const handleOverrideRuleTextChange = (value: string) => {
@@ -1017,9 +1233,12 @@ export function Settings() {
         try {
             const parsed = JSON.parse(value)
             if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return
-            const nextRules = [...overrideRuleObjects]
-            nextRules[selectedOverrideRuleIndex] = parsed as OverrideRuleObject
-            setOverrideRulesText(JSON.stringify(nextRules, null, 2))
+            const nextRule = parsed as OverrideRuleObject
+            const name = getOverrideRuleName(nextRule, '')
+            if (!name || overrideRuleObjects.some((rule, index) => (
+                index !== selectedOverrideRuleIndex && getOverrideRuleName(rule, '') === name
+            ))) return
+            replaceSelectedOverrideRule(nextRule, true)
         } catch {
             // Keep the local editor text so users can finish typing valid JSON.
         }
@@ -2582,22 +2801,6 @@ export function Settings() {
                                                         <div className="flex shrink-0 items-center gap-1">
                                                             <Button
                                                                 type="button"
-                                                                variant={getOverrideRuleEnabled(overrideRuleObjects[selectedOverrideRuleIndex]) ? "ghost" : "outline"}
-                                                                size="sm"
-                                                                onClick={() => handleToggleOverrideRule(selectedOverrideRuleIndex, !getOverrideRuleEnabled(overrideRuleObjects[selectedOverrideRuleIndex]))}
-                                                                className={cn(
-                                                                    "h-8 px-3 text-xs font-semibold",
-                                                                    getOverrideRuleEnabled(overrideRuleObjects[selectedOverrideRuleIndex])
-                                                                        ? "text-muted-foreground hover:text-foreground"
-                                                                        : "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300"
-                                                                )}
-                                                            >
-                                                                {getOverrideRuleEnabled(overrideRuleObjects[selectedOverrideRuleIndex])
-                                                                    ? t('settings.rule_disable')
-                                                                    : t('settings.rule_enable')}
-                                                            </Button>
-                                                            <Button
-                                                                type="button"
                                                                 variant="ghost"
                                                                 size="icon"
                                                                 onClick={() => handleDuplicateOverrideRule(selectedOverrideRuleIndex)}
@@ -2621,52 +2824,114 @@ export function Settings() {
                                                 </div>
                                                 {overrideRuleObjects[selectedOverrideRuleIndex] ? (
                                                     <div className="space-y-4 p-3">
-                                                        <div className="space-y-2">
-                                                            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                                                {t('settings.request_override_body_patch')}
-                                                            </Label>
-                                                            <Textarea
-                                                                value={selectedOverrideRuleText}
-                                                                onChange={e => handleOverrideRuleTextChange(e.target.value)}
-                                                                rows={18}
-                                                                spellCheck={false}
-                                                                className="min-h-[420px] w-full resize-y rounded-lg border-border/30 bg-muted/20 font-mono text-xs leading-relaxed shadow-sm transition-colors focus-visible:bg-background"
-                                                            />
-                                                            {selectedOverrideRuleError && (
-                                                                <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-400">
-                                                                    {selectedOverrideRuleError}
-                                                                </div>
-                                                            )}
+                                                        <div className="grid gap-4 rounded-xl border border-border/50 bg-muted/20 p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+                                                            <FieldBlock label={t('settings.request_override_rule_name')}>
+                                                                <Input
+                                                                    value={selectedOverrideRuleName}
+                                                                    onChange={event => handleOverrideRuleNameChange(event.target.value)}
+                                                                    onBlur={handleCommitOverrideRuleName}
+                                                                    onKeyDown={event => {
+                                                                        if (event.key === 'Enter') event.currentTarget.blur()
+                                                                    }}
+                                                                    className="h-10 rounded-xl border-border/40 bg-background font-mono text-sm"
+                                                                />
+                                                                {selectedOverrideRuleNameError && (
+                                                                    <div className="text-xs text-red-600 dark:text-red-400">
+                                                                        {selectedOverrideRuleNameError}
+                                                                    </div>
+                                                                )}
+                                                            </FieldBlock>
+                                                            <div className="flex h-10 items-center gap-2 rounded-xl border border-border/40 bg-background px-3">
+                                                                <Switch
+                                                                    id="selected-override-rule-enabled"
+                                                                    checked={getOverrideRuleEnabled(overrideRuleObjects[selectedOverrideRuleIndex])}
+                                                                    onCheckedChange={checked => handleToggleOverrideRule(selectedOverrideRuleIndex, checked)}
+                                                                    className="shrink-0 data-[state=unchecked]:bg-border/60"
+                                                                />
+                                                                <Label htmlFor="selected-override-rule-enabled" className="cursor-pointer text-sm font-medium">
+                                                                    {t('settings.rule_enabled')}
+                                                                </Label>
+                                                            </div>
                                                         </div>
 
-                                                        <div className="space-y-2">
-                                                            <div className="flex items-center justify-between">
-                                                                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                                                    {t('settings.request_override_headers')}
-                                                                </Label>
+                                                        <div className="grid gap-4 lg:grid-cols-2">
+                                                            <div className="space-y-3 rounded-xl border border-border/50 bg-muted/20 p-4">
+                                                                <div>
+                                                                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                                                        {t('settings.request_override_match')}
+                                                                    </Label>
+                                                                    <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+                                                                        {t('settings.request_override_match_hint')}
+                                                                    </p>
+                                                                </div>
+                                                                <Textarea
+                                                                    value={selectedOverrideMatchText}
+                                                                    onChange={event => handleOverrideMatchTextChange(event.target.value)}
+                                                                    rows={9}
+                                                                    spellCheck={false}
+                                                                    className="min-h-[220px] w-full resize-y rounded-lg border-border/30 bg-background font-mono text-xs leading-relaxed shadow-sm"
+                                                                />
+                                                                {selectedOverrideMatchError && (
+                                                                    <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-400">
+                                                                        {selectedOverrideMatchError}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+
+                                                            <div className="space-y-3 rounded-xl border border-border/50 bg-muted/20 p-4">
+                                                                <div>
+                                                                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                                                        {t('settings.request_override_body_patch')}
+                                                                    </Label>
+                                                                    <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+                                                                        {t('settings.request_override_body_patch_hint')}
+                                                                    </p>
+                                                                </div>
+                                                                <Textarea
+                                                                    value={selectedOverridePatchText}
+                                                                    onChange={event => handleOverridePatchTextChange(event.target.value)}
+                                                                    rows={9}
+                                                                    spellCheck={false}
+                                                                    className="min-h-[220px] w-full resize-y rounded-lg border-border/30 bg-background font-mono text-xs leading-relaxed shadow-sm"
+                                                                />
+                                                                {selectedOverridePatchError && (
+                                                                    <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-400">
+                                                                        {selectedOverridePatchError}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="space-y-3 rounded-xl border border-border/50 bg-muted/20 p-4">
+                                                            <div className="flex items-start justify-between gap-3">
+                                                                <div>
+                                                                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                                                        {t('settings.request_override_headers')}
+                                                                    </Label>
+                                                                    <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+                                                                        {t('settings.request_override_headers_hint')}
+                                                                    </p>
+                                                                </div>
                                                                 <Button
                                                                     type="button"
                                                                     variant="ghost"
                                                                     size="sm"
                                                                     onClick={handleAddHeaderOp}
-                                                                    className="h-7 px-2 text-xs"
+                                                                    className="h-7 shrink-0 px-2 text-xs"
                                                                 >
                                                                     <Plus className="mr-1 h-3.5 w-3.5" />
                                                                     {t('common.add')}
                                                                 </Button>
                                                             </div>
-                                                            <p className="text-[11px] leading-5 text-muted-foreground">
-                                                                {t('settings.request_override_headers_hint')}
-                                                            </p>
                                                             {getSelectedRuleHeaders().length > 0 ? (
                                                                 <div className="space-y-2">
                                                                     {getSelectedRuleHeaders().map((header, hIdx) => (
-                                                                        <div key={hIdx} className="flex items-center gap-2">
+                                                                        <div key={hIdx} className="grid grid-cols-1 items-center gap-2 sm:grid-cols-[100px_minmax(140px,1fr)_minmax(180px,2fr)_32px]">
                                                                             <Select
                                                                                 value={header.op}
-                                                                                onValueChange={v => handleUpdateHeaderOp(hIdx, 'op', v)}
+                                                                                onValueChange={value => handleUpdateHeaderOp(hIdx, 'op', value)}
                                                                             >
-                                                                                <SelectTrigger className="h-9 w-[100px] shrink-0 rounded-lg border-border/30 bg-background/50 text-xs">
+                                                                                <SelectTrigger className="h-9 w-full rounded-lg border-border/30 bg-background text-xs">
                                                                                     <SelectValue />
                                                                                 </SelectTrigger>
                                                                                 <SelectContent>
@@ -2676,16 +2941,18 @@ export function Settings() {
                                                                             </Select>
                                                                             <Input
                                                                                 value={header.name}
-                                                                                onChange={e => handleUpdateHeaderOp(hIdx, 'name', e.target.value)}
+                                                                                onChange={event => handleUpdateHeaderOp(hIdx, 'name', event.target.value)}
                                                                                 placeholder={t('settings.header_name_placeholder')}
-                                                                                className="h-9 min-w-0 flex-1 rounded-lg border-border/30 bg-background/50 text-xs"
+                                                                                className="h-9 min-w-0 rounded-lg border-border/30 bg-background text-xs"
                                                                             />
-                                                                            <Input
+                                                                            <HeaderValueInput
                                                                                 value={header.value ?? ''}
-                                                                                onChange={e => handleUpdateHeaderOp(hIdx, 'value', e.target.value)}
+                                                                                onChange={value => handleUpdateHeaderOp(hIdx, 'value', value)}
                                                                                 placeholder={header.op === 'remove' ? '—' : t('settings.header_value_placeholder')}
                                                                                 disabled={header.op === 'remove'}
-                                                                                className="h-9 min-w-0 flex-[2] rounded-lg border-border/30 bg-background/50 text-xs disabled:opacity-40"
+                                                                                sensitive={isSensitiveHeaderName(header.name, sensitiveHeaders)}
+                                                                                showLabel={t('settings.show_sensitive_value')}
+                                                                                hideLabel={t('settings.hide_sensitive_value')}
                                                                             />
                                                                             <Button
                                                                                 type="button"
@@ -2702,6 +2969,58 @@ export function Settings() {
                                                             ) : (
                                                                 <div className="rounded-lg border border-dashed border-border/40 px-3 py-4 text-center text-xs text-muted-foreground">
                                                                     {t('settings.request_override_no_headers')}
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        <details className="group rounded-xl border border-border/50 bg-muted/20">
+                                                            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-xs font-semibold text-muted-foreground marker:content-none hover:text-foreground [&::-webkit-details-marker]:hidden">
+                                                                <span>{t('settings.request_override_final_preview')}</span>
+                                                                <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+                                                            </summary>
+                                                            <div className="space-y-2 border-t border-border/40 p-3">
+                                                                <p className="text-[11px] leading-5 text-muted-foreground">
+                                                                    {t('settings.request_override_final_preview_hint')}
+                                                                </p>
+                                                                <Textarea
+                                                                    value={selectedOverrideRulePreview}
+                                                                    readOnly
+                                                                    rows={12}
+                                                                    spellCheck={false}
+                                                                    className="min-h-[260px] w-full resize-y rounded-lg border-border/30 bg-background/60 font-mono text-xs leading-relaxed"
+                                                                />
+                                                                <div className="flex justify-end">
+                                                                    <Button type="button" variant="outline" size="sm" onClick={() => handleCopy(selectedOverrideRulePreview)} className="h-8 text-xs">
+                                                                        <Copy className="mr-1.5 h-3.5 w-3.5" />
+                                                                        {t('common.copy')}
+                                                                    </Button>
+                                                                </div>
+                                                            </div>
+                                                        </details>
+
+                                                        <div className="rounded-xl border border-border/40 bg-muted/10">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setSelectedRuleAdvancedOpen(open => !open)}
+                                                                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
+                                                            >
+                                                                <span>{t('settings.request_override_raw_rule')}</span>
+                                                                <span>{selectedRuleAdvancedOpen ? t('common.hide', '隐藏') : t('common.show', '显示')}</span>
+                                                            </button>
+                                                            {selectedRuleAdvancedOpen && (
+                                                                <div className="space-y-2 border-t border-border/40 p-3">
+                                                                    <Textarea
+                                                                        value={selectedOverrideRuleText}
+                                                                        onChange={event => handleOverrideRuleTextChange(event.target.value)}
+                                                                        rows={14}
+                                                                        spellCheck={false}
+                                                                        className="min-h-[320px] w-full resize-y rounded-lg border-border/30 bg-background font-mono text-xs leading-relaxed shadow-sm"
+                                                                    />
+                                                                    {selectedOverrideRuleError && (
+                                                                <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-400">
+                                                                    {selectedOverrideRuleError}
+                                                                </div>
+                                                            )}
                                                                 </div>
                                                             )}
                                                         </div>
