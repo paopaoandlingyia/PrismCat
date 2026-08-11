@@ -80,62 +80,13 @@ type ToggleSettingProps = {
 
 const requestOverrideExample = JSON.stringify([
     {
-        name: 'Cost guard: cap max_tokens to 2048',
-        enabled: true,
-        match: {
-            methods: ['POST'],
-            path_prefixes: ['/v1/chat/completions', '/v1/messages'],
-        },
-        patch: [
-            { op: 'set', path: 'max_tokens', value: 2048 },
-        ],
-    },
-    {
-        name: 'Dev-only: downgrade gpt-4o to gpt-4o-mini',
-        enabled: false,
-        match: {
-            methods: ['POST'],
-            json: [
-                { path: 'model', equals: 'gpt-4o' },
-            ],
-        },
-        patch: [
-            { op: 'set', path: 'model', value: 'gpt-4o-mini' },
-        ],
-    },
-    {
-        name: 'Inject device metadata for Claude requests',
-        enabled: false,
-        match: {
-            methods: ['POST'],
-            path_prefixes: ['/v1/messages'],
-            json: [
-                { path: 'model', starts_with: 'claude' },
-            ],
-        },
-        patch: [
-            { op: 'set', path: 'metadata.user_id', value: 'demo-user' },
-        ],
-    },
-    {
-        name: 'Default max_tokens only when missing',
+        name: 'Example: default max_tokens',
         enabled: false,
         match: {
             methods: ['POST'],
         },
         patch: [
             { op: 'default', path: 'max_tokens', value: 4096 },
-        ],
-    },
-    {
-        name: 'Strip the `user` field LangChain auto-injects',
-        enabled: false,
-        match: {
-            methods: ['POST'],
-            path_prefixes: ['/v1/chat/completions'],
-        },
-        patch: [
-            { op: 'remove', path: 'user' },
         ],
     },
 ], null, 2)
@@ -507,6 +458,14 @@ function AdvancedSettings({
             )}
         </section>
     )
+}
+
+function uniqueRuleName(baseName: string, rules: OverrideRuleObject[]) {
+    const names = new Set(rules.map(rule => getOverrideRuleName(rule, '')))
+    if (!names.has(baseName)) return baseName
+    let suffix = 2
+    while (names.has(`${baseName} ${suffix}`)) suffix += 1
+    return `${baseName} ${suffix}`
 }
 
 function isSensitiveHeaderName(name: string, configuredHeaders: string) {
@@ -1256,6 +1215,16 @@ export function Settings() {
         setOverrideRulesArray([...overrideRuleObjects, nextRule], overrideRuleObjects.length)
     }
 
+    const handleAddOverrideExample = () => {
+        if (overrideRulesParse.error) return
+        const [template] = JSON.parse(requestOverrideExample) as OverrideRuleObject[]
+        const nextRule = {
+            ...template,
+            name: uniqueRuleName(getOverrideRuleName(template, 'Example rule'), overrideRuleObjects),
+        }
+        setOverrideRulesArray([...overrideRuleObjects, nextRule], overrideRuleObjects.length)
+    }
+
     const handleDuplicateOverrideRule = (index: number) => {
         const source = overrideRuleObjects[index]
         if (!source) return
@@ -1359,6 +1328,18 @@ export function Settings() {
             },
         }
         setUsageRulesArray([...usageRuleObjects, nextRule], usageRuleObjects.length)
+    }
+
+    const handleMergeDefaultUsageRules = () => {
+        if (usageRulesParse.error) return
+        const defaults = JSON.parse(usageExtractionExample) as OverrideRuleObject[]
+        const existingNames = new Set(usageRuleObjects.map(rule => getOverrideRuleName(rule, '')))
+        const additions = defaults.filter(rule => !existingNames.has(getOverrideRuleName(rule, '')))
+        if (additions.length === 0) {
+            toast.info(t('settings.usage_extraction_defaults_complete'))
+            return
+        }
+        setUsageRulesArray([...usageRuleObjects, ...additions], usageRuleObjects.length)
     }
 
     const handleDuplicateUsageRule = (index: number) => {
@@ -2679,7 +2660,7 @@ export function Settings() {
                                                     className="h-8 text-xs font-semibold"
                                                 >
                                                     <a
-                                                        href="https://github.com/tidwall/gjson/blob/master/SYNTAX.md"
+                                                        href={t('settings.request_overrides_docs_url')}
                                                         target="_blank"
                                                         rel="noreferrer noopener"
                                                     >
@@ -2691,7 +2672,8 @@ export function Settings() {
                                                     type="button"
                                                     variant="outline"
                                                     size="sm"
-                                                    onClick={() => setOverrideRulesArray(JSON.parse(requestOverrideExample) as OverrideRuleObject[], 0)}
+                                                    onClick={handleAddOverrideExample}
+                                                    disabled={Boolean(overrideRulesParse.error)}
                                                     className="h-8 text-xs font-semibold"
                                                 >
                                                     <Plus className="mr-1.5 h-3.5 w-3.5" />
@@ -3083,7 +3065,8 @@ export function Settings() {
                                                     type="button"
                                                     variant="outline"
                                                     size="sm"
-                                                    onClick={() => setUsageRulesArray(JSON.parse(usageExtractionExample) as OverrideRuleObject[], 0)}
+                                                    onClick={handleMergeDefaultUsageRules}
+                                                    disabled={Boolean(usageRulesParse.error)}
                                                     className="h-8 text-xs font-semibold"
                                                 >
                                                     <Plus className="mr-1.5 h-3.5 w-3.5" />
