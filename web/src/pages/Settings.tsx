@@ -498,7 +498,7 @@ function AdvancedSettings({
             {open && (
                 <div className={cn(
                     "space-y-6 border-t border-border/40 px-4 py-5",
-                    sidePanel && "lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-6",
+                    sidePanel && "space-y-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-6",
                 )}>
                     {children}
                 </div>
@@ -511,13 +511,18 @@ function AdvancedSettingsGroup({
     title,
     description,
     children,
+    card = false,
 }: {
     title: string
     description?: string
     children: ReactNode
+    card?: boolean
 }) {
     return (
-        <div className="space-y-4">
+        <div className={cn(
+            "space-y-4",
+            card && "rounded-xl border border-border/60 bg-background/70 p-4",
+        )}>
             <div>
                 <div className="text-xs font-semibold uppercase tracking-wider text-foreground/65">{title}</div>
                 {description && <p className="mt-1.5 text-xs leading-5 text-muted-foreground">{description}</p>}
@@ -1392,6 +1397,7 @@ export function Settings() {
                                     <AdvancedSettingsGroup
                                         title={t('upstream_manager.timeout_strategy')}
                                         description={t('upstream_manager.timeout_strategy_hint')}
+                                        card
                                     >
                                         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                                             <FieldBlock
@@ -1433,19 +1439,16 @@ export function Settings() {
                                         </div>
                                     </AdvancedSettingsGroup>
 
-                                    <div className="border-t border-border/40 pt-5">
-                                        <AdvancedSettingsGroup title={t('upstream_manager.request_logging')}>
+                                    <AdvancedSettingsGroup title={t('upstream_manager.request_logging')} card>
                                             <ToggleSetting
                                                 label={t('upstream_manager.logging_enabled')}
                                                 description={t('upstream_manager.logging_enabled_hint')}
                                                 checked={editingUpstream.loggingEnabled}
                                                 onCheckedChange={(checked) => setEditingUpstream(current => current ? { ...current, loggingEnabled: checked } : current)}
                                             />
-                                        </AdvancedSettingsGroup>
-                                    </div>
+                                    </AdvancedSettingsGroup>
 
-                                    <div className="border-t border-border/40 pt-5">
-                                        <AdvancedSettingsGroup title={t('upstream_manager.request_overrides')}>
+                                    <AdvancedSettingsGroup title={t('upstream_manager.request_overrides')} card>
                                             <ToggleSetting
                                                 label={t('upstream_manager.override_enabled')}
                                                 description={t('upstream_manager.override_enabled_hint')}
@@ -1494,11 +1497,9 @@ export function Settings() {
                                                     )}
                                                 </div>
                                             )}
-                                        </AdvancedSettingsGroup>
-                                    </div>
+                                    </AdvancedSettingsGroup>
 
-                                    <div className="border-t border-border/40 pt-5">
-                                        <AdvancedSettingsGroup title={t('upstream_manager.usage_stats')}>
+                                    <AdvancedSettingsGroup title={t('upstream_manager.usage_stats')} card>
                                             <ToggleSetting
                                                 label={t('upstream_manager.usage_enabled')}
                                                 description={t('upstream_manager.usage_enabled_hint')}
@@ -1547,8 +1548,7 @@ export function Settings() {
                                                     )}
                                                 </div>
                                             )}
-                                        </AdvancedSettingsGroup>
-                                    </div>
+                                    </AdvancedSettingsGroup>
                                 </AdvancedSettings>
                             </div>
 
