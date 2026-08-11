@@ -450,32 +450,60 @@ function FieldBlock({ label, hint, htmlFor, unit, children }: FieldBlockProps) {
 
 function AdvancedSettings({
     children,
+    open: controlledOpen,
+    onOpenChange,
     defaultOpen = false,
+    sidePanel = false,
 }: {
     children: ReactNode
+    open?: boolean
+    onOpenChange?: (open: boolean) => void
     defaultOpen?: boolean
+    sidePanel?: boolean
 }) {
     const { t } = useTranslation()
-    const [open, setOpen] = useState(defaultOpen)
+    const [internalOpen, setInternalOpen] = useState(defaultOpen)
+    const open = controlledOpen ?? internalOpen
+    const setOpen = (nextOpen: boolean) => {
+        if (controlledOpen === undefined) setInternalOpen(nextOpen)
+        onOpenChange?.(nextOpen)
+    }
     return (
-        <details
-            open={open}
-            onToggle={event => setOpen(event.currentTarget.open)}
-            className="group rounded-xl border border-border/50 bg-muted/20"
+        <section
+            className={cn(
+                "rounded-xl border border-border/50 bg-muted/20",
+                open && sidePanel && "lg:flex lg:min-h-0 lg:flex-col lg:rounded-none lg:border-y-0 lg:border-r-0",
+            )}
         >
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 marker:content-none [&::-webkit-details-marker]:hidden">
+            <button
+                type="button"
+                aria-expanded={open}
+                onClick={() => setOpen(!open)}
+                className={cn(
+                    "flex w-full cursor-pointer items-center justify-between gap-4 px-4 py-3 text-left",
+                    sidePanel && "lg:px-6",
+                )}
+            >
                 <div className="flex min-w-0 items-center gap-2">
                     <div className="text-sm font-medium text-foreground">
                         {t('upstream_manager.advanced_settings')}
                     </div>
                     <InfoTooltip content={t('upstream_manager.advanced_settings_hint')} />
                 </div>
-                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
-            </summary>
-            <div className="space-y-6 border-t border-border/40 px-4 py-5">
-                {children}
-            </div>
-        </details>
+                <ChevronDown className={cn(
+                    "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                    open && "rotate-180",
+                )} />
+            </button>
+            {open && (
+                <div className={cn(
+                    "space-y-6 border-t border-border/40 px-4 py-5",
+                    sidePanel && "lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-6",
+                )}>
+                    {children}
+                </div>
+            )}
+        </section>
     )
 }
 
@@ -615,6 +643,7 @@ export function Settings() {
     const [newOutboundProxy, setNewOutboundProxy] = useState('env')
     const [newLoggingEnabled, setNewLoggingEnabled] = useState(true)
     const [editingUpstream, setEditingUpstream] = useState<EditingUpstream | null>(null)
+    const [upstreamAdvancedOpen, setUpstreamAdvancedOpen] = useState(false)
 
     const [enablePathRouting, setEnablePathRouting] = useState(false)
     const [pathRoutingPrefix, setPathRoutingPrefix] = useState('/_proxy')
@@ -1143,6 +1172,16 @@ export function Settings() {
     const handleEditUpstream = (upstream: Upstream) => {
         const binding = overrideBindings[upstream.name]
         const usageBinding = usageBindings[upstream.name]
+        setUpstreamAdvancedOpen(
+            (upstream.response_header_timeout || 0) > 0 ||
+            (upstream.response_body_first_byte_timeout || 0) > 0 ||
+            (upstream.response_body_idle_timeout || 0) > 0 ||
+            upstream.logging_enabled === false ||
+            (binding?.enabled ?? false) ||
+            (usageBinding?.enabled ?? false) ||
+            getBindingRuleNames(binding).length > 0 ||
+            getBindingRuleNames(usageBinding).length > 0,
+        )
         setEditingUpstream({
             name: upstream.name,
             target: upstream.target,
@@ -1275,7 +1314,10 @@ export function Settings() {
     return (
         <div className="w-full">
             <Dialog open={!!editingUpstream} onOpenChange={(open) => !open && setEditingUpstream(null)}>
-                <DialogContent className="max-h-[calc(100vh-2rem)] max-w-2xl grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-border/60 bg-card p-0 shadow-2xl">
+                <DialogContent className={cn(
+                    "max-h-[calc(100vh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-border/60 bg-card p-0 shadow-2xl transition-[max-width] duration-200",
+                    upstreamAdvancedOpen ? "max-w-2xl lg:max-w-5xl" : "max-w-2xl",
+                )}>
                     <DialogHeader className="border-b border-border/60 px-6 py-5">
                         <DialogTitle className="text-base font-bold">
                             {editingUpstream ? t('upstream_manager.edit_title', { name: editingUpstream.name }) : t('common.edit')}
@@ -1286,8 +1328,14 @@ export function Settings() {
                     </DialogHeader>
                     {editingUpstream && (
                         <>
-                            <div className="min-h-0 space-y-6 overflow-y-auto px-6 py-5">
-                                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                            <div className={cn(
+                                "min-h-0 grid gap-6 overflow-y-auto px-6 py-5",
+                                upstreamAdvancedOpen && "lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:gap-0 lg:overflow-hidden lg:p-0",
+                            )}>
+                                <div className={cn(
+                                    "grid grid-cols-1 gap-5 sm:grid-cols-2",
+                                    upstreamAdvancedOpen && "lg:min-h-0 lg:auto-rows-min lg:overflow-y-auto lg:px-6 lg:py-5",
+                                )}>
                                     <FieldBlock label={t('upstream_manager.name')}>
                                         <Input
                                             value={editingUpstream.name}
@@ -1337,16 +1385,9 @@ export function Settings() {
                                 </div>
 
                                 <AdvancedSettings
-                                    defaultOpen={
-                                        editingUpstream.responseHeaderTimeout > 0 ||
-                                        editingUpstream.responseBodyFirstByteTimeout > 0 ||
-                                        editingUpstream.responseBodyIdleTimeout > 0 ||
-                                        !editingUpstream.loggingEnabled ||
-                                        editingUpstream.overrideEnabled ||
-                                        editingUpstream.usageEnabled ||
-                                        editingUpstream.ruleNames.length > 0 ||
-                                        editingUpstream.usageRuleNames.length > 0
-                                    }
+                                    open={upstreamAdvancedOpen}
+                                    onOpenChange={setUpstreamAdvancedOpen}
+                                    sidePanel
                                 >
                                     <AdvancedSettingsGroup
                                         title={t('upstream_manager.timeout_strategy')}
