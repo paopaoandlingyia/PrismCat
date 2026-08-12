@@ -2227,14 +2227,14 @@ export function Settings() {
                                             <Table className="table-fixed">
                                                 <TableHeader className="bg-muted">
                                                     <TableRow>
-                                                        <TableHead className="w-[130px]">{t('upstream_manager.name')}</TableHead>
+                                                        <TableHead className="w-[106px]">{t('upstream_manager.name')}</TableHead>
                                                         <TableHead className="w-[250px]">{t('upstream_manager.list_entry')}</TableHead>
-                                                        <TableHead className="w-[96px]">{t('upstream_manager.target_presets')}</TableHead>
+                                                        <TableHead className="w-[120px]">{t('upstream_manager.target_presets')}</TableHead>
                                                         <TableHead>{t('upstream_manager.target')}</TableHead>
-                                                        <TableHead className="w-[170px]">{t('upstream_manager.outbound_proxy')}</TableHead>
-                                                        <TableHead className="w-[76px]">{t('upstream_manager.list_timeout')}</TableHead>
-                                                        <TableHead className="w-[170px]">{t('upstream_manager.list_flags')}</TableHead>
-                                                        <TableHead className="w-[76px]">{t('upstream_manager.actions')}</TableHead>
+                                                        <TableHead className="w-[190px]">{t('upstream_manager.outbound_proxy')}</TableHead>
+                                                        <TableHead className="w-[68px]">{t('upstream_manager.list_timeout')}</TableHead>
+                                                        <TableHead className="w-[156px]">{t('upstream_manager.list_flags')}</TableHead>
+                                                        <TableHead className="w-[72px]">{t('upstream_manager.actions')}</TableHead>
                                                     </TableRow>
                                                 </TableHeader>
                                                 <TableBody>
