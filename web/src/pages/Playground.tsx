@@ -577,7 +577,7 @@ export function Playground() {
                             {t('playground.response')}
                         </span>
                         {sending && (
-                            <div className="flex items-center gap-2 text-xs font-semibold text-primary animate-pulse">
+                            <div className="flex items-center gap-2 text-xs font-semibold text-primary">
                                 <Loader2 className="h-3 w-3 animate-spin" />
                                 {t('common.loading')}
                             </div>

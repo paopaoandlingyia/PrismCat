@@ -205,7 +205,7 @@ export function TraceDetail() {
                   </span>
 
                   {req.streaming && (
-                    <span className="text-xs font-medium text-primary bg-primary/10 px-1 py-0.5 rounded animate-pulse">
+                    <span className="text-xs font-medium text-primary bg-primary/10 px-1 py-0.5 rounded">
                       SSE
                     </span>
                   )}

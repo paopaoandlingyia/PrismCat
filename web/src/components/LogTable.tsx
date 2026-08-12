@@ -371,7 +371,7 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                                         {log.streaming && (
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
-                                                    <div className="shrink-0 animate-pulse">
+                                                    <div className="shrink-0">
                                                         <Zap className="h-3 w-3 text-primary fill-primary/20" />
                                                     </div>
                                                 </TooltipTrigger>

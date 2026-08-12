@@ -195,11 +195,15 @@ export function LogFilters({
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <Button
-                                    variant="default"
+                                    variant={hasChanges ? 'default' : 'outline'}
                                     size="icon"
                                     onClick={handleSearch}
                                     disabled={loading}
-                                    className={cn('h-8 w-8 shrink-0', hasChanges && 'ring-2 ring-primary/30')}
+                                    className={cn(
+                                        'h-8 w-8 shrink-0',
+                                        // 实心强调色只在有未提交筛选时出现,让这块颜色代表"有东西待应用"
+                                        !hasChanges && 'border border-input bg-background text-muted-foreground hover:bg-accent hover:text-foreground',
+                                    )}
                                 >
                                     <Search className={cn('h-4 w-4', loading && 'animate-spin')} />
                                 </Button>

@@ -729,7 +729,7 @@ export function LogDetail({
                             {displayLog.status_code || '---'}
                         </SheetTitle>
                         {displayLog.streaming && (
-                            <Badge variant="secondary" className="border-none bg-primary/10 text-primary font-medium text-xs animate-pulse">
+                            <Badge variant="secondary" className="border-none bg-primary/10 text-primary font-medium text-xs">
                                 <Zap className="mr-1 h-3 w-3 fill-current" />
                                 {t('log_detail.streaming', 'STREAMING')}
                             </Badge>
@@ -779,7 +779,7 @@ export function LogDetail({
                             </Tooltip>
                         </div>
                         {loading && (
-                            <div className="ml-auto flex items-center gap-2 text-xs font-medium text-primary animate-pulse">
+                            <div className="ml-auto flex items-center gap-2 text-xs font-medium text-primary">
                                 <div className="h-1 w-1 rounded-full bg-current" />
                                 {t('common.loading')}
                             </div>
