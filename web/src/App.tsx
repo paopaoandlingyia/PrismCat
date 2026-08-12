@@ -63,76 +63,98 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
     { to: '/settings', labelKey: 'nav.settings', icon: SettingsIcon },
   ]
 
+  const isNavActive = (to: string) =>
+    to === '/' ? location.pathname === '/' : location.pathname.startsWith(to)
+
   const routeFallback = (
-    <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4">
+    <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3">
       <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-      <div className="text-sm font-medium text-muted-foreground">
-        {t('common.loading')}
-      </div>
+      <div className="text-sm text-muted-foreground">{t('common.loading')}</div>
     </div>
   )
 
   return (
-    <div className="relative isolate flex min-h-screen flex-col bg-background">
-      {/* 头部 */}
-      <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur-md">
-        <div className="mx-auto w-full max-w-[1600px] px-4 py-3 sm:px-6 sm:py-4">
-          <div className="flex items-start justify-between gap-3 sm:items-center">
-            <div className="flex min-w-0 items-center gap-3 sm:gap-6">
-              {/* Logo */}
-              <a
-                href="https://github.com/paopaoandlingyia/PrismCat"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex min-w-0 items-center gap-2.5 transition-opacity hover:opacity-80 sm:gap-3"
+    <div className="min-h-screen bg-background">
+      {/* 侧边栏 - 桌面 */}
+      <aside
+        className="fixed inset-y-0 left-0 z-40 hidden w-[200px] flex-col border-r border-border bg-muted/40 md:flex"
+      >
+        <a
+          href="https://github.com/paopaoandlingyia/PrismCat"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3 transition-colors hover:bg-accent/60"
+        >
+          <PrismCatLogo className="h-5 w-5 shrink-0" />
+          <span className="truncate text-sm font-medium text-foreground">{t('app.title')}</span>
+        </a>
+
+        <nav className="flex-1 space-y-0.5 overflow-y-auto p-2">
+          {navItems.map((item) => {
+            const Icon = item.icon
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={cn(
+                  'flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors',
+                  isNavActive(item.to)
+                    ? 'bg-accent font-medium text-foreground'
+                    : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'
+                )}
               >
-                <div className="relative">
-                  <PrismCatLogo className="h-9 w-9" />
-                </div>
-                <h1 className="truncate text-base font-semibold tracking-tight text-foreground">
-                  {t('app.title')}
-                </h1>
-              </a>
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="truncate">{t(item.labelKey)}</span>
+              </NavLink>
+            )
+          })}
+        </nav>
 
-              {/* 导航 */}
-              <nav className="hidden md:flex items-center gap-1 ml-4">
-                {navItems.map((item) => {
-                  const isActive = item.to === '/'
-                    ? location.pathname === '/'
-                    : location.pathname.startsWith(item.to)
-                  const Icon = item.icon
-                  return (
-                    <NavLink
-                      key={item.to}
-                      to={item.to}
-                      className={cn(
-                        'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors',
-                        isActive
-                          ? 'bg-accent font-medium text-foreground'
-                          : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'
-                      )}
-                    >
-                      <Icon className="h-4 w-4" />
-                      <span>{t(item.labelKey)}</span>
-                    </NavLink>
-                  )
-                })}
-              </nav>
+        <div className="shrink-0 border-t border-border p-2">
+          <div className="flex items-center gap-1">
+            <ThemeToggle />
+            <button
+              onClick={() => i18n.changeLanguage(i18n.language === 'zh' ? 'en' : 'zh')}
+              className="flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              aria-label={t('auth.switch_language')}
+            >
+              <Globe className="h-3.5 w-3.5" />
+              <span>{i18n.language === 'zh' ? 'EN' : '中'}</span>
+            </button>
+            <button
+              onClick={onSignOut}
+              className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              aria-label={t('auth.sign_out')}
+              title={t('auth.sign_out')}
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
+          <p className="mt-2 select-none px-1 text-xs text-muted-foreground/70">PrismCat {version}</p>
+        </div>
+      </aside>
+
+      <div className="flex min-h-screen flex-col md:pl-[200px]">
+        {/* 移动端顶栏 */}
+        <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-md md:hidden">
+          <div className="flex items-center justify-between gap-3 px-4 py-2.5">
+            <div className="flex min-w-0 items-center gap-2">
+              <PrismCatLogo className="h-5 w-5 shrink-0" />
+              <span className="truncate text-sm font-medium">{t('app.title')}</span>
             </div>
-
-            {/* 右侧操作 */}
-            <div className="shrink-0 flex items-center gap-2 sm:gap-4">
+            <div className="flex shrink-0 items-center gap-1">
               <ThemeToggle />
               <button
                 onClick={() => i18n.changeLanguage(i18n.language === 'zh' ? 'en' : 'zh')}
-                className="flex h-9 items-center justify-center gap-2 rounded-md border border-border px-3 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                className="flex h-8 items-center justify-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                aria-label={t('auth.switch_language')}
               >
                 <Globe className="h-3.5 w-3.5" />
-                <span>{i18n.language === 'zh' ? 'English' : '中文'}</span>
+                <span>{i18n.language === 'zh' ? 'EN' : '中'}</span>
               </button>
               <button
                 onClick={onSignOut}
-                className="flex h-9 w-9 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 aria-label={t('auth.sign_out')}
                 title={t('auth.sign_out')}
               >
@@ -140,56 +162,44 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
               </button>
             </div>
           </div>
-
-          {/* 移动端导航 */}
-          <nav className="mt-3 flex items-center gap-1.5 md:hidden sm:mt-4 sm:-mx-2 sm:gap-2">
+          <nav className="flex items-center gap-1 overflow-x-auto px-2 pb-2">
             {navItems.map((item) => {
-              const isActive = item.to === '/'
-                ? location.pathname === '/'
-                : location.pathname.startsWith(item.to)
               const Icon = item.icon
               return (
                 <NavLink
                   key={item.to}
                   to={item.to}
                   className={cn(
-                    'flex-1 flex items-center justify-center gap-2 rounded-md px-3 py-2 text-xs transition-colors sm:px-4 sm:text-sm',
-                    isActive
+                    'flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-xs transition-colors',
+                    isNavActive(item.to)
                       ? 'bg-accent font-medium text-foreground'
                       : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'
                   )}
                 >
-                  <Icon className="h-5 w-5" />
+                  <Icon className="h-4 w-4 shrink-0" />
                   <span>{t(item.labelKey)}</span>
                 </NavLink>
               )
             })}
           </nav>
-        </div>
-      </header>
+        </header>
 
-      {/* 主内容 */}
-      <main className="relative z-0 w-full flex-1 bg-background px-4 py-4 sm:px-6">
-        <div className="mx-auto w-full max-w-[1600px]">
-        <Suspense fallback={routeFallback}>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path={logRequestDiffRoute} element={<LogDiffPage />} />
-            <Route path="/traces" element={<Traces />} />
-            <Route path="/traces/:traceId" element={<TraceDetailPage />} />
-            <Route path="/playground" element={<PlaygroundPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-          </Routes>
-        </Suspense>
-        </div>
-      </main>
-
-      {/* 页脚版本号 */}
-      <footer className="relative z-0 flex w-full items-center justify-center bg-background px-4 py-4 sm:px-6">
-        <p className="select-none text-xs text-muted-foreground/70">
-          PrismCat {version}
-        </p>
-      </footer>
+        {/* 主内容 */}
+        <main className="w-full flex-1 px-4 py-4 sm:px-5">
+          <div className="mx-auto w-full max-w-[1600px]">
+            <Suspense fallback={routeFallback}>
+              <Routes>
+                <Route path="/" element={<Dashboard />} />
+                <Route path={logRequestDiffRoute} element={<LogDiffPage />} />
+                <Route path="/traces" element={<Traces />} />
+                <Route path="/traces/:traceId" element={<TraceDetailPage />} />
+                <Route path="/playground" element={<PlaygroundPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+              </Routes>
+            </Suspense>
+          </div>
+        </main>
+      </div>
     </div>
   )
 }
@@ -246,11 +256,9 @@ function AppContent() {
 
   if (isCheckingAuth) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3">
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-        <div className="text-sm font-medium text-muted-foreground">
-          {t('common.loading')}
-        </div>
+        <div className="text-sm text-muted-foreground">{t('common.loading')}</div>
       </div>
     )
   }
@@ -274,5 +282,3 @@ function App() {
 }
 
 export default App
-
-
