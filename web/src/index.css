@@ -26,6 +26,13 @@
   --color-ring: hsl(var(--ring));
   --radius-radius: var(--radius);
 
+  /* 最小字号 12px -> 13px。两个原因:
+     1. 中文字形密度远高于拉丁,12px 中文的可读性约等于 10px 英文;
+     2. Noto Sans SC 没有 Windows 级别的 hinting,12px 在 DPR 1 下发糊,
+        13px 明显缓解。字号标度: 13 / 14 / 16 / 20 / 24 */
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.4;
+
   /* 语义色 - 状态表达统一走这四个,不要再直接用 green-500/amber-600 之类的调色板类 */
   --color-success: hsl(var(--success));
   --color-warning: hsl(var(--warning));
