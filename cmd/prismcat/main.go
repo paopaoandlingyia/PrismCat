@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"log"
 	"os"
@@ -213,7 +214,9 @@ func main() {
 				if lastBlobGC.IsZero() || time.Since(lastBlobGC) >= 24*time.Hour {
 					if refs, err := sqliteRepo.ListBlobRefs(); err != nil {
 						log.Printf("blob GC list refs failed: %v", err)
-					} else if n, err := fsStore.GarbageCollect(context.Background(), refs, time.Hour); err != nil {
+					} else if n, err := fsStore.GarbageCollect(context.Background(), refs, time.Hour); errors.Is(err, storage.ErrRefSetEmpty) {
+						log.Printf("blob GC skipped: %v — check that storage.database points at the database these blobs belong to (blob dir: %s)", err, cfg.Storage.BlobDir)
+					} else if err != nil {
 						log.Printf("blob GC failed: %v", err)
 					} else if n > 0 {
 						log.Printf("deleted %d unreferenced blobs", n)

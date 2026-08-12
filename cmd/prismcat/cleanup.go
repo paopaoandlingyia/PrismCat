@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"time"
 
 	"github.com/paopaoandlingyia/PrismCat/internal/config"
+	"github.com/paopaoandlingyia/PrismCat/internal/storage"
 	"github.com/paopaoandlingyia/PrismCat/internal/storageusage"
 )
 
@@ -150,7 +152,10 @@ func reclaimStorageSpace(
 		if err != nil {
 			firstErr = err
 			logf("blob GC list refs failed: %v", err)
-		} else if n, err := blobGC.GarbageCollect(ctx, refs, storageLimitBlobGCMinAge); err != nil {
+		} else if n, err := blobGC.GarbageCollect(ctx, refs, storageLimitBlobGCMinAge); errors.Is(err, storage.ErrRefSetEmpty) {
+			// 跳过不算失败:这是保护动作,不该让整个存储清理被标记成出错并重试
+			logf("blob GC skipped: %v — check that storage.database points at the database these blobs belong to", err)
+		} else if err != nil {
 			firstErr = err
 			logf("blob GC failed: %v", err)
 		} else if n > 0 {

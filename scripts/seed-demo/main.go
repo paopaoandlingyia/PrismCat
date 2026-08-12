@@ -178,6 +178,8 @@ func run(out string, count, hours int, seed int64, force bool) error {
 	}
 	fmt.Println()
 	fmt.Println("把 config.yaml 的 storage.database 指到上面这个路径并重启,截完图改回去即可。")
+	fmt.Println("注意:blob 目录(storage.blob_dir)是所有数据库共用的,不跟着 database 走。")
+	fmt.Println("旧版本在这种情况下会把 blob 仓库清空;当前版本有守卫会拒绝,但换库前仍建议先备份 data/。")
 	return nil
 }
 
