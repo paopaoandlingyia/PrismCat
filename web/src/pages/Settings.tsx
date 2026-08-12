@@ -25,7 +25,6 @@ import {
     Archive,
     FileCode,
     ChevronDown,
-    ArrowRight,
     Eye,
     EyeOff,
 } from 'lucide-react'
@@ -55,6 +54,14 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from '@/components/ui/tooltip'
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table'
 import { DEFAULT_UPSTREAM_TIMEOUT_SECONDS, fetchUpstreams, addUpstream, removeUpstream, activateUpstreamTarget, fetchConfig, updateConfig, fetchSystemMetrics, fetchUpdateInfo, fetchStorageUsage } from '@/lib/api'
 import type { Upstream, UpstreamTarget, AppConfig, SystemMetrics, UpdateInfo, StorageUsage } from '@/lib/api'
 import { useTranslation } from 'react-i18next'
@@ -2217,37 +2224,142 @@ export function Settings() {
                                                 </p>
                                             </div>
                                         ) : (
-                                            <div className="border-t border-border">
-                                                <div className="divide-y divide-border">
+                                            <Table className="table-fixed">
+                                                <TableHeader className="bg-muted">
+                                                    <TableRow>
+                                                        <TableHead className="w-[130px]">{t('upstream_manager.name')}</TableHead>
+                                                        <TableHead className="w-[250px]">{t('upstream_manager.list_entry')}</TableHead>
+                                                        <TableHead className="w-[96px]">{t('upstream_manager.target_presets')}</TableHead>
+                                                        <TableHead>{t('upstream_manager.target')}</TableHead>
+                                                        <TableHead className="w-[170px]">{t('upstream_manager.outbound_proxy')}</TableHead>
+                                                        <TableHead className="w-[76px]">{t('upstream_manager.list_timeout')}</TableHead>
+                                                        <TableHead className="w-[170px]">{t('upstream_manager.list_flags')}</TableHead>
+                                                        <TableHead className="w-[76px]">{t('upstream_manager.actions')}</TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
                                                     {sortedUpstreams.map(upstream => {
                                                         const overrideConfig = activeTargetConfig(upstream)?.request_overrides || overrideBindings[upstream.name]
+                                                        const overrideEnabled = activeTargetConfig(upstream)?.request_overrides?.enabled || overrideBindings[upstream.name]?.enabled
                                                         const overrideRuleCount = getBindingRuleNames(overrideConfig).length
                                                         const targetNames = upstream.targets ? Object.keys(upstream.targets) : []
+                                                        const activeTarget = upstream.active_target || targetNames[0]
                                                         const proxyIsCustom = outboundProxyMode(upstream.outbound_proxy) === 'custom'
+                                                        const hasFlags = overrideEnabled || upstream.logging_enabled === false
 
                                                         return (
-                                                            <div
-                                                                key={upstream.name}
-                                                                className="group rounded-md py-3 transition-colors hover:bg-muted/30 lg:-mx-2 lg:px-2"
-                                                            >
-                                                                {/* 第一行只放身份:badge 数量是会变的,给它专属的一行,
-                                                                    就不会跟地址抢宽度、也不会把某一列挤爆 */}
-                                                                <div className="flex min-w-0 items-center gap-2">
-                                                                    <span className="shrink-0 text-sm font-medium text-foreground">
-                                                                        {upstream.name}
-                                                                    </span>
-                                                                    {(activeTargetConfig(upstream)?.request_overrides?.enabled || overrideBindings[upstream.name]?.enabled) && (
-                                                                        <Badge variant="outline" className="shrink-0 rounded-md border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                                                                            {t('log_detail.request_override')}
-                                                                            {overrideRuleCount ? ` · ${overrideRuleCount}` : ''}
-                                                                        </Badge>
+                                                            <TableRow key={upstream.name}>
+                                                                <TableCell className="font-medium text-foreground">
+                                                                    <div className="truncate" title={upstream.name}>{upstream.name}</div>
+                                                                </TableCell>
+
+                                                                {/* 路径路由前缀是全局设置,每行都是同一个值;右对齐让它自成一列结构,
+                                                                    而不是跟着入口地址的长度左右漂 */}
+                                                                <TableCell>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleCopy(getProxyUrl(upstream.name))}
+                                                                            className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
+                                                                            title={getProxyUrl(upstream.name)}
+                                                                        >
+                                                                            <Copy className="h-3.5 w-3.5 shrink-0 opacity-40" />
+                                                                            {/* 只显示 host:协议恒等于面板自身的 origin,是常量;复制出去仍是完整 URL */}
+                                                                            <span className="min-w-0 truncate font-mono">{getProxyHost(upstream.name)}</span>
+                                                                        </button>
+                                                                        {enablePathRouting && (
+                                                                            <Tooltip>
+                                                                                <TooltipTrigger asChild>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => handleCopy(getPathProxyUrl(upstream.name))}
+                                                                                        className="shrink-0 rounded-md border border-border bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground transition-colors hover:border-input hover:text-foreground"
+                                                                                    >
+                                                                                        {normalizedPathPrefix}
+                                                                                    </button>
+                                                                                </TooltipTrigger>
+                                                                                <TooltipContent>{t('settings.copy_path_proxy_url')}</TooltipContent>
+                                                                            </Tooltip>
+                                                                        )}
+                                                                    </div>
+                                                                </TableCell>
+
+                                                                {/* 静止时是一段标签,hover 才浮出边框告诉你可以点 ——
+                                                                    表格主体全是只读文本,一个实心表单控件会独自抢走视线 */}
+                                                                <TableCell>
+                                                                    {targetNames.length > 1 && activeTarget ? (
+                                                                        <Select
+                                                                            value={activeTarget}
+                                                                            onValueChange={value => handleActivateTarget(upstream.name, value)}
+                                                                            disabled={switchingTarget === upstream.name}
+                                                                        >
+                                                                            <SelectTrigger className="h-6 w-full gap-1 border-transparent bg-transparent px-1.5 text-xs text-muted-foreground shadow-none hover:border-input hover:bg-background hover:text-foreground data-[state=open]:border-input data-[state=open]:bg-background dark:bg-transparent dark:hover:bg-background">
+                                                                                <SelectValue />
+                                                                            </SelectTrigger>
+                                                                            <SelectContent>
+                                                                                {targetNames.map(name => (
+                                                                                    <SelectItem key={name} value={name}>{name}</SelectItem>
+                                                                                ))}
+                                                                            </SelectContent>
+                                                                        </Select>
+                                                                    ) : (
+                                                                        <div className="truncate px-1.5 text-xs text-muted-foreground">
+                                                                            {activeTarget || <span className="opacity-50">—</span>}
+                                                                        </div>
                                                                     )}
-                                                                    {upstream.logging_enabled === false && (
-                                                                        <Badge variant="outline" className="shrink-0 rounded-md border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                                                                            {t('upstream_manager.logging_disabled_badge')}
-                                                                        </Badge>
+                                                                </TableCell>
+
+                                                                <TableCell>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleCopy(upstream.target)}
+                                                                        className="flex w-full min-w-0 items-center gap-1.5 text-left text-xs text-foreground transition-colors hover:text-primary"
+                                                                        title={upstream.target}
+                                                                    >
+                                                                        <Copy className="h-3.5 w-3.5 shrink-0 opacity-40" />
+                                                                        {/* 目标地址保留 scheme:那是填进去的、会变的(有的上游是 http) */}
+                                                                        <span className="min-w-0 truncate font-mono">{upstream.target}</span>
+                                                                    </button>
+                                                                </TableCell>
+
+                                                                <TableCell className="text-xs text-muted-foreground">
+                                                                    <div
+                                                                        className={cn('truncate', proxyIsCustom && 'font-mono')}
+                                                                        title={proxyIsCustom ? upstream.outbound_proxy : undefined}
+                                                                    >
+                                                                        {formatOutboundProxy(upstream.outbound_proxy)}
+                                                                    </div>
+                                                                </TableCell>
+
+                                                                <TableCell className="font-mono text-xs tabular-nums text-muted-foreground">
+                                                                    {upstream.timeout}s
+                                                                </TableCell>
+
+                                                                {/* badge 数量是会变的,给它专属一列 —— 挂在名称后面会把后面每一列
+                                                                    的起点推到每行不同的位置,那正是原来看着乱的原因 */}
+                                                                <TableCell>
+                                                                    {hasFlags ? (
+                                                                        <div className="flex items-center gap-1">
+                                                                            {overrideEnabled && (
+                                                                                <Badge variant="outline" className="shrink-0 rounded-md border-border bg-muted px-1.5 py-0 text-xs font-normal text-muted-foreground">
+                                                                                    {t('log_detail.request_override')}
+                                                                                    {overrideRuleCount ? ' · ' + overrideRuleCount : ''}
+                                                                                </Badge>
+                                                                            )}
+                                                                            {upstream.logging_enabled === false && (
+                                                                                <Badge variant="outline" className="shrink-0 rounded-md border-border bg-muted px-1.5 py-0 text-xs font-normal text-muted-foreground">
+                                                                                    {t('upstream_manager.logging_disabled_badge')}
+                                                                                </Badge>
+                                                                            )}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <span className="text-xs text-muted-foreground opacity-50">—</span>
                                                                     )}
-                                                                    <div className="ml-auto flex shrink-0 items-center gap-1 transition-opacity duration-200 lg:opacity-0 group-hover:opacity-100">
+                                                                </TableCell>
+
+                                                                {/* 常驻而不是 hover 才出现:右边缘每行都有内容,这一列才立得住 */}
+                                                                <TableCell>
+                                                                    <div className="flex items-center gap-0.5">
                                                                         <Tooltip>
                                                                             <TooltipTrigger asChild>
                                                                                 <Button
@@ -2255,10 +2367,10 @@ export function Settings() {
                                                                                     variant="ghost"
                                                                                     size="icon"
                                                                                     onClick={() => handleEditUpstream(upstream)}
-                                                                                    className="h-7 w-7 text-muted-foreground hover:bg-accent hover:text-foreground"
+                                                                                    className="h-7 w-7 text-muted-foreground/70 hover:bg-accent hover:text-foreground"
                                                                                     aria-label={t('common.edit')}
                                                                                 >
-                                                                                    <Pencil className="h-4 w-4" />
+                                                                                    <Pencil className="h-3.5 w-3.5" />
                                                                                 </Button>
                                                                             </TooltipTrigger>
                                                                             <TooltipContent>{t('common.edit')}</TooltipContent>
@@ -2270,97 +2382,21 @@ export function Settings() {
                                                                                     variant="ghost"
                                                                                     size="icon"
                                                                                     onClick={() => handleRemoveUpstream(upstream.name)}
-                                                                                    className="h-7 w-7 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                                                                    className="h-7 w-7 text-muted-foreground/70 hover:bg-destructive/10 hover:text-destructive"
                                                                                     aria-label={t('common.delete')}
                                                                                 >
-                                                                                    <Trash2 className="h-4 w-4" />
+                                                                                    <Trash2 className="h-3.5 w-3.5" />
                                                                                 </Button>
                                                                             </TooltipTrigger>
                                                                             <TooltipContent>{t('common.delete')}</TooltipContent>
                                                                         </Tooltip>
                                                                     </div>
-                                                                </div>
-
-                                                                {/* 第二行是这条路由本身:入口 → 目标。方向交给箭头,
-                                                                    两串等宽地址就不再是同权重的两坨字符 */}
-                                                                <div className="mt-1 flex min-w-0 flex-col items-start gap-1 text-xs lg:flex-row lg:items-center lg:gap-2">
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => handleCopy(getProxyUrl(upstream.name))}
-                                                                        className="flex min-w-0 max-w-full items-center gap-1.5 text-left text-muted-foreground transition-colors hover:text-foreground"
-                                                                        title={getProxyUrl(upstream.name)}
-                                                                    >
-                                                                        <Copy className="h-3.5 w-3.5 shrink-0 opacity-40" />
-                                                                        <span className="min-w-0 truncate font-mono">{getProxyHost(upstream.name)}</span>
-                                                                    </button>
-
-                                                                    {/* 路径路由是同一个入口的另一种拼法,不值得再占一整行;
-                                                                        芯片直接标出前缀,点一下复制那条完整地址 */}
-                                                                    {enablePathRouting && (
-                                                                        <Tooltip>
-                                                                            <TooltipTrigger asChild>
-                                                                                <button
-                                                                                    type="button"
-                                                                                    onClick={() => handleCopy(getPathProxyUrl(upstream.name))}
-                                                                                    className="shrink-0 rounded-md border border-border bg-muted px-1.5 py-0.5 font-mono text-muted-foreground transition-colors hover:border-input hover:text-foreground"
-                                                                                >
-                                                                                    {normalizedPathPrefix}
-                                                                                </button>
-                                                                            </TooltipTrigger>
-                                                                            <TooltipContent>{t('settings.copy_path_proxy_url')}</TooltipContent>
-                                                                        </Tooltip>
-                                                                    )}
-
-                                                                    <ArrowRight className="hidden h-3.5 w-3.5 shrink-0 text-muted-foreground/50 lg:block" aria-hidden="true" />
-
-                                                                    {/* 静止时是一段标签,hover 才浮出边框告诉你可以点 ——
-                                                                        列表主体全是只读文本,一个实心表单控件会独自抢走视线 */}
-                                                                    {upstream.active_target && targetNames.length > 1 && (
-                                                                        <Select
-                                                                            value={upstream.active_target}
-                                                                            onValueChange={value => handleActivateTarget(upstream.name, value)}
-                                                                            disabled={switchingTarget === upstream.name}
-                                                                        >
-                                                                            <SelectTrigger className="h-6 shrink-0 gap-1 border-transparent bg-transparent px-1.5 text-xs text-muted-foreground shadow-none hover:border-input hover:bg-muted hover:text-foreground data-[state=open]:border-input data-[state=open]:bg-muted dark:bg-transparent dark:hover:bg-muted">
-                                                                                <SelectValue />
-                                                                            </SelectTrigger>
-                                                                            <SelectContent>
-                                                                                {targetNames.map(name => (
-                                                                                    <SelectItem key={name} value={name}>{name}</SelectItem>
-                                                                                ))}
-                                                                            </SelectContent>
-                                                                        </Select>
-                                                                    )}
-
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => handleCopy(upstream.target)}
-                                                                        className="flex min-w-0 max-w-full items-center gap-1.5 text-left text-foreground transition-colors hover:text-primary"
-                                                                        title={upstream.target}
-                                                                    >
-                                                                        <Copy className="h-3.5 w-3.5 shrink-0 opacity-40" />
-                                                                        {/* 目标地址保留 scheme:它是你填的、会变(有的上游是 http) */}
-                                                                        <span className="min-w-0 truncate font-mono">{upstream.target}</span>
-                                                                    </button>
-
-                                                                    {/* 出站代理和总超时回答的是同一个问题 —— 这次外呼怎么打出去,
-                                                                        合成一条元信息挂右端,原来那两个单行窄列就不留空了 */}
-                                                                    <span className="shrink-0 text-muted-foreground lg:ml-auto lg:pl-2">
-                                                                        <span className={proxyIsCustom ? 'font-mono' : undefined}>
-                                                                            {proxyIsCustom
-                                                                                ? `${t('upstream_manager.list_via')} ${upstream.outbound_proxy}`
-                                                                                : formatOutboundProxy(upstream.outbound_proxy)}
-                                                                        </span>
-                                                                        <span className="px-1.5 opacity-40">·</span>
-                                                                        <span>{t('upstream_manager.list_timeout')} </span>
-                                                                        <span className="font-mono tabular-nums">{upstream.timeout}s</span>
-                                                                    </span>
-                                                                </div>
-                                                            </div>
+                                                                </TableCell>
+                                                            </TableRow>
                                                         )
                                                     })}
-                                                </div>
-                                            </div>
+                                                </TableBody>
+                                            </Table>
                                         )}
                                     </div>
                                     </SettingSection>
