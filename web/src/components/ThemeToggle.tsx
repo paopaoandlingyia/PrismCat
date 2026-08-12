@@ -1,5 +1,7 @@
 import { Moon, Sun } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useEffect, useState } from 'react'
 
 function getInitialDarkMode() {
@@ -12,6 +14,7 @@ function applyTheme(isDark: boolean) {
 }
 
 export function ThemeToggle() {
+    const { t } = useTranslation()
     const [isDark, setIsDark] = useState(getInitialDarkMode)
 
     useEffect(() => {
@@ -22,19 +25,26 @@ export function ThemeToggle() {
         setIsDark((current) => !current)
     }
 
+    const label = isDark ? t('common.theme_to_light') : t('common.theme_to_dark')
+
     return (
-        <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleTheme}
-            className="h-9 w-9 rounded-md hover:bg-accent"
-            title={isDark ? '切换到亮色模式' : '切换到暗色模式'}
-        >
-            {isDark ? (
-                <Sun className="h-[1.2rem] w-[1.2rem] text-warning" />
-            ) : (
-                <Moon className="h-[1.2rem] w-[1.2rem] text-info" />
-            )}
-        </Button>
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={toggleTheme}
+                    className="h-9 w-9 rounded-md hover:bg-accent"
+                    aria-label={label}
+                >
+                    {isDark ? (
+                        <Sun className="h-[1.2rem] w-[1.2rem]" />
+                    ) : (
+                        <Moon className="h-[1.2rem] w-[1.2rem]" />
+                    )}
+                </Button>
+            </TooltipTrigger>
+            <TooltipContent>{label}</TooltipContent>
+        </Tooltip>
     )
 }

@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { Dashboard } from '@/pages/Dashboard'
 import { Traces } from '@/pages/Traces'
 import { cn } from '@/lib/utils'
-import { TooltipProvider } from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { Toaster } from '@/components/ui/sonner'
 import { Suspense, lazy, useState, useEffect } from 'react'
@@ -155,14 +155,18 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
               <Globe className="h-3.5 w-3.5" />
               <span>{i18n.language === 'zh' ? 'EN' : '中'}</span>
             </button>
-            <button
-              onClick={onSignOut}
-              className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              aria-label={t('auth.sign_out')}
-              title={t('auth.sign_out')}
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={onSignOut}
+                  className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  aria-label={t('auth.sign_out')}
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>{t('auth.sign_out')}</TooltipContent>
+            </Tooltip>
           </div>
           <p className="mt-2 select-none px-1 text-xs text-muted-foreground/70">PrismCat {version}</p>
         </div>
@@ -186,11 +190,11 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
                 <Globe className="h-3.5 w-3.5" />
                 <span>{i18n.language === 'zh' ? 'EN' : '中'}</span>
               </button>
+              {/* 移动端顶栏不挂 Tooltip:触屏不触发悬停,aria-label 已覆盖读屏器 */}
               <button
                 onClick={onSignOut}
                 className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 aria-label={t('auth.sign_out')}
-                title={t('auth.sign_out')}
               >
                 <LogOut className="h-4 w-4" />
               </button>

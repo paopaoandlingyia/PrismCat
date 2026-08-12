@@ -2341,28 +2341,36 @@ export function Settings() {
 
                                                             {/* 改为并排图标按钮:原来上下堆两个带文字的按钮,把整行撑高了一倍 */}
                                                             <div className="flex items-center gap-1 opacity-100 transition-opacity duration-200 lg:opacity-0 group-hover:opacity-100">
-                                                                <Button
-                                                                    type="button"
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    onClick={() => handleEditUpstream(upstream)}
-                                                                    className="h-8 w-8 text-muted-foreground hover:bg-accent hover:text-foreground"
-                                                                    aria-label={t('common.edit')}
-                                                                    title={t('common.edit')}
-                                                                >
-                                                                    <Pencil className="h-4 w-4" />
-                                                                </Button>
-                                                                <Button
-                                                                    type="button"
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    onClick={() => handleRemoveUpstream(upstream.name)}
-                                                                    className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                                                                    aria-label={t('common.delete')}
-                                                                    title={t('common.delete')}
-                                                                >
-                                                                    <Trash2 className="h-4 w-4" />
-                                                                </Button>
+                                                                <Tooltip>
+                                                                    <TooltipTrigger asChild>
+                                                                        <Button
+                                                                            type="button"
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            onClick={() => handleEditUpstream(upstream)}
+                                                                            className="h-8 w-8 text-muted-foreground hover:bg-accent hover:text-foreground"
+                                                                            aria-label={t('common.edit')}
+                                                                        >
+                                                                            <Pencil className="h-4 w-4" />
+                                                                        </Button>
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent>{t('common.edit')}</TooltipContent>
+                                                                </Tooltip>
+                                                                <Tooltip>
+                                                                    <TooltipTrigger asChild>
+                                                                        <Button
+                                                                            type="button"
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            onClick={() => handleRemoveUpstream(upstream.name)}
+                                                                            className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                                                            aria-label={t('common.delete')}
+                                                                        >
+                                                                            <Trash2 className="h-4 w-4" />
+                                                                        </Button>
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent>{t('common.delete')}</TooltipContent>
+                                                                </Tooltip>
                                                             </div>
                                                         </div>
                                                     ))}

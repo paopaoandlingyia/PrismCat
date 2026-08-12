@@ -1,6 +1,8 @@
 {
     "common": {
         "loading": "加载中...",
+        "theme_to_light": "切换到亮色模式",
+        "theme_to_dark": "切换到暗色模式",
         "error": "错误",
         "save": "保存",
         "cancel": "取消",

@@ -1,6 +1,8 @@
 {
     "common": {
         "loading": "Loading...",
+        "theme_to_light": "Switch to light mode",
+        "theme_to_dark": "Switch to dark mode",
         "error": "Error",
         "save": "Save",
         "cancel": "Cancel",
