@@ -9,8 +9,11 @@
 PrismCat is a **self-hosted, transparent proxy and debugging console for LLM APIs**.
 Change one line — your `base_url` — and instantly see every request and response between your app and OpenAI / Claude / Gemini / Ollama / any LLM API, including streaming (SSE).
 
-<!-- 📸 PrismCat Dashboard -->
-![PrismCat Dashboard](assets/dashboard.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/logs-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="assets/logs-light.png">
+  <img alt="PrismCat log console: every request across every upstream, with status, tokens and latency" src="assets/logs-light.png">
+</picture>
 
 
 ---

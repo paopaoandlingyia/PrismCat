@@ -9,8 +9,11 @@
 PrismCat 是一个**自托管的 LLM API 透明代理与调试控制台**。
 只需改一行 `base_url`，即可完整记录你的应用与 OpenAI / Claude / Gemini / Ollama 等任意 LLM API 之间的所有通信 —— 包括流式响应 (SSE)。
 
-<!-- 📸 PrismCat Dashboard -->
-![PrismCat Dashboard](assets/dashboard.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/logs-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="assets/logs-light.png">
+  <img alt="PrismCat 日志控制台：所有上游的每一条请求，含状态码、token 用量和延迟" src="assets/logs-light.png">
+</picture>
 
 
 ---
