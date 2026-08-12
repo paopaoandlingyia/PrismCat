@@ -2034,13 +2034,14 @@ export function Settings() {
                                     <SettingSection
                                         title={t('settings.tabs.upstreams')}
                                         description={t('settings.upstreams_description')}
+                                        // 一屏只留一个实心强调色按钮,这里让位给底部的保存
                                         action={
                                             <Button
                                                 type="button"
-                                                variant={showAddForm ? 'secondary' : 'default'}
+                                                variant="outline"
                                                 onClick={() => setShowAddForm(prev => !prev)}
                                                 size="sm"
-                                                className="h-9 rounded-lg font-medium transition-all whitespace-nowrap"
+                                                className="h-8 whitespace-nowrap border border-input bg-background font-medium text-foreground hover:bg-accent"
                                             >
                                                 {!showAddForm && <Plus className="mr-1.5 h-4 w-4 shrink-0" />}
                                                 {showAddForm ? t('common.cancel') : t('upstream_manager.add_new')}
@@ -2231,7 +2232,7 @@ export function Settings() {
                                                                         .{domainSuffix}
                                                                     </Badge>
                                                                     {(activeTargetConfig(upstream)?.request_overrides?.enabled || overrideBindings[upstream.name]?.enabled) && (
-                                                                        <Badge variant="outline" className="rounded-md border-warning/30 bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
+                                                                        <Badge variant="outline" className="rounded-md border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
                                                                             {t('log_detail.request_override')}
                                                                             {getBindingRuleNames(activeTargetConfig(upstream)?.request_overrides || overrideBindings[upstream.name]).length
                                                                                 ? ` · ${getBindingRuleNames(activeTargetConfig(upstream)?.request_overrides || overrideBindings[upstream.name]).length}`
@@ -2245,24 +2246,28 @@ export function Settings() {
                                                                     )}
                                                                 </div>
 
-                                                                <div className="space-y-2">
+                                                                {/* 两条入口地址原本一紫一绿,是在用颜色编码"子域名 / 路径路由",
+                                                                    但颜色不自解释 —— 地址本身已经说明了区别,统一为中性等宽 */}
+                                                                <div className="space-y-1">
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => handleCopy(getProxyUrl(upstream.name))}
-                                                                        className="flex items-start gap-2 text-left text-sm leading-relaxed text-primary/80 transition-colors hover:text-primary"
+                                                                        className="flex w-full items-center gap-2 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
+                                                                        title={getProxyUrl(upstream.name)}
                                                                     >
-                                                                        <Copy className="mt-1 h-3.5 w-3.5 shrink-0" />
-                                                                        <span className="break-all font-mono">{getProxyUrl(upstream.name)}</span>
+                                                                        <Copy className="h-3.5 w-3.5 shrink-0 opacity-40" />
+                                                                        <span className="min-w-0 truncate font-mono">{getProxyUrl(upstream.name)}</span>
                                                                     </button>
 
                                                                     {enablePathRouting && (
                                                                         <button
                                                                             type="button"
                                                                             onClick={() => handleCopy(getPathProxyUrl(upstream.name))}
-                                                                            className="flex items-start gap-2 text-left text-sm leading-relaxed text-success/80 transition-colors hover:text-success/80 dark:hover:text-success"
+                                                                            className="flex w-full items-center gap-2 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
+                                                                            title={getPathProxyUrl(upstream.name)}
                                                                         >
-                                                                            <Copy className="mt-1 h-3.5 w-3.5 shrink-0" />
-                                                                            <span className="break-all font-mono">{getPathProxyUrl(upstream.name)}</span>
+                                                                            <Copy className="h-3.5 w-3.5 shrink-0 opacity-40" />
+                                                                            <span className="min-w-0 truncate font-mono">{getPathProxyUrl(upstream.name)}</span>
                                                                         </button>
                                                                     )}
                                                                 </div>
@@ -2272,13 +2277,15 @@ export function Settings() {
                                                                 <p className="mb-2 text-xs font-semibold text-foreground/60 lg:hidden">
                                                                     {t('upstream_manager.target')}
                                                                 </p>
-                                                                {upstream.targets && upstream.active_target && Object.keys(upstream.targets).length > 0 && (
+                                                                {/* 只有一个预设时下拉框点开也只有一个选项,是个纯占位的重控件,
+                                                                    还会把行撑高;有没有预设看下面的目标地址就够了 */}
+                                                                {upstream.targets && upstream.active_target && Object.keys(upstream.targets).length > 1 && (
                                                                     <Select
                                                                         value={upstream.active_target}
                                                                         onValueChange={value => handleActivateTarget(upstream.name, value)}
                                                                         disabled={switchingTarget === upstream.name}
                                                                     >
-                                                                        <SelectTrigger className="mb-2 h-8 w-full rounded-lg border-primary/20 bg-primary/5 text-xs font-medium">
+                                                                        <SelectTrigger className="mb-1.5 h-7 w-auto min-w-[110px] border-input bg-background text-xs">
                                                                             <SelectValue />
                                                                         </SelectTrigger>
                                                                         <SelectContent>
@@ -2292,10 +2299,11 @@ export function Settings() {
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => handleCopy(upstream.target)}
-                                                                        className="flex items-start gap-2 text-left text-foreground/80 transition-colors hover:text-primary dark:hover:text-primary-foreground group/target"
+                                                                        className="group/target flex w-full items-center gap-2 text-left text-foreground transition-colors hover:text-foreground"
+                                                                        title={upstream.target}
                                                                     >
-                                                                        <Copy className="mt-1 h-3.5 w-3.5 shrink-0 opacity-40 group-hover/target:opacity-100 transition-opacity" />
-                                                                        <span className="break-all font-mono">{upstream.target}</span>
+                                                                        <Copy className="h-3.5 w-3.5 shrink-0 opacity-40 transition-opacity group-hover/target:opacity-100" />
+                                                                        <span className="min-w-0 truncate font-mono">{upstream.target}</span>
                                                                     </button>
                                                                 </div>
                                                             </div>
@@ -2309,10 +2317,12 @@ export function Settings() {
                                                                         <button
                                                                             type="button"
                                                                             onClick={() => handleCopy(upstream.outbound_proxy)}
-                                                                            className="flex items-start gap-2 text-left transition-colors hover:text-primary"
+                                                                            className="flex w-full items-center gap-2 text-left transition-colors hover:text-foreground"
+                                                                            title={upstream.outbound_proxy}
                                                                         >
-                                                                            <Copy className="mt-1 h-3.5 w-3.5 shrink-0 opacity-40" />
-                                                                            <span className="break-all font-mono">{upstream.outbound_proxy}</span>
+                                                                            <Copy className="h-3.5 w-3.5 shrink-0 opacity-40" />
+                                                                            {/* 原来是 break-all,窄列里会在 127.0.0.1:789|0 中间断开,像坏了 */}
+                                                                            <span className="min-w-0 truncate font-mono">{upstream.outbound_proxy}</span>
                                                                         </button>
                                                                     ) : (
                                                                         <span>{formatOutboundProxy(upstream.outbound_proxy)}</span>
@@ -2329,26 +2339,29 @@ export function Settings() {
                                                                 </div>
                                                             </div>
 
-                                                            <div className="flex flex-col items-start gap-2 opacity-100 lg:opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                                                            {/* 改为并排图标按钮:原来上下堆两个带文字的按钮,把整行撑高了一倍 */}
+                                                            <div className="flex items-center gap-1 opacity-100 transition-opacity duration-200 lg:opacity-0 group-hover:opacity-100">
                                                                 <Button
                                                                     type="button"
                                                                     variant="ghost"
-                                                                    size="sm"
+                                                                    size="icon"
                                                                     onClick={() => handleEditUpstream(upstream)}
-                                                                    className="h-8 justify-start rounded-lg px-2.5 text-foreground/65 hover:bg-primary/10 hover:text-primary"
+                                                                    className="h-8 w-8 text-muted-foreground hover:bg-accent hover:text-foreground"
+                                                                    aria-label={t('common.edit')}
+                                                                    title={t('common.edit')}
                                                                 >
-                                                                    <Pencil className="h-4 w-4 mr-1.5" />
-                                                                    {t('common.edit')}
+                                                                    <Pencil className="h-4 w-4" />
                                                                 </Button>
                                                                 <Button
                                                                     type="button"
                                                                     variant="ghost"
-                                                                    size="sm"
+                                                                    size="icon"
                                                                     onClick={() => handleRemoveUpstream(upstream.name)}
-                                                                    className="h-8 justify-start rounded-lg px-2.5 text-foreground/65 hover:bg-destructive/10 hover:text-destructive"
+                                                                    className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                                                    aria-label={t('common.delete')}
+                                                                    title={t('common.delete')}
                                                                 >
-                                                                    <Trash2 className="h-4 w-4 mr-1.5" />
-                                                                    {t('common.delete')}
+                                                                    <Trash2 className="h-4 w-4" />
                                                                 </Button>
                                                             </div>
                                                         </div>
