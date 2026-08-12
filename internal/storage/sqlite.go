@@ -824,12 +824,14 @@ func (r *SQLiteRepository) GetStats(since *time.Time) (*LogStats, error) {
 		args = append(args, since.UTC().UnixMilli())
 	}
 
+	// SUM 在零行时返回 NULL,直接扫进 int64 会报错 —— 全新安装、还没有任何日志时
+	// 走的正是这条路径,所以每个聚合都要 COALESCE
 	query := fmt.Sprintf(`
-	SELECT 
+	SELECT
 		COUNT(*) as total,
-		SUM(CASE WHEN status_code >= 200 AND status_code < 400 THEN 1 ELSE 0 END) as success,
-		SUM(CASE WHEN (error IS NOT NULL AND error != '') OR status_code >= 400 THEN 1 ELSE 0 END) as errors,
-		SUM(CASE WHEN streaming = 1 THEN 1 ELSE 0 END) as streaming,
+		COALESCE(SUM(CASE WHEN status_code >= 200 AND status_code < 400 THEN 1 ELSE 0 END), 0) as success,
+		COALESCE(SUM(CASE WHEN (error IS NOT NULL AND error != '') OR status_code >= 400 THEN 1 ELSE 0 END), 0) as errors,
+		COALESCE(SUM(CASE WHEN streaming = 1 THEN 1 ELSE 0 END), 0) as streaming,
 		COALESCE(AVG(latency_ms), 0) as avg_latency
 	FROM request_logs %s
 	`, where)
