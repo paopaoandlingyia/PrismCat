@@ -65,20 +65,21 @@ export function Traces() {
   return (
     <div className="space-y-6">
       {/* Filter bar */}
-      <div className="rounded-md bg-muted/30 p-2 md:p-3 space-y-2">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+      <div className="space-y-2 rounded-lg border border-border bg-card p-2 md:p-3">
+        {/* 与日志页工具条同构:输入框占满,控件定宽,操作按钮只留图标 */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <Input
             placeholder={t('traces.search_placeholder')}
             value={draftFilter.trace_id || ''}
             onChange={e => setDraftFilter(prev => ({ ...prev, trace_id: e.target.value }))}
             onKeyDown={e => e.key === 'Enter' && handleSearch()}
-            className="h-9 text-xs"
+            className="h-8 flex-1 text-xs"
           />
           <Select
             value={draftFilter.upstream || '_all'}
             onValueChange={v => setDraftFilter(prev => ({ ...prev, upstream: v === '_all' ? '' : v }))}
           >
-            <SelectTrigger className="h-9 text-xs">
+            <SelectTrigger className="h-8 w-full text-xs sm:w-[160px]">
               <SelectValue placeholder={t('filters.upstream_placeholder')} />
             </SelectTrigger>
             <SelectContent>
@@ -88,13 +89,24 @@ export function Traces() {
               ))}
             </SelectContent>
           </Select>
-          <div className="flex gap-2">
-            <Button size="sm" onClick={handleSearch} className="h-9 gap-1.5 flex-1">
-              <Search className="h-3.5 w-3.5" />
-              {t('common.search')}
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Button
+              size="icon"
+              variant="outline"
+              onClick={handleSearch}
+              className="h-8 w-8 border border-input bg-background text-muted-foreground hover:bg-accent hover:text-foreground"
+              aria-label={t('common.search')}
+            >
+              <Search className="h-4 w-4" />
             </Button>
-            <Button size="sm" variant="outline" onClick={handleReset} className="h-9 gap-1.5">
-              <X className="h-3.5 w-3.5" />
+            <Button
+              size="icon"
+              variant="outline"
+              onClick={handleReset}
+              className="h-8 w-8 border border-input bg-background text-muted-foreground hover:bg-accent hover:text-foreground"
+              aria-label={t('common.reset')}
+            >
+              <X className="h-4 w-4" />
             </Button>
           </div>
         </div>
@@ -177,7 +189,7 @@ export function Traces() {
                     <td className="px-3 py-3">
                       <div className="flex flex-wrap gap-1">
                         {(trace.upstreams || []).map(u => (
-                          <span key={u} className="inline-flex items-center h-[18px] px-1.5 rounded-md text-xs font-semibold tracking-tight bg-primary/10 text-primary">
+                          <span key={u} className="inline-flex items-center h-[18px] px-1.5 rounded-md text-xs font-semibold tracking-tight bg-muted text-muted-foreground">
                             {u}
                           </span>
                         ))}
@@ -214,7 +226,7 @@ export function Traces() {
                 <div className="flex items-center gap-2 mb-2">
                   <Network className="h-3.5 w-3.5 text-info shrink-0" />
                   <span className="font-mono text-xs text-foreground/90 truncate flex-1">{trace.trace_id}</span>
-                  <span className="text-xs font-medium bg-primary/10 text-primary px-1.5 py-0.5 rounded">{trace.request_count} reqs</span>
+                  <span className="text-xs font-medium bg-muted text-muted-foreground px-1.5 py-0.5 rounded">{trace.request_count} reqs</span>
                   {trace.error_count > 0 && (
                     <span className="text-xs font-medium bg-danger/10 text-danger px-1.5 py-0.5 rounded flex items-center gap-0.5">
                       <AlertCircle className="h-2.5 w-2.5" />{trace.error_count}
@@ -223,7 +235,7 @@ export function Traces() {
                 </div>
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
                   {(trace.upstreams || []).map(u => (
-                    <span key={u} className="text-xs font-semibold tracking-tight bg-primary/10 text-primary px-1.5 py-0.5 rounded-md">{u}</span>
+                    <span key={u} className="text-xs font-semibold tracking-tight bg-muted text-muted-foreground px-1.5 py-0.5 rounded-md">{u}</span>
                   ))}
                   <span className="text-xs font-mono text-muted-foreground ml-auto">{formatLatency(trace.total_latency_ms)}</span>
                 </div>

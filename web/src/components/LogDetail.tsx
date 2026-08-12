@@ -740,8 +740,9 @@ export function LogDetail({
                                 {t('common.error', 'ERROR')}
                             </Badge>
                         )}
+                        {/* 与日志表保持一致:"已修改"是属性不是警告 */}
                         {displayLog.request_override_applied && (
-                            <Badge variant="outline" className="border-warning/30 bg-warning/10 text-warning font-medium text-xs">
+                            <Badge variant="outline" className="border-border bg-muted text-muted-foreground font-medium text-xs">
                                 {t('log_detail.modified', 'MODIFIED')}
                             </Badge>
                         )}
@@ -1057,10 +1058,11 @@ export function LogDetail({
                         </div>
                     )}
 
+                    {/* 语义色只上图标,面板保持中性 —— 整块染色会把页面变成色卡 */}
                     {(displayLog.request_override_applied || displayLog.request_override_error) && (
-                        <div className="overflow-hidden rounded-lg border border-warning/20 bg-warning/5 p-4">
-                            <div className="mb-3 flex items-center gap-2 text-warning font-medium text-xs">
-                                <AlertTriangle className="h-4 w-4" />
+                        <div className="overflow-hidden rounded-lg border border-border bg-card p-4">
+                            <div className="mb-3 flex items-center gap-2 text-xs font-medium text-foreground">
+                                <AlertTriangle className="h-4 w-4 text-warning" />
                                 {t('log_detail.request_override', 'Request Override')}
                             </div>
                             {displayLog.request_override_rules?.length ? (
@@ -1106,10 +1108,11 @@ export function LogDetail({
                         </div>
                     )}
 
+                    {/* Token 用量是中性信息,不是"成功",原来整块绿底属于误用语义色 */}
                     {hasUsage && (
-                        <div className="overflow-hidden rounded-lg border border-success/20 bg-success/5 p-4">
-                            <div className="mb-3 flex items-center gap-2 text-success font-medium text-xs">
-                                <CircleDot className="h-4 w-4" />
+                        <div className="overflow-hidden rounded-lg border border-border bg-card p-4">
+                            <div className="mb-3 flex items-center gap-2 text-xs font-medium text-foreground">
+                                <CircleDot className="h-4 w-4 text-muted-foreground" />
                                 {t('log_detail.usage', 'Usage')}
                             </div>
                             <div className="grid gap-2 sm:grid-cols-3">
