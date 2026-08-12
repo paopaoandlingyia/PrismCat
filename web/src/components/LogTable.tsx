@@ -66,7 +66,7 @@ function DesktopLogSkeleton({ t }: { t: (key: string) => string }) {
     return (
         <div className="hidden rounded-lg overflow-hidden bg-card/20 md:block">
             <Table>
-                <TableHeader className="bg-muted/50">
+                <TableHeader className="bg-muted">
                     <TableRow>
                         <TableHead className="w-[80px]">{t('log_table.method')}</TableHead>
                         <TableHead className="w-[70px]">{t('log_table.status')}</TableHead>
@@ -283,7 +283,7 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
 
             <div className="hidden rounded-lg overflow-hidden bg-card/20 md:block">
                 <Table>
-                    <TableHeader className="bg-muted/30">
+                    <TableHeader className="bg-muted">
                         <TableRow className="hover:bg-transparent">
                             <TableHead className="w-[80px] font-medium text-xs">{t('log_table.method')}</TableHead>
                             <TableHead className="w-[70px] font-medium text-xs text-center">{t('log_table.status')}</TableHead>

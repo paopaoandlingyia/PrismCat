@@ -28,7 +28,7 @@ export function StatsCards({ stats, loading }: StatsCardsProps) {
                     <div className="text-xs text-muted-foreground">{card.title}</div>
                     <div
                         className={cn(
-                            'mt-0.5 font-mono text-lg tabular-nums',
+                            'mt-0.5 text-xl tabular-nums',
                             card.tone === 'danger' && (stats?.error_count ?? 0) > 0 ? 'text-danger' : 'text-foreground',
                         )}
                     >
