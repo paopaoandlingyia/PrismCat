@@ -1,4 +1,4 @@
-import { cn, formatDate, formatLatency, getMethodColor, getStatusColor } from '@/lib/utils'
+import { cn, formatDate, formatLatency, METHOD_CLASS, getStatusColor } from '@/lib/utils'
 import { AlertTriangle, BookmarkCheck, CheckCircle2, ChevronRight, CircleDot, Clock3, Network, Server, Tag as TagIcon, Tags, Zap } from 'lucide-react'
 import type { RequestLog } from '@/lib/api'
 import { useNavigate } from 'react-router-dom'
@@ -11,7 +11,6 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
-import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
     Tooltip,
@@ -27,11 +26,11 @@ interface LogTableProps {
 }
 
 function getStatusBadgeColor(code: number): string {
-    if (code >= 200 && code < 300) return 'bg-green-500/10 text-green-600 dark:text-green-400'
-    if (code >= 300 && code < 400) return 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400'
-    if (code >= 400 && code < 500) return 'bg-orange-500/10 text-orange-600 dark:text-orange-400'
-    if (code >= 500) return 'bg-red-500/10 text-red-600 dark:text-red-400'
-    return 'bg-slate-500/10 text-slate-600 dark:text-slate-400'
+    if (code >= 200 && code < 300) return 'bg-success/10 text-success'
+    if (code >= 300 && code < 400) return 'bg-warning/10 text-warning'
+    if (code >= 400 && code < 500) return 'bg-warning/10 text-warning'
+    if (code >= 500) return 'bg-danger/10 text-danger'
+    return 'bg-muted text-muted-foreground'
 }
 
 function formatTokenCount(value?: number): string {
@@ -45,17 +44,17 @@ function MobileLogSkeleton() {
     return (
         <div className="space-y-3 md:hidden">
             {Array.from({ length: 6 }).map((_, index) => (
-                <div key={index} className="rounded-2xl bg-card/20 p-4 space-y-3">
+                <div key={index} className="rounded-lg bg-card/20 p-4 space-y-3">
                     <div className="flex items-center gap-2">
-                        <Skeleton className="h-6 w-16 rounded-full bg-muted/50" />
-                        <Skeleton className="h-6 w-14 rounded-full bg-muted/50" />
+                        <Skeleton className="h-6 w-16 rounded-md bg-muted/50" />
+                        <Skeleton className="h-6 w-14 rounded-md bg-muted/50" />
                         <Skeleton className="ml-auto h-5 w-12 rounded-md bg-muted/50" />
                     </div>
                     <Skeleton className="h-4 w-full bg-muted/50" />
                     <Skeleton className="h-4 w-3/4 bg-muted/50" />
                     <div className="flex gap-2">
-                        <Skeleton className="h-5 w-20 rounded-full bg-muted/50" />
-                        <Skeleton className="h-5 w-16 rounded-full bg-muted/50" />
+                        <Skeleton className="h-5 w-20 rounded-md bg-muted/50" />
+                        <Skeleton className="h-5 w-16 rounded-md bg-muted/50" />
                     </div>
                 </div>
             ))}
@@ -65,9 +64,9 @@ function MobileLogSkeleton() {
 
 function DesktopLogSkeleton({ t }: { t: (key: string) => string }) {
     return (
-        <div className="hidden rounded-2xl overflow-hidden bg-card/20 md:block">
+        <div className="hidden rounded-lg overflow-hidden bg-card/20 md:block">
             <Table>
-                <TableHeader className="bg-muted/50">
+                <TableHeader className="bg-muted">
                     <TableRow>
                         <TableHead className="w-[80px]">{t('log_table.method')}</TableHead>
                         <TableHead className="w-[70px]">{t('log_table.status')}</TableHead>
@@ -75,7 +74,7 @@ function DesktopLogSkeleton({ t }: { t: (key: string) => string }) {
                         <TableHead>{t('log_table.path')}</TableHead>
                         <TableHead className="w-[80px] text-right">{t('log_table.latency')}</TableHead>
                         <TableHead className="w-[160px] text-right">{t('log_table.time')}</TableHead>
-                        <TableHead className="w-[100px]"></TableHead>
+                        <TableHead className="w-10"></TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -126,9 +125,9 @@ function MobileLogCard({
             type="button"
             onClick={() => onSelect(log)}
             className={cn(
-                'w-full rounded-2xl p-4 text-left transition-all active:scale-[0.99]',
+                'w-full rounded-lg p-4 text-left transition-all active:scale-[0.99]',
                 selected
-                    ? 'bg-primary/10 shadow-md shadow-primary/5'
+                    ? 'bg-primary/10'
                     : 'bg-card/20 hover:bg-card/40'
             )}
         >
@@ -137,64 +136,64 @@ function MobileLogCard({
                     <div className="flex flex-wrap items-center gap-2">
                         <span
                             className={cn(
-                                'inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em]',
-                                getMethodColor(log.method)
+                                'inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold',
+                                METHOD_CLASS
                             )}
                         >
                             {log.method}
                         </span>
                         <span
                             className={cn(
-                                'inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-black tracking-wider',
+                                'inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold',
                                 getStatusBadgeColor(log.status_code)
                             )}
                         >
                             {log.status_code || '---'}
                         </span>
-                        <span className="inline-flex items-center gap-1 rounded-full bg-background/60 px-2.5 py-1 text-[10px] font-semibold text-muted-foreground">
+                        <span className="inline-flex items-center gap-1 rounded-md bg-background/60 px-2.5 py-1 text-xs font-semibold text-muted-foreground">
                             <Server className="h-3 w-3" />
                             <span className="truncate max-w-[160px]">
                                 {log.upstream}{log.upstream_target ? ` / ${log.upstream_target}` : ''}
                             </span>
                         </span>
                         {log.streaming && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-violet-600 dark:text-violet-400">
+                            <span className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
                                 <Zap className="h-3 w-3" />
                                 {streamingLabel}
                             </span>
                         )}
                         {log.request_override_applied && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-600 dark:text-amber-400">
+                            <span className="inline-flex items-center gap-1 rounded-md border border-border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
                                 <AlertTriangle className="h-3 w-3" />
                                 {modifiedLabel}
                             </span>
                         )}
                         {log.trace_id && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/10 px-2.5 py-1 text-[10px] font-bold tracking-[0.14em] text-cyan-600 dark:text-cyan-400">
+                            <span className="inline-flex items-center gap-1 rounded-md bg-info/10 px-2.5 py-1 text-xs font-medium text-info">
                                 <Network className="h-3 w-3" />
                                 TRACE
                             </span>
                         )}
                         {log.tag && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-600 dark:text-amber-400">
+                            <span className="inline-flex items-center gap-1 rounded-md border border-border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
                                 <TagIcon className="h-3 w-3" />
                                 <span className="truncate max-w-[120px]">{log.tag}</span>
                             </span>
                         )}
                         {log.annotation?.saved && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-primary">
+                            <span className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
                                 <BookmarkCheck className="h-3 w-3" />
                                 {savedLabel}
                             </span>
                         )}
                         {log.annotation?.status === 'todo' && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-600 dark:text-amber-400">
+                            <span className="inline-flex items-center gap-1 rounded-md bg-warning/10 px-2.5 py-1 text-xs font-medium text-warning">
                                 <CircleDot className="h-3 w-3" />
                                 {todoLabel}
                             </span>
                         )}
                         {log.annotation?.status === 'done' && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-green-600 dark:text-green-400">
+                            <span className="inline-flex items-center gap-1 rounded-md bg-success/10 px-2.5 py-1 text-xs font-medium text-success">
                                 <CheckCircle2 className="h-3 w-3" />
                                 {doneLabel}
                             </span>
@@ -206,7 +205,7 @@ function MobileLogCard({
                             {log.path}
                             {log.query && <span className="text-muted-foreground/80">?{log.query}</span>}
                         </div>
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground/70">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground/70">
                             <span className="inline-flex items-center gap-1">
                                 <Clock3 className="h-3.5 w-3.5" />
                                 {formatLatency(log.latency_ms)}
@@ -225,7 +224,7 @@ function MobileLogCard({
                     </div>
                 </div>
 
-                <div className="shrink-0 inline-flex items-center gap-1 rounded-full bg-background/60 px-2 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">
+                <div className="shrink-0 inline-flex items-center gap-1 rounded-md bg-background/60 px-2 py-1 text-xs font-semibold text-muted-foreground">
                     <span>{detailLabel}</span>
                     <ChevronRight className="h-3.5 w-3.5" />
                 </div>
@@ -250,7 +249,7 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
 
     if (logs.length === 0) {
         return (
-            <div className="flex flex-col items-center justify-center py-20 sm:py-24 text-muted-foreground bg-card/10 rounded-2xl px-6">
+            <div className="flex flex-col items-center justify-center py-20 sm:py-24 text-muted-foreground bg-card/10 rounded-lg px-6">
                 <div className="text-5xl sm:text-6xl mb-6 grayscale opacity-50">📭</div>
                 <div className="text-lg sm:text-xl font-semibold tracking-tight text-foreground/70 text-center">{t('log_table.no_logs')}</div>
                 <p className="text-sm mt-2 max-w-[280px] text-center leading-relaxed font-medium text-muted-foreground/80">
@@ -282,36 +281,38 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                 ))}
             </div>
 
-            <div className="hidden rounded-2xl overflow-hidden bg-card/20 md:block">
+            <div className="hidden rounded-lg overflow-hidden bg-card/20 md:block">
                 <Table>
-                    <TableHeader className="bg-muted/30">
+                    <TableHeader className="bg-muted">
                         <TableRow className="hover:bg-transparent">
-                            <TableHead className="w-[80px] font-bold text-[11px] uppercase tracking-tighter">{t('log_table.method')}</TableHead>
-                            <TableHead className="w-[70px] font-bold text-[11px] uppercase tracking-tighter text-center">{t('log_table.status')}</TableHead>
-                            <TableHead className="w-[100px] font-bold text-[11px] uppercase tracking-tighter">{t('log_table.upstream')}</TableHead>
-                            <TableHead className="font-bold text-[11px] uppercase tracking-tighter">{t('log_table.path')}</TableHead>
+                            <TableHead className="w-[80px] font-medium text-xs">{t('log_table.method')}</TableHead>
+                            <TableHead className="w-[70px] font-medium text-xs text-center">{t('log_table.status')}</TableHead>
+                            <TableHead className="w-[100px] font-medium text-xs">{t('log_table.upstream')}</TableHead>
+                            <TableHead className="font-medium text-xs">{t('log_table.path')}</TableHead>
                             {showUsage && (
-                                <TableHead className="w-[90px] font-bold text-[11px] uppercase tracking-tighter text-right">{t('log_table.tokens', 'Tokens')}</TableHead>
+                                <TableHead className="w-[90px] font-medium text-xs text-right">{t('log_table.tokens', 'Tokens')}</TableHead>
                             )}
-                            <TableHead className="w-[100px] font-bold text-[11px] uppercase tracking-tighter text-right">{t('log_table.latency')}</TableHead>
-                            <TableHead className="w-[180px] font-bold text-[11px] uppercase tracking-tighter text-right">{t('log_table.time')}</TableHead>
-                            <TableHead className="w-[100px]"></TableHead>
+                            <TableHead className="w-[100px] font-medium text-xs text-right">{t('log_table.latency')}</TableHead>
+                            <TableHead className="w-[180px] font-medium text-xs text-right">{t('log_table.time')}</TableHead>
+                            <TableHead className="w-10"></TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {logs.map((log) => (
                             <TableRow
                                 key={log.id}
+                                onClick={() => onSelect(log)}
+                                aria-label={t('common.details')}
                                 className={cn(
-                                    'transition-colors border-b',
-                                    selectedId === log.id ? 'bg-primary/10 hover:bg-primary/15' : 'hover:bg-muted/40'
+                                    'group cursor-pointer border-b transition-colors',
+                                    selectedId === log.id ? 'bg-accent hover:bg-accent' : 'hover:bg-muted/60'
                                 )}
                             >
                                 <TableCell>
                                     <div
                                         className={cn(
-                                            'inline-flex items-center justify-center min-w-[56px] h-6 px-2 rounded-md text-[10px] font-black uppercase tracking-[0.18em]',
-                                            getMethodColor(log.method)
+                                            'inline-flex items-center justify-center min-w-[56px] h-6 px-2 rounded-md text-xs font-semibold',
+                                            METHOD_CLASS
                                         )}
                                     >
                                         {log.method}
@@ -320,7 +321,7 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                                 <TableCell className="text-center">
                                     <span
                                         className={cn(
-                                            'font-mono text-xs font-bold',
+                                            'font-mono text-xs font-medium',
                                             getStatusColor(log.status_code)
                                         )}
                                     >
@@ -328,7 +329,7 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                                     </span>
                                 </TableCell>
                                 <TableCell>
-                                    <span className="block max-w-[110px] truncate text-[11px] font-semibold text-muted-foreground/85">
+                                    <span className="block max-w-[110px] truncate text-xs font-semibold text-muted-foreground/85">
                                         {log.upstream}{log.upstream_target ? ` / ${log.upstream_target}` : ''}
                                     </span>
                                 </TableCell>
@@ -344,50 +345,50 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                                                     <span
                                                         role="link"
                                                         onClick={(e) => { e.stopPropagation(); navigate(`/traces/${encodeURIComponent(log.trace_id!)}`) }}
-                                                        className="shrink-0 inline-flex items-center gap-0.5 h-[18px] px-1.5 rounded-[3px] text-[9px] font-black tracking-tight bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 cursor-pointer hover:bg-cyan-500/20 transition-colors"
+                                                        className="shrink-0 inline-flex items-center gap-0.5 h-[18px] px-1.5 rounded-md text-xs font-semibold tracking-tight bg-info/10 text-info cursor-pointer hover:bg-info/20 transition-colors"
                                                     >
                                                         <Network className="h-2.5 w-2.5" />
                                                         TRACE
                                                     </span>
                                                 </TooltipTrigger>
                                                 <TooltipContent side="right">
-                                                    <p className="text-[10px] font-bold">Trace: {log.trace_id}</p>
+                                                    <p className="text-xs font-medium">Trace: {log.trace_id}</p>
                                                 </TooltipContent>
                                             </Tooltip>
                                         )}
                                         {log.tag && (
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
-                                                    <span className="shrink-0 inline-flex items-center h-[18px] px-1.5 rounded-[3px] text-[9px] font-black uppercase tracking-tight bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                                                    <span className="shrink-0 inline-flex items-center h-[18px] px-1.5 rounded-md border border-border text-xs font-medium bg-muted text-muted-foreground">
                                                         {log.tag}
                                                     </span>
                                                 </TooltipTrigger>
                                                 <TooltipContent side="right">
-                                                    <p className="text-[10px] font-bold uppercase">{t('log_table.tag')}: {log.tag}</p>
+                                                    <p className="text-xs font-medium">{t('log_table.tag')}: {log.tag}</p>
                                                 </TooltipContent>
                                             </Tooltip>
                                         )}
                                         {log.streaming && (
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
-                                                    <div className="shrink-0 animate-pulse">
-                                                        <Zap className="h-3 w-3 text-purple-500 fill-purple-500/20" />
+                                                    <div className="shrink-0">
+                                                        <Zap className="h-3 w-3 text-primary fill-primary/20" />
                                                     </div>
                                                 </TooltipTrigger>
                                                 <TooltipContent side="right">
-                                                    <p className="text-[10px] font-bold uppercase">{t('log_detail.streaming', '流式响应')}</p>
+                                                    <p className="text-xs font-medium">{t('log_detail.streaming', '流式响应')}</p>
                                                 </TooltipContent>
                                             </Tooltip>
                                         )}
                                         {log.request_override_applied && (
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
-                                                    <span className="shrink-0 inline-flex items-center h-[18px] px-1.5 rounded-[3px] text-[9px] font-black uppercase tracking-tight bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                                                    <span className="shrink-0 inline-flex items-center h-[18px] px-1.5 rounded-md border border-border text-xs font-medium bg-muted text-muted-foreground">
                                                         {t('log_detail.modified', 'MODIFIED')}
                                                     </span>
                                                 </TooltipTrigger>
                                                 <TooltipContent side="right">
-                                                    <p className="text-[10px] font-bold uppercase">{t('log_detail.request_override', 'Request Override')}</p>
+                                                    <p className="text-xs font-medium">{t('log_detail.request_override', 'Request Override')}</p>
                                                 </TooltipContent>
                                             </Tooltip>
                                         )}
@@ -397,39 +398,39 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                                                     <BookmarkCheck className="h-3.5 w-3.5 shrink-0 text-primary" />
                                                 </TooltipTrigger>
                                                 <TooltipContent side="right">
-                                                    <p className="text-[10px] font-bold uppercase">{t('log_annotation.saved', 'Saved')}</p>
+                                                    <p className="text-xs font-medium">{t('log_annotation.saved', 'Saved')}</p>
                                                 </TooltipContent>
                                             </Tooltip>
                                         )}
                                         {log.annotation?.status === 'todo' && (
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
-                                                    <CircleDot className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                                                    <CircleDot className="h-3.5 w-3.5 shrink-0 text-warning" />
                                                 </TooltipTrigger>
                                                 <TooltipContent side="right">
-                                                    <p className="text-[10px] font-bold uppercase">{t('log_annotation.todo', 'Todo')}</p>
+                                                    <p className="text-xs font-medium">{t('log_annotation.todo', 'Todo')}</p>
                                                 </TooltipContent>
                                             </Tooltip>
                                         )}
                                         {log.annotation?.status === 'done' && (
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
-                                                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-500" />
+                                                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" />
                                                 </TooltipTrigger>
                                                 <TooltipContent side="right">
-                                                    <p className="text-[10px] font-bold uppercase">{t('log_annotation.done', 'Done')}</p>
+                                                    <p className="text-xs font-medium">{t('log_annotation.done', 'Done')}</p>
                                                 </TooltipContent>
                                             </Tooltip>
                                         )}
                                         {log.annotation?.labels?.map((label) => (
                                             <Tooltip key={label}>
                                                 <TooltipTrigger asChild>
-                                                    <span className="shrink-0 inline-flex items-center h-[18px] px-1.5 rounded-[3px] text-[9px] font-black uppercase tracking-tight bg-primary/10 text-primary">
+                                                    <span className="shrink-0 inline-flex items-center h-[18px] px-1.5 rounded-md text-xs font-semibold tracking-tight bg-primary/10 text-primary">
                                                         {label}
                                                     </span>
                                                 </TooltipTrigger>
                                                 <TooltipContent side="right">
-                                                    <p className="text-[10px] font-bold uppercase">{t('log_annotation.label', 'Label')}: {label}</p>
+                                                    <p className="text-xs font-medium">{t('log_annotation.label', 'Label')}: {label}</p>
                                                 </TooltipContent>
                                             </Tooltip>
                                         ))}
@@ -448,26 +449,18 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                                     </span>
                                 </TableCell>
                                 <TableCell className="text-right">
-                                    <span className="text-[11px] text-muted-foreground/85 font-medium">
+                                    <span className="text-xs text-muted-foreground/85 font-medium">
                                         {formatDate(log.created_at, i18n.language)}
                                     </span>
                                 </TableCell>
-                                <TableCell>
-                                    <div className="flex justify-end transition-opacity">
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className={cn(
-                                                'h-7 text-[11px] font-black px-6 min-w-[80px] rounded-md transition-all active:scale-95',
-                                                selectedId === log.id
-                                                    ? 'bg-primary text-primary-foreground'
-                                                    : 'text-muted-foreground hover:bg-primary hover:text-primary-foreground dark:hover:bg-primary dark:hover:text-primary-foreground'
-                                            )}
-                                            onClick={() => onSelect(log)}
-                                        >
-                                            {t('common.details')}
-                                        </Button>
-                                    </div>
+                                <TableCell className="text-right">
+                                    <ChevronRight
+                                        className={cn(
+                                            'ml-auto h-4 w-4 text-muted-foreground transition-opacity',
+                                            selectedId === log.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                                        )}
+                                        aria-hidden="true"
+                                    />
                                 </TableCell>
                             </TableRow>
                         ))}

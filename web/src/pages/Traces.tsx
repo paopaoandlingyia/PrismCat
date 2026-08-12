@@ -65,7 +65,7 @@ export function Traces() {
   return (
     <div className="space-y-6">
       {/* Filter bar */}
-      <div className="rounded-xl bg-muted/30 p-2 md:p-3 space-y-2">
+      <div className="rounded-md bg-muted/30 p-2 md:p-3 space-y-2">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
           <Input
             placeholder={t('traces.search_placeholder')}
@@ -133,17 +133,17 @@ export function Traces() {
       ) : (
         <>
           {/* Desktop table */}
-          <div className="hidden md:block rounded-2xl overflow-hidden bg-card/20 border border-border">
+          <div className="hidden md:block rounded-lg overflow-hidden bg-card/20 border border-border">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b bg-muted/30">
-                  <th className="px-4 py-3 text-left font-bold text-[10px] uppercase tracking-wider text-muted-foreground">{t('traces.trace_id')}</th>
-                  <th className="px-3 py-3 text-center font-bold text-[10px] uppercase tracking-wider text-muted-foreground">{t('traces.requests')}</th>
-                  <th className="px-3 py-3 text-left font-bold text-[10px] uppercase tracking-wider text-muted-foreground">{t('traces.upstreams')}</th>
-                  <th className="px-3 py-3 text-right font-bold text-[10px] uppercase tracking-wider text-muted-foreground">{t('traces.duration')}</th>
-                  <th className="px-3 py-3 text-right font-bold text-[10px] uppercase tracking-wider text-muted-foreground">{t('traces.tokens')}</th>
-                  <th className="px-3 py-3 text-center font-bold text-[10px] uppercase tracking-wider text-muted-foreground">{t('traces.errors')}</th>
-                  <th className="px-3 py-3 text-right font-bold text-[10px] uppercase tracking-wider text-muted-foreground">{t('traces.time')}</th>
+                  <th className="px-4 py-3 text-left font-medium text-xs text-muted-foreground">{t('traces.trace_id')}</th>
+                  <th className="px-3 py-3 text-center font-medium text-xs text-muted-foreground">{t('traces.requests')}</th>
+                  <th className="px-3 py-3 text-left font-medium text-xs text-muted-foreground">{t('traces.upstreams')}</th>
+                  <th className="px-3 py-3 text-right font-medium text-xs text-muted-foreground">{t('traces.duration')}</th>
+                  <th className="px-3 py-3 text-right font-medium text-xs text-muted-foreground">{t('traces.tokens')}</th>
+                  <th className="px-3 py-3 text-center font-medium text-xs text-muted-foreground">{t('traces.errors')}</th>
+                  <th className="px-3 py-3 text-right font-medium text-xs text-muted-foreground">{t('traces.time')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -155,7 +155,7 @@ export function Traces() {
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <Network className="h-3.5 w-3.5 shrink-0 text-cyan-500" />
+                        <Network className="h-3.5 w-3.5 shrink-0 text-info" />
                         <span className="font-mono text-foreground/90 truncate max-w-[200px]">{trace.trace_id}</span>
                       </div>
                       {/* Latency bar */}
@@ -163,21 +163,21 @@ export function Traces() {
                         <div
                           className={cn(
                             'h-1.5 rounded-full transition-all duration-500',
-                            trace.error_count > 0 ? 'bg-red-500/60 dark:bg-red-400/40' :
-                            trace.total_latency_ms > 5000 ? 'bg-amber-500/60 dark:bg-amber-400/40' :
-                            'bg-cyan-500/60 dark:bg-cyan-400/40'
+                            trace.error_count > 0 ? 'bg-danger' :
+                            trace.total_latency_ms > 5000 ? 'bg-warning' :
+                            'bg-info'
                           )}
                           style={{ width: `${Math.max(4, (trace.total_latency_ms / maxLatency) * 100)}%` }}
                         />
                       </div>
                     </td>
                     <td className="px-3 py-3 text-center">
-                      <span className="font-mono font-bold text-foreground/80">{trace.request_count}</span>
+                      <span className="font-mono font-semibold text-foreground/80">{trace.request_count}</span>
                     </td>
                     <td className="px-3 py-3">
                       <div className="flex flex-wrap gap-1">
                         {(trace.upstreams || []).map(u => (
-                          <span key={u} className="inline-flex items-center h-[18px] px-1.5 rounded-[3px] text-[9px] font-black uppercase tracking-tight bg-primary/10 text-primary">
+                          <span key={u} className="inline-flex items-center h-[18px] px-1.5 rounded-md text-xs font-semibold tracking-tight bg-primary/10 text-primary">
                             {u}
                           </span>
                         ))}
@@ -190,7 +190,7 @@ export function Traces() {
                       {typeof trace.usage_total_tokens === 'number' ? trace.usage_total_tokens.toLocaleString() : '-'}
                     </td>
                     <td className="px-3 py-3 text-center">
-                      <span className={cn('font-mono font-bold', trace.error_count > 0 ? 'text-red-500' : 'text-muted-foreground/60')}>
+                      <span className={cn('font-mono font-semibold', trace.error_count > 0 ? 'text-danger' : 'text-muted-foreground/60')}>
                         {trace.error_count}
                       </span>
                     </td>
@@ -209,37 +209,37 @@ export function Traces() {
               <button
                 key={trace.trace_id}
                 onClick={() => navigate(`/traces/${encodeURIComponent(trace.trace_id)}`)}
-                className="w-full rounded-2xl p-4 text-left transition-all active:scale-[0.99] bg-card/20 hover:bg-card/40 border border-border/50"
+                className="w-full rounded-lg p-4 text-left transition-all active:scale-[0.99] bg-card/20 hover:bg-card/40 border border-border/50"
               >
                 <div className="flex items-center gap-2 mb-2">
-                  <Network className="h-3.5 w-3.5 text-cyan-500 shrink-0" />
+                  <Network className="h-3.5 w-3.5 text-info shrink-0" />
                   <span className="font-mono text-xs text-foreground/90 truncate flex-1">{trace.trace_id}</span>
-                  <span className="text-[10px] font-bold bg-primary/10 text-primary px-1.5 py-0.5 rounded">{trace.request_count} reqs</span>
+                  <span className="text-xs font-medium bg-primary/10 text-primary px-1.5 py-0.5 rounded">{trace.request_count} reqs</span>
                   {trace.error_count > 0 && (
-                    <span className="text-[10px] font-bold bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                    <span className="text-xs font-medium bg-danger/10 text-danger px-1.5 py-0.5 rounded flex items-center gap-0.5">
                       <AlertCircle className="h-2.5 w-2.5" />{trace.error_count}
                     </span>
                   )}
                 </div>
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
                   {(trace.upstreams || []).map(u => (
-                    <span key={u} className="text-[9px] font-black uppercase tracking-tight bg-primary/10 text-primary px-1.5 py-0.5 rounded-[3px]">{u}</span>
+                    <span key={u} className="text-xs font-semibold tracking-tight bg-primary/10 text-primary px-1.5 py-0.5 rounded-md">{u}</span>
                   ))}
-                  <span className="text-[11px] font-mono text-muted-foreground ml-auto">{formatLatency(trace.total_latency_ms)}</span>
+                  <span className="text-xs font-mono text-muted-foreground ml-auto">{formatLatency(trace.total_latency_ms)}</span>
                 </div>
-                <div className="mb-2 text-[10px] font-mono text-muted-foreground/70">
+                <div className="mb-2 text-xs font-mono text-muted-foreground/70">
                   {t('traces.tokens')}: {typeof trace.usage_total_tokens === 'number' ? trace.usage_total_tokens.toLocaleString() : '-'}
                 </div>
                 <div className="h-1.5 w-full rounded-full bg-muted/50">
                   <div
                     className={cn(
                       'h-1.5 rounded-full',
-                      trace.error_count > 0 ? 'bg-red-500/60' : 'bg-cyan-500/60'
+                      trace.error_count > 0 ? 'bg-danger/60' : 'bg-info/60'
                     )}
                     style={{ width: `${Math.max(4, (trace.total_latency_ms / maxLatency) * 100)}%` }}
                   />
                 </div>
-                <div className="flex items-center justify-between mt-2 text-[10px] text-muted-foreground/60">
+                <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground/60">
                   <span>{new Date(trace.first_time).toLocaleString()}</span>
                   <span>{new Date(trace.last_time).toLocaleTimeString()}</span>
                 </div>

@@ -31,7 +31,7 @@ const DateTimeInput = forwardRef<HTMLButtonElement, { value?: string; onClick?: 
             variant="outline"
             type="button"
             className={cn(
-                'flex w-full items-center justify-start gap-2.5 px-3 h-10 rounded-lg text-sm transition-all min-w-0 sm:min-w-[170px] border-border/50 bg-background/50',
+                'flex w-full items-center justify-start gap-2 px-2.5 h-8 rounded-md text-xs transition-colors min-w-0 sm:min-w-[150px] border-input bg-background',
                 'hover:border-primary/50 hover:bg-accent/50',
                 !value && 'text-muted-foreground'
             )}
@@ -104,7 +104,7 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
                 maxDate={endDate || new Date()}
                 placement="bottom-start"
             />
-            <span className="hidden text-muted-foreground/30 text-sm font-bold mx-1 sm:inline">/</span>
+            <span className="hidden text-muted-foreground/30 text-sm font-medium mx-1 sm:inline">/</span>
             <DateTimePicker
                 value={endDate}
                 onChange={handleEndChange}

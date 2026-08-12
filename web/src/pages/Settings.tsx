@@ -7,6 +7,8 @@ import {
     type FormEvent,
     type ReactNode,
 } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { isSettingsTab, settingsTabPath, type SettingsTab } from '@/lib/routes'
 import {
     Plus,
     Trash2,
@@ -175,7 +177,6 @@ type EditingUpstream = {
 }
 
 type OutboundProxyMode = 'env' | 'direct' | 'custom'
-type SettingsTab = 'routing' | 'logging' | 'overrides' | 'system'
 type RuleTab = 'request_overrides' | 'usage_extraction'
 type OverrideRuleObject = Record<string, unknown>
 type HeaderOp = { op: string; name: string; value?: string }
@@ -364,7 +365,7 @@ function OutboundProxyControl({
     return (
         <div
             className={cn(
-                "relative flex h-10 overflow-hidden rounded-xl border border-border/30 bg-background/50 transition-shadow focus-within:ring-2 focus-within:ring-ring/50",
+                "relative flex h-9 overflow-hidden rounded-md border border-input bg-background transition-shadow focus-within:ring-2 focus-within:ring-ring/50",
                 className,
             )}
         >
@@ -424,13 +425,13 @@ function InfoTooltip({ content }: { content: string }) {
                 <button
                     type="button"
                     onClick={event => event.stopPropagation()}
-                    className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground/85 transition-colors hover:text-foreground"
+                    className="inline-flex h-4 w-4 items-center justify-center rounded-md text-muted-foreground/85 transition-colors hover:text-foreground"
                     aria-label="More info"
                 >
                     <CircleHelp className="h-3.5 w-3.5" />
                 </button>
             </TooltipTrigger>
-            <TooltipContent sideOffset={6} className="max-w-xs px-3 py-2 text-[12px] leading-6">
+            <TooltipContent sideOffset={6} className="max-w-xs px-3 py-2 text-xs leading-6">
                 {content}
             </TooltipContent>
         </Tooltip>
@@ -449,7 +450,7 @@ function FieldBlock({ label, hint, htmlFor, unit, children }: FieldBlockProps) {
                 </Label>
                 {hint && <InfoTooltip content={hint} />}
                 {unit && (
-                    <span className="rounded-full bg-muted/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                    <span className="rounded-md bg-muted/60 px-2 py-0.5 text-xs font-medium text-muted-foreground">
                         {unit}
                     </span>
                 )}
@@ -482,7 +483,7 @@ function AdvancedSettings({
     return (
         <section
             className={cn(
-                "rounded-xl border border-border/50 bg-muted/20",
+                "rounded-md border border-input bg-muted/20",
                 open && sidePanel && "lg:flex lg:min-h-0 lg:flex-col lg:rounded-none lg:border-y-0 lg:border-r-0",
             )}
         >
@@ -508,7 +509,7 @@ function AdvancedSettings({
             </button>
             {open && (
                 <div className={cn(
-                    "space-y-6 border-t border-border/40 px-4 py-5",
+                    "space-y-6 border-t border-input px-4 py-5",
                     sidePanel && "space-y-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-6",
                 )}>
                     {children}
@@ -569,10 +570,10 @@ function AdvancedSettingsGroup({
     return (
         <div className={cn(
             "space-y-4",
-            card && "rounded-xl border border-border/60 bg-background/70 p-4",
+            card && "rounded-md border border-input bg-background/70 p-4",
         )}>
             <div>
-                <div className="text-xs font-semibold uppercase tracking-wider text-foreground/65">{title}</div>
+                <div className="text-xs font-semibold text-foreground/65">{title}</div>
                 {description && <p className="mt-1.5 text-xs leading-5 text-muted-foreground">{description}</p>}
             </div>
             {children}
@@ -638,7 +639,7 @@ function HeaderValueInput({
                 disabled={disabled}
                 autoComplete="off"
                 className={cn(
-                    "h-9 w-full rounded-lg border-border/30 bg-background/50 text-xs disabled:opacity-40",
+                    "h-9 w-full rounded-lg border-input bg-background text-xs disabled:opacity-40",
                     sensitive && !disabled && "pr-9",
                 )}
             />
@@ -668,9 +669,9 @@ function MetricCard({
     detail?: string
 }) {
     return (
-        <div className="rounded-xl border border-border/40 bg-background/45 px-4 py-4 shadow-sm">
+        <div className="rounded-md border border-input bg-background/45 px-4 py-4">
             <div className="mb-4 flex items-center justify-between gap-3">
-                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <div className="text-xs font-semibold text-muted-foreground">
                     {label}
                 </div>
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -699,8 +700,8 @@ function SettingSection({
     children: ReactNode
 }) {
     return (
-        <section className="overflow-hidden rounded-2xl border border-border/50 bg-card/40 shadow-sm">
-            <div className="flex items-start justify-between gap-4 border-b border-border/40 px-6 py-4">
+        <section className="overflow-hidden rounded-lg border border-input bg-card/40">
+            <div className="flex items-start justify-between gap-4 border-b border-input px-6 py-4">
                 <div className="min-w-0">
                     <h3 className="text-sm font-semibold text-foreground">{title}</h3>
                     {description && (
@@ -722,7 +723,15 @@ export function Settings() {
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [showAddForm, setShowAddForm] = useState(false)
-    const [activeTab, setActiveTab] = useState<SettingsTab>('routing')
+    // 分区由 URL 决定。/settings 不带分区时落到 routing,不做重定向,
+    // 免得在保存栏有未提交改动时因为地址跳转丢状态。
+    const { tab: tabParam } = useParams()
+    const navigate = useNavigate()
+    const activeTab: SettingsTab = isSettingsTab(tabParam) ? tabParam : 'routing'
+    const setActiveTab = useCallback(
+        (next: SettingsTab) => navigate(settingsTabPath(next)),
+        [navigate],
+    )
     const [activeRuleTab, setActiveRuleTab] = useState<RuleTab>('request_overrides')
     const [metrics, setMetrics] = useState<SystemMetrics | null>(null)
     const [metricsLoading, setMetricsLoading] = useState(false)
@@ -1661,7 +1670,7 @@ export function Settings() {
     if (loading) {
         return (
             <div className="flex h-96 flex-col items-center justify-center gap-4">
-                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                 <div className="text-sm font-medium text-muted-foreground">
                     {t('common.loading')}
                 </div>
@@ -1673,11 +1682,11 @@ export function Settings() {
         <div className="w-full">
             <Dialog open={!!editingUpstream} onOpenChange={(open) => !open && setEditingUpstream(null)}>
                 <DialogContent className={cn(
-                    "max-h-[calc(100vh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-border/60 bg-card p-0 shadow-2xl transition-[max-width] duration-200",
+                    "max-h-[calc(100vh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-lg border border-input bg-card p-0 transition-[max-width] duration-200",
                     upstreamAdvancedOpen ? "max-w-2xl lg:max-w-5xl" : "max-w-2xl",
                 )}>
-                    <DialogHeader className="border-b border-border/60 px-6 py-5">
-                        <DialogTitle className="text-base font-bold">
+                    <DialogHeader className="border-b border-input px-6 py-5">
+                        <DialogTitle className="text-base font-semibold">
                             {editingUpstream ? t('upstream_manager.edit_title', { name: editingUpstream.name }) : t('common.edit')}
                         </DialogTitle>
                         <DialogDescription className="sr-only">
@@ -1698,7 +1707,7 @@ export function Settings() {
                                         <Input
                                             value={editingUpstream.name}
                                             readOnly
-                                            className="h-10 rounded-xl border-border/30 bg-muted/50 font-mono text-sm"
+                                            className="h-9 rounded-md border-input bg-muted/50 font-mono text-sm"
                                         />
                                     </FieldBlock>
                                     <FieldBlock label={t('upstream_manager.order')}>
@@ -1707,10 +1716,10 @@ export function Settings() {
                                             min={0}
                                             value={editingUpstream.order}
                                             onChange={e => setEditingUpstream(current => current ? { ...current, order: Number(e.target.value) } : current)}
-                                            className="h-10 rounded-xl border-border/30 bg-background/50 text-sm"
+                                            className="h-9 rounded-md border-input bg-background text-sm"
                                         />
                                     </FieldBlock>
-                                    <div className="sm:col-span-2 rounded-xl border border-border/40 bg-muted/15 p-4">
+                                    <div className="sm:col-span-2 rounded-md border border-input bg-muted/15 p-4">
                                         <div className="flex flex-wrap items-start justify-between gap-3">
                                             <div>
                                                 <div className="text-sm font-semibold">{t('upstream_manager.target_presets')}</div>
@@ -1787,7 +1796,7 @@ export function Settings() {
                                             <Input
                                                 value={editingUpstream.target}
                                                 onChange={e => setEditingUpstream(current => current ? { ...current, target: e.target.value } : current)}
-                                                className="h-10 rounded-xl border-border/30 bg-background/50 font-mono text-sm"
+                                                className="h-9 rounded-md border-input bg-background font-mono text-sm"
                                             />
                                         </FieldBlock>
                                     </div>
@@ -1798,7 +1807,7 @@ export function Settings() {
                                                 min="1"
                                                 value={editingUpstream.timeout}
                                                 onChange={e => setEditingUpstream(current => current ? { ...current, timeout: Number(e.target.value) } : current)}
-                                                className="h-10 rounded-xl border-border/30 bg-background/50 text-sm"
+                                                className="h-9 rounded-md border-input bg-background text-sm"
                                             />
                                         </FieldBlock>
                                         <FieldBlock
@@ -1834,7 +1843,7 @@ export function Settings() {
                                                     min="0"
                                                     value={editingUpstream.responseHeaderTimeout}
                                                     onChange={e => setEditingUpstream(current => current ? { ...current, responseHeaderTimeout: Number(e.target.value) } : current)}
-                                                    className="h-10 rounded-xl border-border/30 bg-background/50 text-sm"
+                                                    className="h-9 rounded-md border-input bg-background text-sm"
                                                 />
                                             </FieldBlock>
                                             <FieldBlock
@@ -1846,7 +1855,7 @@ export function Settings() {
                                                     min="0"
                                                     value={editingUpstream.responseBodyFirstByteTimeout}
                                                     onChange={e => setEditingUpstream(current => current ? { ...current, responseBodyFirstByteTimeout: Number(e.target.value) } : current)}
-                                                    className="h-10 rounded-xl border-border/30 bg-background/50 text-sm"
+                                                    className="h-9 rounded-md border-input bg-background text-sm"
                                                 />
                                             </FieldBlock>
                                             <FieldBlock
@@ -1858,7 +1867,7 @@ export function Settings() {
                                                     min="0"
                                                     value={editingUpstream.responseBodyIdleTimeout}
                                                     onChange={e => setEditingUpstream(current => current ? { ...current, responseBodyIdleTimeout: Number(e.target.value) } : current)}
-                                                    className="h-10 rounded-xl border-border/30 bg-background/50 text-sm"
+                                                    className="h-9 rounded-md border-input bg-background text-sm"
                                                 />
                                             </FieldBlock>
                                         </div>
@@ -1882,11 +1891,11 @@ export function Settings() {
                                             />
                                             {editingUpstream.overrideEnabled && (
                                                 <div className="space-y-2">
-                                                    <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                                    <div className="text-xs font-semibold text-muted-foreground">
                                                         {t('upstream_manager.bound_rules')}
                                                     </div>
                                                     {parsedOverrideRules.length === 0 ? (
-                                                        <div className="rounded-lg border border-dashed border-border/50 bg-background/50 px-3 py-4 text-xs text-muted-foreground">
+                                                        <div className="rounded-lg border border-dashed border-input bg-background px-3 py-4 text-xs text-muted-foreground">
                                                             {t('upstream_manager.no_rules')}
                                                         </div>
                                                     ) : (
@@ -1899,7 +1908,7 @@ export function Settings() {
                                                                     <label
                                                                         key={`${ruleName}-${ruleIndex}`}
                                                                         className={cn(
-                                                                            "flex items-center gap-2 rounded-lg border border-border/40 bg-background/50 px-3 py-2 text-sm",
+                                                                            "flex items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 text-sm",
                                                                             !ruleEnabled && "opacity-70"
                                                                         )}
                                                                     >
@@ -1911,7 +1920,7 @@ export function Settings() {
                                                                         />
                                                                         <span className="min-w-0 truncate font-mono text-xs">{ruleName}</span>
                                                                         {!ruleEnabled && (
-                                                                            <Badge variant="outline" className="ml-auto h-5 shrink-0 rounded-full border-border/40 bg-muted/50 px-1.5 text-[10px] text-muted-foreground">
+                                                                            <Badge variant="outline" className="ml-auto h-5 shrink-0 rounded-md border-input bg-muted/50 px-1.5 text-xs text-muted-foreground">
                                                                                 {t('settings.rule_disabled')}
                                                                             </Badge>
                                                                         )}
@@ -1933,11 +1942,11 @@ export function Settings() {
                                             />
                                             {editingUpstream.usageEnabled && (
                                                 <div className="space-y-2">
-                                                    <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                                    <div className="text-xs font-semibold text-muted-foreground">
                                                         {t('upstream_manager.bound_usage_rules')}
                                                     </div>
                                                     {parsedUsageRules.length === 0 ? (
-                                                        <div className="rounded-lg border border-dashed border-border/50 bg-background/50 px-3 py-4 text-xs text-muted-foreground">
+                                                        <div className="rounded-lg border border-dashed border-input bg-background px-3 py-4 text-xs text-muted-foreground">
                                                             {t('upstream_manager.no_usage_rules')}
                                                         </div>
                                                     ) : (
@@ -1950,7 +1959,7 @@ export function Settings() {
                                                                     <label
                                                                         key={`${ruleName}-${ruleIndex}`}
                                                                         className={cn(
-                                                                            "flex items-center gap-2 rounded-lg border border-border/40 bg-background/50 px-3 py-2 text-sm",
+                                                                            "flex items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 text-sm",
                                                                             !ruleEnabled && "opacity-70"
                                                                         )}
                                                                     >
@@ -1962,7 +1971,7 @@ export function Settings() {
                                                                         />
                                                                         <span className="min-w-0 truncate font-mono text-xs">{ruleName}</span>
                                                                         {!ruleEnabled && (
-                                                                            <Badge variant="outline" className="ml-auto h-5 shrink-0 rounded-full border-border/40 bg-muted/50 px-1.5 text-[10px] text-muted-foreground">
+                                                                            <Badge variant="outline" className="ml-auto h-5 shrink-0 rounded-md border-input bg-muted/50 px-1.5 text-xs text-muted-foreground">
                                                                                 {t('settings.rule_disabled')}
                                                                             </Badge>
                                                                         )}
@@ -1977,7 +1986,7 @@ export function Settings() {
                                 </AdvancedSettings>
                             </div>
 
-                            <div className="flex justify-end gap-2 border-t border-border/50 bg-card px-6 py-4">
+                            <div className="flex justify-end gap-2 border-t border-input bg-card px-6 py-4">
                                 <Button type="button" variant="ghost" onClick={() => setEditingUpstream(null)}>
                                     {t('common.cancel')}
                                 </Button>
@@ -1994,15 +2003,15 @@ export function Settings() {
                 <div className="relative z-10 w-full space-y-10 pb-20 px-4 sm:px-10 pt-6 animate-fade-in">
 
                     {/* Header & Tabs */}
-                    <div className="flex items-center gap-2 border-b border-border/40 pb-5">
+                    <div className="flex items-center gap-2 border-b border-input pb-5">
 
                         <div className="flex items-center gap-2">
                             <button
                                 onClick={() => setActiveTab('routing')}
                                 className={cn(
-                                    "px-5 py-2.5 rounded-xl text-base font-medium transition-all duration-200",
+                                    "px-5 py-2.5 rounded-md text-base font-medium transition-all duration-200",
                                     activeTab === 'routing'
-                                        ? "bg-primary/10 text-primary shadow-sm"
+                                        ? "bg-primary/10 text-primary"
                                         : "text-foreground/85 hover:bg-muted/50 hover:text-foreground"
                                 )}
                             >
@@ -2011,9 +2020,9 @@ export function Settings() {
                             <button
                                 onClick={() => setActiveTab('logging')}
                                 className={cn(
-                                    "px-5 py-2.5 rounded-xl text-base font-medium transition-all duration-200",
+                                    "px-5 py-2.5 rounded-md text-base font-medium transition-all duration-200",
                                     activeTab === 'logging'
-                                        ? "bg-primary/10 text-primary shadow-sm"
+                                        ? "bg-primary/10 text-primary"
                                         : "text-foreground/70 hover:bg-muted/50 hover:text-foreground"
                                 )}
                             >
@@ -2022,9 +2031,9 @@ export function Settings() {
                             <button
                                 onClick={() => setActiveTab('overrides')}
                                 className={cn(
-                                    "px-5 py-2.5 rounded-xl text-base font-medium transition-all duration-200",
+                                    "px-5 py-2.5 rounded-md text-base font-medium transition-all duration-200",
                                     activeTab === 'overrides'
-                                        ? "bg-primary/10 text-primary shadow-sm"
+                                        ? "bg-primary/10 text-primary"
                                         : "text-foreground/70 hover:bg-muted/50 hover:text-foreground"
                                 )}
                             >
@@ -2033,9 +2042,9 @@ export function Settings() {
                             <button
                                 onClick={() => setActiveTab('system')}
                                 className={cn(
-                                    "px-5 py-2.5 rounded-xl text-base font-medium transition-all duration-200",
+                                    "px-5 py-2.5 rounded-md text-base font-medium transition-all duration-200",
                                     activeTab === 'system'
-                                        ? "bg-primary/10 text-primary shadow-sm"
+                                        ? "bg-primary/10 text-primary"
                                         : "text-foreground/70 hover:bg-muted/50 hover:text-foreground"
                                 )}
                             >
@@ -2053,7 +2062,7 @@ export function Settings() {
                                         title={t('settings.access_title')}
                                         description={t('settings.access_description')}
                                     >
-                                        <div className="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
+                                        <div className="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
                                             <FieldBlock
                                                 label={t('settings.proxy_domain_suffix')}
                                                 hint={t('settings.proxy_domain_suffix_hint', {
@@ -2064,7 +2073,7 @@ export function Settings() {
                                                 <Input
                                                     value={`.${domainSuffix}`}
                                                     readOnly
-                                                    className="h-11 w-full rounded-xl border-border/30 bg-background/40 text-sm font-medium shadow-sm transition-colors cursor-default"
+                                                    className="h-9 w-full rounded-md border-input bg-background text-sm font-medium transition-colors cursor-default"
                                                 />
                                             </FieldBlock>
                                             <FieldBlock
@@ -2077,7 +2086,7 @@ export function Settings() {
                                                     value={pathRoutingPrefix}
                                                     onChange={e => setPathRoutingPrefix(e.target.value)}
                                                     placeholder="/_proxy"
-                                                    className="h-11 w-full rounded-xl border-border/30 bg-background/50 text-sm shadow-sm transition-colors focus-visible:bg-background"
+                                                    className="h-9 w-full rounded-md border-input bg-background text-sm transition-colors focus-visible:bg-background"
                                                 />
                                             </FieldBlock>
                                             <div className="flex items-center lg:pt-6">
@@ -2100,7 +2109,7 @@ export function Settings() {
                                                 variant={showAddForm ? 'secondary' : 'default'}
                                                 onClick={() => setShowAddForm(prev => !prev)}
                                                 size="sm"
-                                                className="h-9 rounded-lg font-medium shadow-sm transition-all whitespace-nowrap"
+                                                className="h-9 rounded-lg font-medium transition-all whitespace-nowrap"
                                             >
                                                 {!showAddForm && <Plus className="mr-1.5 h-4 w-4 shrink-0" />}
                                                 {showAddForm ? t('common.cancel') : t('upstream_manager.add_new')}
@@ -2109,7 +2118,7 @@ export function Settings() {
                                     >
                                     <div className="w-full">
                                         {showAddForm && (
-                                            <div className="mb-8 w-full rounded-2xl bg-background/40 p-6 ring-1 ring-border/20 backdrop-blur-sm">
+                                            <div className="mb-8 w-full rounded-lg bg-background p-6 ring-1 ring-border/20 backdrop-blur-sm">
                                                 <form onSubmit={handleAddUpstream} className="grid grid-cols-1 gap-6 md:grid-cols-12 md:items-end">
                                                     <div className="md:col-span-3">
                                                         <FieldBlock label={t('upstream_manager.name')} htmlFor="name">
@@ -2119,7 +2128,7 @@ export function Settings() {
                                                                     value={newName}
                                                                     onChange={e => setNewName(e.target.value)}
                                                                     placeholder="openai"
-                                                                    className="h-11 rounded-xl border-border/30 bg-background/80 pr-20 text-sm shadow-sm transition-colors focus-visible:bg-background"
+                                                                    className="h-9 rounded-md border-input bg-background pr-20 text-sm transition-colors focus-visible:bg-background"
                                                                     required
                                                                 />
                                                                 <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-xs text-muted-foreground">
@@ -2136,7 +2145,7 @@ export function Settings() {
                                                                 value={newTarget}
                                                                 onChange={e => setNewTarget(e.target.value)}
                                                                 placeholder="https://api.openai.com"
-                                                                className="h-11 rounded-xl border-border/30 bg-background/80 font-mono text-sm shadow-sm transition-colors focus-visible:bg-background"
+                                                                className="h-9 rounded-md border-input bg-background font-mono text-sm transition-colors focus-visible:bg-background"
                                                                 required
                                                             />
                                                         </FieldBlock>
@@ -2150,7 +2159,7 @@ export function Settings() {
                                                                 min="1"
                                                                 value={newTimeout}
                                                                 onChange={e => setNewTimeout(Number(e.target.value))}
-                                                                className="h-11 rounded-xl border-border/30 bg-background/80 text-sm shadow-sm transition-colors focus-visible:bg-background"
+                                                                className="h-9 rounded-md border-input bg-background text-sm transition-colors focus-visible:bg-background"
                                                             />
                                                         </FieldBlock>
                                                     </div>
@@ -2163,7 +2172,7 @@ export function Settings() {
                                                                 min={0}
                                                                 value={newOrder}
                                                                 onChange={e => setNewOrder(Number(e.target.value))}
-                                                                className="h-11 rounded-xl border-border/30 bg-background/80 text-sm shadow-sm transition-colors focus-visible:bg-background"
+                                                                className="h-9 rounded-md border-input bg-background text-sm transition-colors focus-visible:bg-background"
                                                             />
                                                         </FieldBlock>
                                                     </div>
@@ -2177,7 +2186,7 @@ export function Settings() {
                                                                 value={newOutboundProxy}
                                                                 onChange={setNewOutboundProxy}
                                                                 t={t}
-                                                                className="h-11 bg-background/80 shadow-sm"
+                                                                className="h-9 bg-background"
                                                             />
                                                         </FieldBlock>
                                                     </div>
@@ -2200,7 +2209,7 @@ export function Settings() {
                                                                             min="0"
                                                                             value={newResponseHeaderTimeout}
                                                                             onChange={e => setNewResponseHeaderTimeout(Number(e.target.value))}
-                                                                            className="h-11 rounded-xl border-border/30 bg-background/80 text-sm shadow-sm transition-colors focus-visible:bg-background"
+                                                                            className="h-9 rounded-md border-input bg-background text-sm transition-colors focus-visible:bg-background"
                                                                         />
                                                                     </FieldBlock>
 
@@ -2215,7 +2224,7 @@ export function Settings() {
                                                                             min="0"
                                                                             value={newResponseBodyFirstByteTimeout}
                                                                             onChange={e => setNewResponseBodyFirstByteTimeout(Number(e.target.value))}
-                                                                            className="h-11 rounded-xl border-border/30 bg-background/80 text-sm shadow-sm transition-colors focus-visible:bg-background"
+                                                                            className="h-9 rounded-md border-input bg-background text-sm transition-colors focus-visible:bg-background"
                                                                         />
                                                                     </FieldBlock>
 
@@ -2230,13 +2239,13 @@ export function Settings() {
                                                                             min="0"
                                                                             value={newResponseBodyIdleTimeout}
                                                                             onChange={e => setNewResponseBodyIdleTimeout(Number(e.target.value))}
-                                                                            className="h-11 rounded-xl border-border/30 bg-background/80 text-sm shadow-sm transition-colors focus-visible:bg-background"
+                                                                            className="h-9 rounded-md border-input bg-background text-sm transition-colors focus-visible:bg-background"
                                                                         />
                                                                     </FieldBlock>
                                                                 </div>
                                                             </AdvancedSettingsGroup>
 
-                                                            <div className="border-t border-border/40 pt-5">
+                                                            <div className="border-t border-input pt-5">
                                                                 <AdvancedSettingsGroup title={t('upstream_manager.request_logging')}>
                                                                     <ToggleSetting
                                                                         label={t('upstream_manager.logging_enabled')}
@@ -2250,7 +2259,7 @@ export function Settings() {
                                                     </div>
 
                                                     <div className="flex justify-end md:col-span-12">
-                                                        <Button type="submit" variant="default" size="lg" className="h-11 rounded-xl min-w-[120px] font-medium shadow-sm whitespace-nowrap shrink-0">
+                                                        <Button type="submit" variant="default" size="lg" className="h-9 rounded-md min-w-[120px] font-medium whitespace-nowrap shrink-0">
                                                             <Save className="mr-1.5 h-4 w-4 shrink-0" />
                                                             {t('common.save')}
                                                         </Button>
@@ -2260,38 +2269,38 @@ export function Settings() {
                                         )}
 
                                         {upstreams.length === 0 ? (
-                                            <div className="rounded-3xl border border-dashed border-border/60 bg-muted/10 px-6 py-20 text-center">
-                                                <Upload className="mx-auto mb-4 h-10 w-10 text-muted-foreground/30" />
+                                            <div className="rounded-lg border border-dashed border-input bg-muted/10 px-6 py-20 text-center">
+                                                <Upload className="mx-auto mb-4 h-9 w-10 text-muted-foreground/30" />
                                                 <p className="text-sm text-foreground/75">
                                                     {t('upstream_manager.no_upstreams')}
                                                 </p>
                                             </div>
                                         ) : (
                                             <div className="space-y-0">
-                                                <div className="hidden grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_180px_110px_96px] gap-5 border-b border-border/40 pb-3 px-2 lg:grid">
-                                                    <span className="text-xs font-semibold uppercase tracking-wider text-foreground/65">{t('upstream_manager.name')}</span>
-                                                    <span className="text-xs font-semibold uppercase tracking-wider text-foreground/65">{t('upstream_manager.target')}</span>
-                                                    <span className="text-xs font-semibold uppercase tracking-wider text-foreground/65">{t('upstream_manager.outbound_proxy')}</span>
-                                                    <span className="text-xs font-semibold uppercase tracking-wider text-foreground/65">{t('upstream_manager.timeout')}</span>
-                                                    <span className="text-xs font-semibold uppercase tracking-wider text-foreground/65">{t('upstream_manager.actions')}</span>
+                                                <div className="hidden grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_180px_110px_96px] gap-5 border-b border-input pb-3 px-2 lg:grid">
+                                                    <span className="text-xs font-semibold text-foreground/65">{t('upstream_manager.name')}</span>
+                                                    <span className="text-xs font-semibold text-foreground/65">{t('upstream_manager.target')}</span>
+                                                    <span className="text-xs font-semibold text-foreground/65">{t('upstream_manager.outbound_proxy')}</span>
+                                                    <span className="text-xs font-semibold text-foreground/65">{t('upstream_manager.timeout')}</span>
+                                                    <span className="text-xs font-semibold text-foreground/65">{t('upstream_manager.actions')}</span>
                                                 </div>
 
                                                 <div className="divide-y divide-border/20">
                                                     {sortedUpstreams.map(upstream => (
                                                         <div
                                                             key={upstream.name}
-                                                            className="group grid gap-5 py-5 px-2 transition-colors hover:bg-muted/20 rounded-xl lg:-mx-2 lg:px-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_180px_110px_96px] lg:items-start lg:gap-5"
+                                                            className="group grid gap-5 py-5 px-2 transition-colors hover:bg-muted/20 rounded-md lg:-mx-2 lg:px-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_180px_110px_96px] lg:items-start lg:gap-5"
                                                         >
                                                             <div className="min-w-0 space-y-3">
                                                                 <div className="flex flex-wrap items-center gap-2">
                                                                     <span className="text-base font-semibold text-foreground">
                                                                         {upstream.name}
                                                                     </span>
-                                                                    <Badge variant="outline" className="rounded-full border-border/40 bg-background/50 px-2 py-0.5 text-[11px] font-medium text-foreground/80">
+                                                                    <Badge variant="outline" className="rounded-md border-input bg-background px-2 py-0.5 text-xs font-medium text-foreground/80">
                                                                         .{domainSuffix}
                                                                     </Badge>
                                                                     {(activeTargetConfig(upstream)?.request_overrides?.enabled || overrideBindings[upstream.name]?.enabled) && (
-                                                                        <Badge variant="outline" className="rounded-full border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                                                                        <Badge variant="outline" className="rounded-md border-warning/30 bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
                                                                             {t('log_detail.request_override')}
                                                                             {getBindingRuleNames(activeTargetConfig(upstream)?.request_overrides || overrideBindings[upstream.name]).length
                                                                                 ? ` · ${getBindingRuleNames(activeTargetConfig(upstream)?.request_overrides || overrideBindings[upstream.name]).length}`
@@ -2299,7 +2308,7 @@ export function Settings() {
                                                                         </Badge>
                                                                     )}
                                                                     {upstream.logging_enabled === false && (
-                                                                        <Badge variant="outline" className="rounded-full border-slate-500/30 bg-slate-500/10 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">
+                                                                        <Badge variant="outline" className="rounded-md border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
                                                                             {t('upstream_manager.logging_disabled_badge')}
                                                                         </Badge>
                                                                     )}
@@ -2309,7 +2318,7 @@ export function Settings() {
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => handleCopy(getProxyUrl(upstream.name))}
-                                                                        className="flex items-start gap-2 text-left text-[13px] leading-relaxed text-primary/80 transition-colors hover:text-primary"
+                                                                        className="flex items-start gap-2 text-left text-sm leading-relaxed text-primary/80 transition-colors hover:text-primary"
                                                                     >
                                                                         <Copy className="mt-1 h-3.5 w-3.5 shrink-0" />
                                                                         <span className="break-all font-mono">{getProxyUrl(upstream.name)}</span>
@@ -2319,7 +2328,7 @@ export function Settings() {
                                                                         <button
                                                                             type="button"
                                                                             onClick={() => handleCopy(getPathProxyUrl(upstream.name))}
-                                                                            className="flex items-start gap-2 text-left text-[13px] leading-relaxed text-emerald-600/80 transition-colors hover:text-emerald-600 dark:text-emerald-400/80 dark:hover:text-emerald-400"
+                                                                            className="flex items-start gap-2 text-left text-sm leading-relaxed text-success/80 transition-colors hover:text-success/80 dark:hover:text-success"
                                                                         >
                                                                             <Copy className="mt-1 h-3.5 w-3.5 shrink-0" />
                                                                             <span className="break-all font-mono">{getPathProxyUrl(upstream.name)}</span>
@@ -2329,7 +2338,7 @@ export function Settings() {
                                                             </div>
 
                                                             <div className="min-w-0">
-                                                                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-foreground/60 lg:hidden">
+                                                                <p className="mb-2 text-xs font-semibold text-foreground/60 lg:hidden">
                                                                     {t('upstream_manager.target')}
                                                                 </p>
                                                                 {upstream.targets && upstream.active_target && Object.keys(upstream.targets).length > 0 && (
@@ -2348,7 +2357,7 @@ export function Settings() {
                                                                         </SelectContent>
                                                                     </Select>
                                                                 )}
-                                                                <div className="text-[13px] leading-relaxed">
+                                                                <div className="text-sm leading-relaxed">
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => handleCopy(upstream.target)}
@@ -2361,10 +2370,10 @@ export function Settings() {
                                                             </div>
 
                                                             <div className="min-w-0">
-                                                                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-foreground/50 lg:hidden">
+                                                                <p className="mb-2 text-xs font-semibold text-foreground/50 lg:hidden">
                                                                     {t('upstream_manager.outbound_proxy')}
                                                                 </p>
-                                                                <div className="text-[13px] font-medium text-foreground/80">
+                                                                <div className="text-sm font-medium text-foreground/80">
                                                                     {outboundProxyMode(upstream.outbound_proxy) === 'custom' ? (
                                                                         <button
                                                                             type="button"
@@ -2381,10 +2390,10 @@ export function Settings() {
                                                             </div>
 
                                                             <div>
-                                                                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-foreground/50 lg:hidden">
+                                                                <p className="mb-2 text-xs font-semibold text-foreground/50 lg:hidden">
                                                                     {t('upstream_manager.timeout')}
                                                                 </p>
-                                                                <div className="text-[13px] font-medium text-foreground/80">
+                                                                <div className="text-sm font-medium text-foreground/80">
                                                                     {upstream.timeout}s
                                                                 </div>
                                                             </div>
@@ -2429,7 +2438,7 @@ export function Settings() {
                                         title={t('settings.section_content_size')}
                                         description={t('settings.section_content_size_desc')}
                                     >
-                                        <div className="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
+                                        <div className="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
                                             <FieldBlock
                                                 label={t('settings.max_request_body')}
                                                 hint={t('settings.max_request_body_hint')}
@@ -2442,7 +2451,7 @@ export function Settings() {
                                                     min="1"
                                                     value={maxRequestBody}
                                                     onChange={e => setMaxRequestBody(Number(e.target.value))}
-                                                    className="h-11 w-full rounded-xl border-border/30 bg-background/50 text-sm shadow-sm transition-colors focus-visible:bg-background"
+                                                    className="h-9 w-full rounded-md border-input bg-background text-sm transition-colors focus-visible:bg-background"
                                                 />
                                             </FieldBlock>
                                             <FieldBlock
@@ -2457,7 +2466,7 @@ export function Settings() {
                                                     min="1"
                                                     value={maxResponseBody}
                                                     onChange={e => setMaxResponseBody(Number(e.target.value))}
-                                                    className="h-11 w-full rounded-xl border-border/30 bg-background/50 text-sm shadow-sm transition-colors focus-visible:bg-background"
+                                                    className="h-9 w-full rounded-md border-input bg-background text-sm transition-colors focus-visible:bg-background"
                                                 />
                                             </FieldBlock>
                                             <FieldBlock
@@ -2472,7 +2481,7 @@ export function Settings() {
                                                     min="0"
                                                     value={detachBodyOver}
                                                     onChange={e => setDetachBodyOver(Number(e.target.value))}
-                                                    className="h-11 w-full rounded-xl border-border/30 bg-background/50 text-sm shadow-sm transition-colors focus-visible:bg-background"
+                                                    className="h-9 w-full rounded-md border-input bg-background text-sm transition-colors focus-visible:bg-background"
                                                 />
                                             </FieldBlock>
                                             <FieldBlock
@@ -2487,7 +2496,7 @@ export function Settings() {
                                                     min="0"
                                                     value={bodyPreview}
                                                     onChange={e => setBodyPreview(Number(e.target.value))}
-                                                    className="h-11 w-full rounded-xl border-border/30 bg-background/50 text-sm shadow-sm transition-colors focus-visible:bg-background"
+                                                    className="h-9 w-full rounded-md border-input bg-background text-sm transition-colors focus-visible:bg-background"
                                                 />
                                             </FieldBlock>
                                         </div>
@@ -2497,7 +2506,7 @@ export function Settings() {
                                         title={t('settings.section_retention')}
                                         description={t('settings.section_retention_desc')}
                                     >
-                                        <div className="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
+                                        <div className="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
                                             <FieldBlock
                                                 label={t('settings.retention_days')}
                                                 hint={t('settings.retention_days_hint')}
@@ -2510,7 +2519,7 @@ export function Settings() {
                                                     min="0"
                                                     value={retentionDays}
                                                     onChange={e => setRetentionDays(Number(e.target.value))}
-                                                    className="h-11 w-full rounded-xl border-border/30 bg-background/50 text-sm shadow-sm transition-colors focus-visible:bg-background"
+                                                    className="h-9 w-full rounded-md border-input bg-background text-sm transition-colors focus-visible:bg-background"
                                                 />
                                             </FieldBlock>
                                             <FieldBlock
@@ -2526,7 +2535,7 @@ export function Settings() {
                                                     step="0.1"
                                                     value={maxStorageGB}
                                                     onChange={e => setMaxStorageGB(Number(e.target.value))}
-                                                    className="h-11 w-full rounded-xl border-border/30 bg-background/50 text-sm shadow-sm transition-colors focus-visible:bg-background"
+                                                    className="h-9 w-full rounded-md border-input bg-background text-sm transition-colors focus-visible:bg-background"
                                                 />
                                             </FieldBlock>
                                         </div>
@@ -2536,7 +2545,7 @@ export function Settings() {
                                         title={t('settings.section_logging_behavior')}
                                         description={t('settings.section_logging_behavior_desc')}
                                     >
-                                        <div className="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-2">
+                                        <div className="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-2">
                                             <ToggleSetting
                                                 label={t('settings.early_request_body_snapshot')}
                                                 description={t('settings.early_request_body_snapshot_hint')}
@@ -2560,7 +2569,7 @@ export function Settings() {
                                             value={sensitiveHeaders}
                                             onChange={e => setSensitiveHeaders(e.target.value)}
                                             rows={4}
-                                            className="min-h-[112px] w-full rounded-xl border-border/30 bg-background/50 font-mono text-sm leading-relaxed shadow-sm transition-colors focus-visible:bg-background resize-y"
+                                            className="min-h-[112px] w-full rounded-md border-input bg-background font-mono text-sm leading-relaxed transition-colors focus-visible:bg-background resize-y"
                                             placeholder="Authorization&#10;x-api-key&#10;api-key"
                                         />
                                     </SettingSection>
@@ -2569,9 +2578,9 @@ export function Settings() {
                         )}
 
                         {activeTab === 'system' && (
-                            <div className="mx-auto max-w-7xl space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300 motion-reduce:animate-none motion-reduce:duration-0">
+                            <div className="mx-auto max-w-7xl space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300 motion-reduce:animate-none motion-reduce:duration-0">
                                 {metricsError && (
-                                    <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                                    <div className="flex items-start gap-3 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
                                         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                                         <span>{metricsError}</span>
                                     </div>
@@ -2617,8 +2626,8 @@ export function Settings() {
                                 </div>
 
                                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                                    <div className="rounded-xl border border-border/40 bg-background/45 px-5 py-4">
-                                        <div className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                    <div className="rounded-md border border-input bg-background/45 px-5 py-4">
+                                        <div className="mb-3 text-xs font-semibold text-muted-foreground">
                                             {t('settings.system_runtime')}
                                         </div>
                                         <dl className="grid grid-cols-[120px_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
@@ -2630,9 +2639,9 @@ export function Settings() {
                                             <dd className="break-all font-mono text-foreground">{metrics?.runtime.go_version || '-'}</dd>
                                         </dl>
                                     </div>
-                                    <div className="rounded-xl border border-border/40 bg-background/45 px-5 py-4">
+                                    <div className="rounded-md border border-input bg-background/45 px-5 py-4">
                                         <div className="mb-3 flex items-center justify-between gap-3">
-                                            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                            <div className="text-xs font-semibold text-muted-foreground">
                                                 {t('settings.system_snapshot')}
                                             </div>
                                             <Button
@@ -2658,10 +2667,10 @@ export function Settings() {
                                     </div>
                                 </div>
 
-                                <div className="rounded-xl border border-border/40 bg-background/45 px-5 py-4">
+                                <div className="rounded-md border border-input bg-background/45 px-5 py-4">
                                     <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                                         <div>
-                                            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                            <div className="text-xs font-semibold text-muted-foreground">
                                                 {t('settings.storage_usage_title')}
                                             </div>
                                             <div className="mt-2 text-sm text-muted-foreground">
@@ -2675,7 +2684,7 @@ export function Settings() {
                                             variant="outline"
                                             onClick={handleCalculateStorage}
                                             disabled={storageLoading}
-                                            className="h-10 rounded-xl"
+                                            className="h-9 rounded-md"
                                         >
                                             <RefreshCw className={cn("mr-2 h-4 w-4", storageLoading && "animate-spin")} />
                                             {t('settings.storage_usage_calculate')}
@@ -2683,15 +2692,15 @@ export function Settings() {
                                     </div>
 
                                     {storageError && (
-                                        <div className="mb-4 flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                                        <div className="mb-4 flex items-start gap-3 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
                                             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                                             <span>{storageError}</span>
                                         </div>
                                     )}
 
                                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                                        <div className="rounded-lg border border-border/30 bg-background/40 px-4 py-3">
-                                            <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                        <div className="rounded-lg border border-input bg-background px-4 py-3">
+                                            <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
                                                 <Archive className="h-3.5 w-3.5" />
                                                 {t('settings.storage_usage_total')}
                                             </div>
@@ -2704,8 +2713,8 @@ export function Settings() {
                                                 })}
                                             </div>
                                         </div>
-                                        <div className="rounded-lg border border-border/30 bg-background/40 px-4 py-3">
-                                            <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                        <div className="rounded-lg border border-input bg-background px-4 py-3">
+                                            <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
                                                 <Database className="h-3.5 w-3.5" />
                                                 {t('settings.storage_usage_database')}
                                             </div>
@@ -2718,8 +2727,8 @@ export function Settings() {
                                                     : '-'}
                                             </div>
                                         </div>
-                                        <div className="rounded-lg border border-border/30 bg-background/40 px-4 py-3">
-                                            <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                        <div className="rounded-lg border border-input bg-background px-4 py-3">
+                                            <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
                                                 <Archive className="h-3.5 w-3.5" />
                                                 {t('settings.storage_usage_blobs')}
                                             </div>
@@ -2735,10 +2744,10 @@ export function Settings() {
                                     </div>
                                 </div>
 
-                                <div className="rounded-xl border border-border/40 bg-background/45 px-5 py-4">
+                                <div className="rounded-md border border-input bg-background/45 px-5 py-4">
                                     <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                                         <div>
-                                            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                            <div className="text-xs font-semibold text-muted-foreground">
                                                 {t('settings.update_title')}
                                             </div>
                                             <div className="mt-2 text-sm text-muted-foreground">
@@ -2752,7 +2761,7 @@ export function Settings() {
                                             variant="outline"
                                             onClick={handleCheckUpdate}
                                             disabled={updateLoading}
-                                            className="h-10 rounded-xl"
+                                            className="h-9 rounded-md"
                                         >
                                             <RefreshCw className={cn("mr-2 h-4 w-4", updateLoading && "animate-spin")} />
                                             {t('settings.update_check')}
@@ -2760,7 +2769,7 @@ export function Settings() {
                                     </div>
 
                                     {updateError && (
-                                        <div className="mb-4 flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                                        <div className="mb-4 flex items-start gap-3 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
                                             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                                             <span>{updateError}</span>
                                         </div>
@@ -2772,10 +2781,10 @@ export function Settings() {
                                                 <Badge
                                                     variant="outline"
                                                     className={cn(
-                                                        "rounded-full px-3 py-1 text-xs font-semibold",
+                                                        "rounded-md px-3 py-1 text-xs font-semibold",
                                                         updateInfo.update_available
-                                                            ? "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400"
-                                                            : "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                                            ? "border-warning/30 bg-warning/10 text-warning"
+                                                            : "border-success/30 bg-success/10 text-success"
                                                     )}
                                                 >
                                                     {updateInfo.update_available ? t('settings.update_available') : t('settings.update_latest')}
@@ -2792,7 +2801,7 @@ export function Settings() {
                                             {updateInfo.update_available && (
                                                 <div className="flex flex-wrap gap-2">
                                                     {updateInfo.matching_asset && (
-                                                        <Button asChild className="h-10 rounded-xl">
+                                                        <Button asChild className="h-9 rounded-md">
                                                             <a href={updateInfo.matching_asset.download_url} target="_blank" rel="noreferrer noopener">
                                                                 <Download className="mr-2 h-4 w-4" />
                                                                 {t('settings.update_download_asset', {
@@ -2801,7 +2810,7 @@ export function Settings() {
                                                             </a>
                                                         </Button>
                                                     )}
-                                                    <Button asChild variant="outline" className="h-10 rounded-xl">
+                                                    <Button asChild variant="outline" className="h-9 rounded-md">
                                                         <a href={updateInfo.release_url} target="_blank" rel="noreferrer noopener">
                                                             <ExternalLink className="mr-2 h-4 w-4" />
                                                             {t('settings.update_open_release')}
@@ -2817,15 +2826,15 @@ export function Settings() {
 
                         {activeTab === 'overrides' && (
                             <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-300 motion-reduce:animate-none motion-reduce:duration-0">
-                                <div className="mx-auto max-w-7xl space-y-8">
-                                    <div className="inline-flex rounded-xl border border-border/50 bg-muted/30 p-1">
+                                <div className="mx-auto max-w-7xl space-y-6">
+                                    <div className="inline-flex rounded-md border border-input bg-muted/30 p-1">
                                         <button
                                             type="button"
                                             onClick={() => setActiveRuleTab('request_overrides')}
                                             className={cn(
                                                 "rounded-lg px-4 py-2 text-sm font-semibold transition-colors",
                                                 activeRuleTab === 'request_overrides'
-                                                    ? "bg-background text-foreground shadow-sm"
+                                                    ? "bg-background text-foreground"
                                                     : "text-muted-foreground hover:text-foreground"
                                             )}
                                         >
@@ -2837,7 +2846,7 @@ export function Settings() {
                                             className={cn(
                                                 "rounded-lg px-4 py-2 text-sm font-semibold transition-colors",
                                                 activeRuleTab === 'usage_extraction'
-                                                    ? "bg-background text-foreground shadow-sm"
+                                                    ? "bg-background text-foreground"
                                                     : "text-muted-foreground hover:text-foreground"
                                             )}
                                         >
@@ -2847,7 +2856,7 @@ export function Settings() {
 
                                     {activeRuleTab === 'request_overrides' && (
                                         <>
-                                    <div className="flex items-start gap-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-800 dark:text-yellow-300">
+                                    <div className="flex items-start gap-3 rounded-md border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning">
                                         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                                         <div className="space-y-1">
                                             <p className="font-semibold">{t('settings.request_overrides_warning_title')}</p>
@@ -2856,7 +2865,7 @@ export function Settings() {
                                     </div>
 
                                     <SettingSection title={t('settings.request_overrides_config')}>
-                                        <div className="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
+                                        <div className="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
                                             <div className="flex items-center sm:pt-6">
                                                 <ToggleSetting
                                                     label={t('settings.request_overrides_enable')}
@@ -2878,7 +2887,7 @@ export function Settings() {
                                                     min="1"
                                                     value={overrideMaxBodyKB}
                                                     onChange={e => setOverrideMaxBodyKB(Number(e.target.value))}
-                                                    className="h-11 w-full rounded-xl border-border/30 bg-background/50 text-sm shadow-sm transition-colors focus-visible:bg-background"
+                                                    className="h-9 w-full rounded-md border-input bg-background text-sm transition-colors focus-visible:bg-background"
                                                 />
                                             </FieldBlock>
                                         </div>
@@ -2888,7 +2897,7 @@ export function Settings() {
                                         title={t('settings.request_overrides_rules')}
                                         description={t('settings.request_overrides_rules_hint')}
                                     >
-                                        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/40 bg-muted/30 px-3 py-2">
+                                        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-md border border-input bg-muted/30 px-3 py-2">
                                             <p className="text-xs leading-5 text-muted-foreground">
                                                 {t('settings.request_overrides_scope_hint')}
                                             </p>
@@ -2923,9 +2932,9 @@ export function Settings() {
                                             </div>
                                         </div>
                                         <div className="grid gap-4 xl:grid-cols-[minmax(280px,0.32fr)_minmax(0,1fr)]">
-                                            <div className="rounded-xl border border-border/40 bg-background/50">
-                                                <div className="flex items-center justify-between gap-2 border-b border-border/40 px-3 py-2">
-                                                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                            <div className="rounded-md border border-input bg-background">
+                                                <div className="flex items-center justify-between gap-2 border-b border-input px-3 py-2">
+                                                    <span className="text-xs font-semibold text-muted-foreground">
                                                         {t('settings.request_override_rule_list')}
                                                     </span>
                                                     <Button
@@ -2940,7 +2949,7 @@ export function Settings() {
                                                     </Button>
                                                 </div>
                                                 {overrideRulesParse.error ? (
-                                                    <div className="px-3 py-8 text-center text-xs text-red-500">
+                                                    <div className="px-3 py-8 text-center text-xs text-danger">
                                                         {overrideRulesParse.error}
                                                     </div>
                                                 ) : overrideRuleObjects.length === 0 ? (
@@ -2954,10 +2963,10 @@ export function Settings() {
                                                             const selected = selectedOverrideRuleIndex === index
                                                             const status = getRuleRuntimeStatus(rule, overrideBindings, requestOverridesEnabled)
                                                             const statusBadgeClass = cn(
-                                                                "h-5 rounded-full px-2 text-[10px] font-semibold",
-                                                                status.kind === 'active' && "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-                                                                status.kind === 'blocked' && "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400",
-                                                                status.kind === 'unbound' && "border-border/40 bg-muted/50 text-muted-foreground",
+                                                                "h-5 rounded-md px-2 text-xs font-semibold",
+                                                                status.kind === 'active' && "border-success/40 bg-success/10 text-success",
+                                                                status.kind === 'blocked' && "border-warning/40 bg-warning/10 text-warning",
+                                                                status.kind === 'unbound' && "border-input bg-muted/50 text-muted-foreground",
                                                             )
                                                             const statusText =
                                                                 status.kind === 'active'
@@ -2995,7 +3004,7 @@ export function Settings() {
                                                                                 {statusText}
                                                                             </Badge>
                                                                             {detail && (
-                                                                                <span className="min-w-0 truncate text-[10px] text-muted-foreground">
+                                                                                <span className="min-w-0 truncate text-xs text-muted-foreground">
                                                                                     {detail}
                                                                                 </span>
                                                                             )}
@@ -3008,15 +3017,15 @@ export function Settings() {
                                                 )}
                                             </div>
 
-                                            <div className="rounded-xl border border-border/40 bg-background/50">
-                                                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 px-3 py-2">
+                                            <div className="rounded-md border border-input bg-background">
+                                                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-input px-3 py-2">
                                                     <div className="min-w-0">
                                                         <div className="truncate text-sm font-semibold text-foreground">
                                                             {overrideRuleObjects[selectedOverrideRuleIndex]
                                                                 ? getOverrideRuleName(overrideRuleObjects[selectedOverrideRuleIndex], `rule-${selectedOverrideRuleIndex + 1}`)
                                                                 : t('settings.request_override_no_rule_selected')}
                                                         </div>
-                                                        <div className="text-[11px] text-muted-foreground">
+                                                        <div className="text-xs text-muted-foreground">
                                                             {t('settings.request_override_single_rule_hint')}
                                                         </div>
                                                     </div>
@@ -3037,7 +3046,7 @@ export function Settings() {
                                                                 variant="ghost"
                                                                 size="icon"
                                                                 onClick={() => handleDeleteOverrideRule(selectedOverrideRuleIndex)}
-                                                                className="h-8 w-8 text-muted-foreground hover:text-red-500"
+                                                                className="h-8 w-8 text-muted-foreground hover:text-danger"
                                                                 aria-label={t('common.delete')}
                                                             >
                                                                 <Trash2 className="h-3.5 w-3.5" />
@@ -3047,7 +3056,7 @@ export function Settings() {
                                                 </div>
                                                 {overrideRuleObjects[selectedOverrideRuleIndex] ? (
                                                     <div className="space-y-4 p-3">
-                                                        <div className="grid gap-4 rounded-xl border border-border/50 bg-muted/20 p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+                                                        <div className="grid gap-4 rounded-md border border-input bg-muted/20 p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
                                                             <FieldBlock label={t('settings.request_override_rule_name')}>
                                                                 <Input
                                                                     value={selectedOverrideRuleName}
@@ -3056,15 +3065,15 @@ export function Settings() {
                                                                     onKeyDown={event => {
                                                                         if (event.key === 'Enter') event.currentTarget.blur()
                                                                     }}
-                                                                    className="h-10 rounded-xl border-border/40 bg-background font-mono text-sm"
+                                                                    className="h-9 rounded-md border-input bg-background font-mono text-sm"
                                                                 />
                                                                 {selectedOverrideRuleNameError && (
-                                                                    <div className="text-xs text-red-600 dark:text-red-400">
+                                                                    <div className="text-xs text-danger">
                                                                         {selectedOverrideRuleNameError}
                                                                     </div>
                                                                 )}
                                                             </FieldBlock>
-                                                            <div className="flex h-10 items-center gap-2 rounded-xl border border-border/40 bg-background px-3">
+                                                            <div className="flex h-9 items-center gap-2 rounded-md border border-input bg-background px-3">
                                                                 <Switch
                                                                     id="selected-override-rule-enabled"
                                                                     checked={getOverrideRuleEnabled(overrideRuleObjects[selectedOverrideRuleIndex])}
@@ -3078,12 +3087,12 @@ export function Settings() {
                                                         </div>
 
                                                         <div className="grid gap-4 lg:grid-cols-2">
-                                                            <div className="space-y-3 rounded-xl border border-border/50 bg-muted/20 p-4">
+                                                            <div className="space-y-3 rounded-md border border-input bg-muted/20 p-4">
                                                                 <div>
-                                                                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                                                    <Label className="text-xs font-semibold text-muted-foreground">
                                                                         {t('settings.request_override_match')}
                                                                     </Label>
-                                                                    <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+                                                                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
                                                                         {t('settings.request_override_match_hint')}
                                                                     </p>
                                                                 </div>
@@ -3092,21 +3101,21 @@ export function Settings() {
                                                                     onChange={event => handleOverrideMatchTextChange(event.target.value)}
                                                                     rows={9}
                                                                     spellCheck={false}
-                                                                    className="min-h-[220px] w-full resize-y rounded-lg border-border/30 bg-background font-mono text-xs leading-relaxed shadow-sm"
+                                                                    className="min-h-[220px] w-full resize-y rounded-lg border-input bg-background font-mono text-xs leading-relaxed"
                                                                 />
                                                                 {selectedOverrideMatchError && (
-                                                                    <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-400">
+                                                                    <div className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
                                                                         {selectedOverrideMatchError}
                                                                     </div>
                                                                 )}
                                                             </div>
 
-                                                            <div className="space-y-3 rounded-xl border border-border/50 bg-muted/20 p-4">
+                                                            <div className="space-y-3 rounded-md border border-input bg-muted/20 p-4">
                                                                 <div>
-                                                                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                                                    <Label className="text-xs font-semibold text-muted-foreground">
                                                                         {t('settings.request_override_body_patch')}
                                                                     </Label>
-                                                                    <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+                                                                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
                                                                         {t('settings.request_override_body_patch_hint')}
                                                                     </p>
                                                                 </div>
@@ -3115,23 +3124,23 @@ export function Settings() {
                                                                     onChange={event => handleOverridePatchTextChange(event.target.value)}
                                                                     rows={9}
                                                                     spellCheck={false}
-                                                                    className="min-h-[220px] w-full resize-y rounded-lg border-border/30 bg-background font-mono text-xs leading-relaxed shadow-sm"
+                                                                    className="min-h-[220px] w-full resize-y rounded-lg border-input bg-background font-mono text-xs leading-relaxed"
                                                                 />
                                                                 {selectedOverridePatchError && (
-                                                                    <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-400">
+                                                                    <div className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
                                                                         {selectedOverridePatchError}
                                                                     </div>
                                                                 )}
                                                             </div>
                                                         </div>
 
-                                                        <div className="space-y-3 rounded-xl border border-border/50 bg-muted/20 p-4">
+                                                        <div className="space-y-3 rounded-md border border-input bg-muted/20 p-4">
                                                             <div className="flex items-start justify-between gap-3">
                                                                 <div>
-                                                                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                                                    <Label className="text-xs font-semibold text-muted-foreground">
                                                                         {t('settings.request_override_headers')}
                                                                     </Label>
-                                                                    <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+                                                                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
                                                                         {t('settings.request_override_headers_hint')}
                                                                     </p>
                                                                 </div>
@@ -3154,7 +3163,7 @@ export function Settings() {
                                                                                 value={header.op}
                                                                                 onValueChange={value => handleUpdateHeaderOp(hIdx, 'op', value)}
                                                                             >
-                                                                                <SelectTrigger className="h-9 w-full rounded-lg border-border/30 bg-background text-xs">
+                                                                                <SelectTrigger className="h-9 w-full rounded-lg border-input bg-background text-xs">
                                                                                     <SelectValue />
                                                                                 </SelectTrigger>
                                                                                 <SelectContent>
@@ -3166,7 +3175,7 @@ export function Settings() {
                                                                                 value={header.name}
                                                                                 onChange={event => handleUpdateHeaderOp(hIdx, 'name', event.target.value)}
                                                                                 placeholder={t('settings.header_name_placeholder')}
-                                                                                className="h-9 min-w-0 rounded-lg border-border/30 bg-background text-xs"
+                                                                                className="h-9 min-w-0 rounded-lg border-input bg-background text-xs"
                                                                             />
                                                                             <HeaderValueInput
                                                                                 value={header.value ?? ''}
@@ -3182,7 +3191,7 @@ export function Settings() {
                                                                                 variant="ghost"
                                                                                 size="icon"
                                                                                 onClick={() => handleRemoveHeaderOp(hIdx)}
-                                                                                className="h-8 w-8 shrink-0 text-muted-foreground hover:text-red-500"
+                                                                                className="h-8 w-8 shrink-0 text-muted-foreground hover:text-danger"
                                                                             >
                                                                                 <Trash2 className="h-3.5 w-3.5" />
                                                                             </Button>
@@ -3190,19 +3199,19 @@ export function Settings() {
                                                                     ))}
                                                                 </div>
                                                             ) : (
-                                                                <div className="rounded-lg border border-dashed border-border/40 px-3 py-4 text-center text-xs text-muted-foreground">
+                                                                <div className="rounded-lg border border-dashed border-input px-3 py-4 text-center text-xs text-muted-foreground">
                                                                     {t('settings.request_override_no_headers')}
                                                                 </div>
                                                             )}
                                                         </div>
 
-                                                        <details className="group rounded-xl border border-border/50 bg-muted/20">
+                                                        <details className="group rounded-md border border-input bg-muted/20">
                                                             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-xs font-semibold text-muted-foreground marker:content-none hover:text-foreground [&::-webkit-details-marker]:hidden">
                                                                 <span>{t('settings.request_override_final_preview')}</span>
                                                                 <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
                                                             </summary>
-                                                            <div className="space-y-2 border-t border-border/40 p-3">
-                                                                <p className="text-[11px] leading-5 text-muted-foreground">
+                                                            <div className="space-y-2 border-t border-input p-3">
+                                                                <p className="text-xs leading-5 text-muted-foreground">
                                                                     {t('settings.request_override_final_preview_hint')}
                                                                 </p>
                                                                 <Textarea
@@ -3210,7 +3219,7 @@ export function Settings() {
                                                                     readOnly
                                                                     rows={12}
                                                                     spellCheck={false}
-                                                                    className="min-h-[260px] w-full resize-y rounded-lg border-border/30 bg-background/60 font-mono text-xs leading-relaxed"
+                                                                    className="min-h-[260px] w-full resize-y rounded-lg border-input bg-background font-mono text-xs leading-relaxed"
                                                                 />
                                                                 <div className="flex justify-end">
                                                                     <Button type="button" variant="outline" size="sm" onClick={() => handleCopy(selectedOverrideRulePreview)} className="h-8 text-xs">
@@ -3221,7 +3230,7 @@ export function Settings() {
                                                             </div>
                                                         </details>
 
-                                                        <div className="rounded-xl border border-border/40 bg-muted/10">
+                                                        <div className="rounded-md border border-input bg-muted/10">
                                                             <button
                                                                 type="button"
                                                                 onClick={() => setSelectedRuleAdvancedOpen(open => !open)}
@@ -3231,16 +3240,16 @@ export function Settings() {
                                                                 <span>{selectedRuleAdvancedOpen ? t('common.hide', '隐藏') : t('common.show', '显示')}</span>
                                                             </button>
                                                             {selectedRuleAdvancedOpen && (
-                                                                <div className="space-y-2 border-t border-border/40 p-3">
+                                                                <div className="space-y-2 border-t border-input p-3">
                                                                     <Textarea
                                                                         value={selectedOverrideRuleText}
                                                                         onChange={event => handleOverrideRuleTextChange(event.target.value)}
                                                                         rows={14}
                                                                         spellCheck={false}
-                                                                        className="min-h-[320px] w-full resize-y rounded-lg border-border/30 bg-background font-mono text-xs leading-relaxed shadow-sm"
+                                                                        className="min-h-[320px] w-full resize-y rounded-lg border-input bg-background font-mono text-xs leading-relaxed"
                                                                     />
                                                                     {selectedOverrideRuleError && (
-                                                                <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-400">
+                                                                <div className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
                                                                     {selectedOverrideRuleError}
                                                                 </div>
                                                             )}
@@ -3256,7 +3265,7 @@ export function Settings() {
                                             </div>
                                         </div>
 
-                                        <div className="mt-4 rounded-xl border border-border/40 bg-muted/20">
+                                        <div className="mt-4 rounded-md border border-input bg-muted/20">
                                             <button
                                                 type="button"
                                                 onClick={() => setAdvancedRulesOpen(open => !open)}
@@ -3266,13 +3275,13 @@ export function Settings() {
                                                 <span>{advancedRulesOpen ? t('common.hide', '隐藏') : t('common.show', '显示')}</span>
                                             </button>
                                             {advancedRulesOpen && (
-                                                <div className="border-t border-border/40 p-3">
+                                                <div className="border-t border-input p-3">
                                                     <Textarea
                                                         value={overrideRulesText}
                                                         onChange={e => setOverrideRulesText(e.target.value)}
                                                         rows={12}
                                                         spellCheck={false}
-                                                        className="min-h-[260px] w-full rounded-lg border-border/30 bg-background/50 font-mono text-xs leading-relaxed shadow-sm transition-colors focus-visible:bg-background resize-y"
+                                                        className="min-h-[260px] w-full rounded-lg border-input bg-background font-mono text-xs leading-relaxed transition-colors focus-visible:bg-background resize-y"
                                                         placeholder={requestOverrideExample}
                                                     />
                                                 </div>
@@ -3298,7 +3307,7 @@ export function Settings() {
                                         title={t('settings.usage_extraction_rules')}
                                         description={t('settings.usage_extraction_rules_hint')}
                                     >
-                                            <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/40 bg-background/50 px-3 py-2">
+                                            <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-md border border-input bg-background px-3 py-2">
                                                 <p className="text-xs leading-5 text-muted-foreground">
                                                     {t('settings.usage_extraction_scope_hint')}
                                                 </p>
@@ -3316,9 +3325,9 @@ export function Settings() {
                                             </div>
 
                                             <div className="grid gap-4 xl:grid-cols-[minmax(280px,0.32fr)_minmax(0,1fr)]">
-                                                <div className="rounded-xl border border-border/40 bg-background/50">
-                                                    <div className="flex items-center justify-between gap-2 border-b border-border/40 px-3 py-2">
-                                                        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                                <div className="rounded-md border border-input bg-background">
+                                                    <div className="flex items-center justify-between gap-2 border-b border-input px-3 py-2">
+                                                        <span className="text-xs font-semibold text-muted-foreground">
                                                             {t('settings.usage_extraction_rule_list')}
                                                         </span>
                                                         <Button
@@ -3333,7 +3342,7 @@ export function Settings() {
                                                         </Button>
                                                     </div>
                                                     {usageRulesParse.error ? (
-                                                        <div className="px-3 py-8 text-center text-xs text-red-500">
+                                                        <div className="px-3 py-8 text-center text-xs text-danger">
                                                             {usageRulesParse.error}
                                                         </div>
                                                     ) : usageRuleObjects.length === 0 ? (
@@ -3365,16 +3374,16 @@ export function Settings() {
                                                                                 <Badge
                                                                                     variant="outline"
                                                                                     className={cn(
-                                                                                        "h-5 rounded-full px-1.5 text-[10px]",
+                                                                                        "h-5 rounded-md px-1.5 text-xs",
                                                                                         getOverrideRuleEnabled(rule)
-                                                                                            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                                                                                            : "border-border/40 bg-muted/50 text-muted-foreground"
+                                                                                            ? "border-success/30 bg-success/10 text-success"
+                                                                                            : "border-input bg-muted/50 text-muted-foreground"
                                                                                     )}
                                                                                 >
                                                                                     {getOverrideRuleEnabled(rule) ? t('settings.rule_enabled') : t('settings.rule_disabled')}
                                                                                 </Badge>
                                                                                 {boundCount > 0 && (
-                                                                                    <Badge variant="outline" className="h-5 rounded-full border-border/40 bg-muted/50 px-1.5 text-[10px] text-muted-foreground">
+                                                                                    <Badge variant="outline" className="h-5 rounded-md border-input bg-muted/50 px-1.5 text-xs text-muted-foreground">
                                                                                         {t('settings.rule_bound_count', { count: boundCount })}
                                                                                     </Badge>
                                                                                 )}
@@ -3387,15 +3396,15 @@ export function Settings() {
                                                     )}
                                                 </div>
 
-                                                <div className="rounded-xl border border-border/40 bg-background/50">
-                                                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 px-3 py-2">
+                                                <div className="rounded-md border border-input bg-background">
+                                                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-input px-3 py-2">
                                                         <div className="min-w-0">
                                                             <div className="truncate text-sm font-semibold text-foreground">
                                                                 {usageRuleObjects[selectedUsageRuleIndex]
                                                                     ? getOverrideRuleName(usageRuleObjects[selectedUsageRuleIndex], `usage-rule-${selectedUsageRuleIndex + 1}`)
                                                                     : t('settings.usage_extraction_no_rule_selected')}
                                                             </div>
-                                                            <div className="text-[11px] text-muted-foreground">
+                                                            <div className="text-xs text-muted-foreground">
                                                                 {t('settings.usage_extraction_single_rule_hint')}
                                                             </div>
                                                         </div>
@@ -3427,7 +3436,7 @@ export function Settings() {
                                                                     variant="ghost"
                                                                     size="icon"
                                                                     onClick={() => handleDeleteUsageRule(selectedUsageRuleIndex)}
-                                                                    className="h-8 w-8 text-muted-foreground hover:text-red-500"
+                                                                    className="h-8 w-8 text-muted-foreground hover:text-danger"
                                                                     aria-label={t('common.delete')}
                                                                 >
                                                                     <Trash2 className="h-3.5 w-3.5" />
@@ -3442,10 +3451,10 @@ export function Settings() {
                                                                 onChange={e => handleUsageRuleTextChange(e.target.value)}
                                                                 rows={14}
                                                                 spellCheck={false}
-                                                                className="min-h-[320px] w-full resize-y rounded-lg border-border/30 bg-muted/20 font-mono text-xs leading-relaxed shadow-sm transition-colors focus-visible:bg-background"
+                                                                className="min-h-[320px] w-full resize-y rounded-lg border-input bg-muted/20 font-mono text-xs leading-relaxed transition-colors focus-visible:bg-background"
                                                             />
                                                             {selectedUsageRuleError && (
-                                                                <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-400">
+                                                                <div className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
                                                                     {selectedUsageRuleError}
                                                                 </div>
                                                             )}
@@ -3458,7 +3467,7 @@ export function Settings() {
                                                 </div>
                                             </div>
 
-                                            <div className="mt-4 rounded-xl border border-border/40 bg-background/50">
+                                            <div className="mt-4 rounded-md border border-input bg-background">
                                                 <button
                                                     type="button"
                                                     onClick={() => setUsageAdvancedRulesOpen(open => !open)}
@@ -3468,13 +3477,13 @@ export function Settings() {
                                                     <span>{usageAdvancedRulesOpen ? t('common.hide', '隐藏') : t('common.show', '显示')}</span>
                                                 </button>
                                                 {usageAdvancedRulesOpen && (
-                                                    <div className="border-t border-border/40 p-3">
+                                                    <div className="border-t border-input p-3">
                                                         <Textarea
                                                             value={usageRulesText}
                                                             onChange={e => setUsageRulesText(e.target.value)}
                                                             rows={12}
                                                             spellCheck={false}
-                                                            className="min-h-[260px] w-full rounded-lg border-border/30 bg-background/50 font-mono text-xs leading-relaxed shadow-sm transition-colors focus-visible:bg-background resize-y"
+                                                            className="min-h-[260px] w-full rounded-lg border-input bg-background font-mono text-xs leading-relaxed transition-colors focus-visible:bg-background resize-y"
                                                             placeholder={usageExtractionExample}
                                                         />
                                                     </div>
@@ -3490,7 +3499,7 @@ export function Settings() {
                         )}
                     </div>
                     {(activeTab === 'routing' || activeTab === 'logging' || activeTab === 'overrides') && (
-                        <div className="sticky bottom-0 z-30 -mx-4 border-t border-border/40 bg-background/85 px-4 py-3 backdrop-blur-md sm:-mx-10 sm:px-10">
+                        <div className="sticky bottom-0 z-30 -mx-4 border-t border-input bg-background/85 px-4 py-3 backdrop-blur-md sm:-mx-10 sm:px-10">
                             <div className="mx-auto flex max-w-7xl items-center justify-end gap-4">
                                 <Button
                                     type="button"
@@ -3498,7 +3507,7 @@ export function Settings() {
                                     disabled={saving}
                                     variant="default"
                                     size="lg"
-                                    className="h-11 min-w-[160px] rounded-xl font-medium shadow-sm transition-all whitespace-nowrap"
+                                    className="h-9 min-w-[160px] rounded-md font-medium transition-all whitespace-nowrap"
                                 >
                                     <Save className="mr-2 h-4 w-4 shrink-0" />
                                     {t('common.save')}

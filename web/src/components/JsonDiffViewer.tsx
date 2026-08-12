@@ -19,9 +19,9 @@ interface JsonDiffViewerProps {
 }
 
 const typeClassNames: Record<JsonDiffType, string> = {
-    added: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-    removed: 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400',
-    changed: 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400',
+    added: 'border-success/30 bg-success/10 text-success',
+    removed: 'border-danger/30 bg-danger/10 text-danger',
+    changed: 'border-warning/30 bg-warning/10 text-warning',
 }
 
 export function JsonDiffViewer({ beforeText, afterText }: JsonDiffViewerProps) {
@@ -46,7 +46,7 @@ export function JsonDiffViewer({ beforeText, afterText }: JsonDiffViewerProps) {
     if (!diff.parsed) {
         return (
             <div className="space-y-3">
-                <div className="flex items-start gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-[11px] leading-relaxed text-yellow-700 dark:text-yellow-400">
+                <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs leading-relaxed text-warning">
                     <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                     <span>{t('json_diff.json_required', 'Diff needs both sides to be valid JSON. Showing raw bodies instead.')}</span>
                 </div>
@@ -57,7 +57,7 @@ export function JsonDiffViewer({ beforeText, afterText }: JsonDiffViewerProps) {
 
     if (diff.changes.length === 0) {
         return (
-            <div className="rounded-lg border border-dashed border-border/50 bg-background/60 px-4 py-8 text-center text-[11px] font-medium text-muted-foreground">
+            <div className="rounded-lg border border-dashed border-border/50 bg-background/60 px-4 py-8 text-center text-xs font-medium text-muted-foreground">
                 {t('json_diff.no_changes', 'No JSON changes')}
             </div>
         )
@@ -67,7 +67,7 @@ export function JsonDiffViewer({ beforeText, afterText }: JsonDiffViewerProps) {
 
     return (
         <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-muted-foreground">
                 <span>{t('json_diff.summary', '{{count}} changes', { count: diff.changes.length })}</span>
                 <DiffCount type="added" count={counts.added} />
                 <DiffCount type="removed" count={counts.removed} />
@@ -87,7 +87,7 @@ function DiffCount({ type, count }: { type: JsonDiffType; count: number }) {
     if (count === 0) return null
 
     return (
-        <Badge variant="outline" className={cn('h-5 rounded-md px-1.5 text-[10px] font-bold', typeClassNames[type])}>
+        <Badge variant="outline" className={cn('h-5 rounded-md px-1.5 text-xs font-medium', typeClassNames[type])}>
             {t(`json_diff.${type}`, type)} {count}
         </Badge>
     )
@@ -97,12 +97,12 @@ function DiffChangeRow({ change }: { change: JsonDiffChange }) {
     const { t } = useTranslation()
 
     return (
-        <div className="overflow-hidden rounded-lg border border-border/60 bg-background shadow-sm">
+        <div className="overflow-hidden rounded-lg border border-border/60 bg-background">
             <div className="flex flex-wrap items-center gap-2 border-b border-border/50 bg-muted/25 px-3 py-2">
-                <Badge variant="outline" className={cn('h-5 rounded-md px-1.5 text-[10px] font-bold uppercase', typeClassNames[change.type])}>
+                <Badge variant="outline" className={cn('h-5 rounded-md px-1.5 text-xs font-medium', typeClassNames[change.type])}>
                     {t(`json_diff.${change.type}`, change.type)}
                 </Badge>
-                <code className="break-all text-[11px] font-bold text-foreground">
+                <code className="break-all text-xs font-medium text-foreground">
                     {formatJsonPointer(change.path)}
                 </code>
             </div>
@@ -142,31 +142,31 @@ function DiffValuePanel({
         <div
             className={cn(
                 'min-w-0 p-3',
-                state === 'added' && 'bg-emerald-500/[0.07]',
-                state === 'removed' && 'bg-red-500/[0.07]',
+                state === 'added' && 'bg-success/[0.07]',
+                state === 'removed' && 'bg-danger/[0.07]',
                 state === 'missing' && 'bg-muted/35'
             )}
         >
             <div
                 className={cn(
-                    'mb-2 text-[10px] font-bold uppercase tracking-wider',
-                    state === 'added' && 'text-emerald-700 dark:text-emerald-300',
-                    state === 'removed' && 'text-red-700 dark:text-red-300',
+                    'mb-2 text-xs font-medium',
+                    state === 'added' && 'text-success',
+                    state === 'removed' && 'text-danger',
                     state === 'missing' && 'text-muted-foreground'
                 )}
             >
                 {title}
             </div>
             {value === undefined ? (
-                <div className="rounded-md border border-dashed border-border/60 bg-background/45 px-3 py-4 text-[11px] italic text-muted-foreground">
+                <div className="rounded-md border border-dashed border-border/60 bg-background/45 px-3 py-4 text-xs italic text-muted-foreground">
                     {t('json_diff.missing', 'Missing')}
                 </div>
             ) : (
                 <pre
                     className={cn(
-                        'custom-scrollbar max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md border px-3 py-2 font-mono text-[11px] leading-relaxed select-text',
-                        state === 'added' && 'border-emerald-500/20 bg-emerald-500/[0.06] text-emerald-900 dark:text-emerald-100',
-                        state === 'removed' && 'border-red-500/20 bg-red-500/[0.06] text-red-900 dark:text-red-100'
+                        'custom-scrollbar max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md border px-3 py-2 font-mono text-xs leading-relaxed select-text',
+                        state === 'added' && 'border-success/20 bg-success/[0.06] text-success',
+                        state === 'removed' && 'border-danger/20 bg-danger/[0.06] text-danger'
                     )}
                 >
                     {prefixJsonLines(value, sign)}
@@ -201,10 +201,10 @@ function RawSideBySide({ beforeText, afterText }: JsonDiffViewerProps) {
 function RawPanel({ title, text }: { title: string; text: string }) {
     return (
         <div className="min-w-0 bg-muted/40 p-3">
-            <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            <div className="mb-2 text-xs font-medium text-muted-foreground">
                 {title}
             </div>
-            <pre className="custom-scrollbar max-h-64 overflow-auto whitespace-pre-wrap break-all text-[11px] font-mono leading-relaxed text-foreground select-text">
+            <pre className="custom-scrollbar max-h-64 overflow-auto whitespace-pre-wrap break-all text-xs font-mono leading-relaxed text-foreground select-text">
                 {text}
             </pre>
         </div>

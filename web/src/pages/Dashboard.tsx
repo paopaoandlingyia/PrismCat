@@ -121,9 +121,9 @@ export function Dashboard() {
     }, [])
 
     const logDetailFallback = selectedLog ? (
-        <div className="fixed inset-y-0 right-0 z-50 w-full border-l border-border/60 bg-background shadow-2xl sm:max-w-2xl">
+        <div className="fixed inset-y-0 right-0 z-50 w-full border-l border-border/60 bg-background sm:max-w-2xl">
             <div className="flex h-full flex-col items-center justify-center gap-4">
-                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                 <div className="text-sm font-medium text-muted-foreground">
                     {t('common.loading')}
                 </div>
@@ -132,14 +132,14 @@ export function Dashboard() {
     ) : null
 
     return (
-        <div className="flex flex-col gap-6 md:gap-8">
+        <div className="flex flex-col gap-4">
             {/* 统计卡片 */}
             <section>
                 <StatsCards stats={stats} loading={loading && !stats} />
             </section>
 
             {/* 日志模块 - 筛选栏(头部) + 表格(主体) 合为一张卡片 */}
-            <section className="rounded-2xl overflow-hidden border border-border bg-card shadow-card">
+            <section className="rounded-lg overflow-hidden border border-border bg-card">
                 {/* 筛选 + 分页 头部 */}
                 <div className="border-b border-border px-2 sm:px-0">
                     <LogFilters

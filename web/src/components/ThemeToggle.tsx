@@ -27,13 +27,13 @@ export function ThemeToggle() {
             variant="ghost"
             size="icon"
             onClick={toggleTheme}
-            className="rounded-full w-9 h-9 hover:bg-white/10"
+            className="h-9 w-9 rounded-md hover:bg-accent"
             title={isDark ? '切换到亮色模式' : '切换到暗色模式'}
         >
             {isDark ? (
-                <Sun className="h-[1.2rem] w-[1.2rem] text-yellow-500" />
+                <Sun className="h-[1.2rem] w-[1.2rem] text-warning" />
             ) : (
-                <Moon className="h-[1.2rem] w-[1.2rem] text-blue-500" />
+                <Moon className="h-[1.2rem] w-[1.2rem] text-info" />
             )}
         </Button>
     )

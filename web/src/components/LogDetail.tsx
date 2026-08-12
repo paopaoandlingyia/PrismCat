@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import { cn, formatDate, formatLatency, formatSize, getStatusColor, getMethodColor } from '@/lib/utils'
+import { cn, formatDate, formatLatency, formatSize, getStatusColor, METHOD_CLASS } from '@/lib/utils'
 import { copyText } from '@/lib/clipboard'
 import { Copy, Check, Zap, AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsDownUp, ChevronsUpDown, FileCode, ListTree, Globe, Layers, RotateCcw, Maximize2, Minimize2, ExternalLink, Terminal, Bookmark, BookmarkCheck, CheckCircle2, CircleDot, Tags, Search, X } from 'lucide-react'
 import { fetchBlob, fetchLogBody, updateLogAnnotation } from '@/lib/api'
@@ -114,7 +114,7 @@ function clearActiveSearchMatch(container: HTMLElement | null) {
 
 function RawBodyViewer({ text, searchTerm, maxMatches }: { text: string; searchTerm?: string; maxMatches: number }) {
     return (
-        <pre className="whitespace-pre-wrap break-all text-[11px] font-mono leading-relaxed text-foreground select-text">
+        <pre className="whitespace-pre-wrap break-all text-xs font-mono leading-relaxed text-foreground select-text">
             {searchTerm ? <HighlightText text={text} searchTerm={searchTerm} maxMatches={maxMatches} /> : text}
         </pre>
     );
@@ -123,8 +123,8 @@ function RawBodyViewer({ text, searchTerm, maxMatches }: { text: string; searchT
 function UsageMetric({ label, value }: { label: string; value?: number }) {
     return (
         <div className="rounded-lg border border-border/40 bg-background/60 px-3 py-2">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{label}</div>
-            <div className="mt-1 font-mono text-sm font-bold text-foreground">
+            <div className="text-xs font-medium text-muted-foreground">{label}</div>
+            <div className="mt-1 font-mono text-sm font-medium text-foreground">
                 {typeof value === 'number' ? value.toLocaleString() : '-'}
             </div>
         </div>
@@ -174,7 +174,7 @@ function BodySearchBar({
                 className="flex-1 min-w-0 bg-transparent text-xs outline-none placeholder:text-muted-foreground/50"
             />
             {searchTerm && (
-                <span className="text-[10px] font-bold text-muted-foreground whitespace-nowrap">
+                <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
                     {matchLabel}
                 </span>
             )}
@@ -555,11 +555,11 @@ export function LogDetail({
     if (!displayLog) return null
 
     const sheetWidthClassName = cn(
-        "w-full p-0 flex flex-col bg-background shadow-2xl",
+        "w-full p-0 flex flex-col bg-background",
         panelWidthMode === 'wide' && "border-l border-border/60 sm:rounded-l-2xl sm:max-w-6xl",
         panelWidthMode === 'full' && "border-0 sm:rounded-none sm:max-w-none"
     )
-    const sectionCardClassName = "rounded-2xl border border-border/60 bg-card p-5"
+    const sectionCardClassName = "rounded-lg border border-border/60 bg-card p-5"
     const contentCardClassName = "rounded-lg bg-muted/50 p-3.5"
     const codeCardClassName = "rounded-lg bg-muted/50"
     const emptyStateClassName = "rounded-lg border border-dashed border-border/50 bg-muted/50 px-4 py-6 text-center"
@@ -580,7 +580,7 @@ export function LogDetail({
                         aria-label={label}
                     >
                         {copiedField === field ? (
-                            <Check className="h-3.5 w-3.5 text-green-500" />
+                            <Check className="h-3.5 w-3.5 text-success" />
                         ) : (
                             <Copy className="h-3.5 w-3.5 text-muted-foreground" />
                         )}
@@ -630,9 +630,9 @@ export function LogDetail({
                     size="sm"
                     onClick={() => onChange(option.value)}
                     className={cn(
-                        "h-6 rounded-md px-2 text-[10px] font-bold uppercase tracking-wider transition-all",
+                        "h-6 rounded-md px-2 text-xs font-medium transition-all",
                         value === option.value
-                            ? "border border-border/70 bg-background text-foreground shadow-sm hover:bg-background"
+                            ? "border border-border/70 bg-background text-foreground hover:bg-background"
                             : "text-muted-foreground hover:bg-background/70 hover:text-foreground"
                     )}
                 >
@@ -695,7 +695,7 @@ export function LogDetail({
                 )}>
                     <Icon className="h-3.5 w-3.5" />
                 </div>
-                <span className="text-xs font-bold uppercase tracking-wider text-foreground group-hover:text-primary transition-colors">
+                <span className="text-xs font-medium text-foreground group-hover:text-primary transition-colors">
                     {title}
                 </span>
                 {expandedSections[section] ? (
@@ -716,32 +716,32 @@ export function LogDetail({
                     <div className="flex flex-wrap items-center gap-2.5">
                         <div
                                 className={cn(
-                                    "w-14 py-0.5 rounded-[3px] text-[10px] text-center uppercase font-bold border",
-                                    getMethodColor(displayLog.method)
+                                    "w-14 py-0.5 rounded-md text-xs text-center font-medium border",
+                                    METHOD_CLASS
                                 )}
                         >
                             {displayLog.method}
                         </div>
                         <SheetTitle className={cn(
-                            "font-mono text-xl font-black tracking-tighter",
+                            "font-mono text-xl font-semibold",
                             getStatusColor(displayLog.status_code)
                         )}>
                             {displayLog.status_code || '---'}
                         </SheetTitle>
                         {displayLog.streaming && (
-                            <Badge variant="secondary" className="border-none bg-primary/10 text-primary font-bold text-[10px] animate-pulse">
+                            <Badge variant="secondary" className="border-none bg-primary/10 text-primary font-medium text-xs">
                                 <Zap className="mr-1 h-3 w-3 fill-current" />
                                 {t('log_detail.streaming', 'STREAMING')}
                             </Badge>
                         )}
                         {displayLog.error && (
-                            <Badge variant="destructive" className="border-none bg-red-500/10 text-red-500 font-bold text-[10px]">
+                            <Badge variant="destructive" className="border-none bg-danger/10 text-danger font-medium text-xs">
                                 <AlertTriangle className="mr-1 h-3 w-3" />
                                 {t('common.error', 'ERROR')}
                             </Badge>
                         )}
                         {displayLog.request_override_applied && (
-                            <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold text-[10px]">
+                            <Badge variant="outline" className="border-warning/30 bg-warning/10 text-warning font-medium text-xs">
                                 {t('log_detail.modified', 'MODIFIED')}
                             </Badge>
                         )}
@@ -767,7 +767,7 @@ export function LogDetail({
                                         aria-label={t('log_detail.copy_id', 'Copy log ID')}
                                     >
                                         {copiedField === 'id' ? (
-                                            <span className="text-green-500">{t('common.copied', 'Copied')}</span>
+                                            <span className="text-success">{t('common.copied', 'Copied')}</span>
                                         ) : (
                                             `${displayLog.id.substring(0, 8)}...`
                                         )}
@@ -779,7 +779,7 @@ export function LogDetail({
                             </Tooltip>
                         </div>
                         {loading && (
-                            <div className="ml-auto flex items-center gap-2 text-[11px] font-bold text-primary animate-pulse">
+                            <div className="ml-auto flex items-center gap-2 text-xs font-medium text-primary">
                                 <div className="h-1 w-1 rounded-full bg-current" />
                                 {t('common.loading')}
                             </div>
@@ -787,7 +787,7 @@ export function LogDetail({
                         {!loading && (
                             <div className="ml-auto mr-10 flex flex-wrap items-center justify-end gap-2">
                                 {onNavigateLog && (
-                                    <div className="flex items-center gap-1 rounded-lg border border-border/50 bg-background/60 p-0.5 shadow-sm">
+                                    <div className="flex items-center gap-1 rounded-lg border border-border/50 bg-background/60 p-0.5">
                                         <Tooltip>
                                             <TooltipTrigger asChild>
                                                 <Button
@@ -852,11 +852,11 @@ export function LogDetail({
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    className="h-7 gap-1.5 border-border/60 bg-background/60 px-2.5 text-[11px] font-semibold shadow-sm transition-all hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
+                                    className="h-7 gap-1.5 border-border/60 bg-background/60 px-2.5 text-xs font-semibold transition-all hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
                                     onClick={copyCurlCommand}
                                 >
                                     {copiedField === 'curl' ? (
-                                        <Check className="h-3 w-3 text-green-500" />
+                                        <Check className="h-3 w-3 text-success" />
                                     ) : (
                                         <Terminal className="h-3 w-3" />
                                     )}
@@ -865,7 +865,7 @@ export function LogDetail({
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    className="h-7 gap-1.5 border-primary/20 bg-primary/5 px-2.5 text-[11px] font-semibold shadow-sm transition-all hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
+                                    className="h-7 gap-1.5 border-primary/20 bg-primary/5 px-2.5 text-xs font-semibold transition-all hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
                                     onClick={async () => {
                                         const navigateToPlayground = (body: string) => {
                                             onClose()
@@ -907,7 +907,7 @@ export function LogDetail({
 
                 {/* 主内容区域 */}
                 <div className="custom-scrollbar flex-1 space-y-4 overflow-y-auto bg-muted/30 px-5 py-4">
-                    <div className="rounded-xl border border-border/60 bg-card px-3 py-2.5">
+                    <div className="rounded-md border border-border/60 bg-card px-3 py-2.5">
                         <div className="flex flex-wrap items-center gap-2">
                             <Button
                                 type="button"
@@ -934,7 +934,7 @@ export function LogDetail({
                                 })}
                                 className={cn(
                                     "h-8 gap-1.5 rounded-lg px-3 text-xs font-semibold",
-                                    annotation.status === 'todo' && "bg-amber-500/10 text-amber-700 hover:bg-amber-500/15 dark:text-amber-300"
+                                    annotation.status === 'todo' && "bg-warning/10 text-warning hover:bg-warning/15 dark:text-warning"
                                 )}
                             >
                                 <CircleDot className="h-3.5 w-3.5" />
@@ -951,14 +951,14 @@ export function LogDetail({
                                 })}
                                 className={cn(
                                     "h-8 gap-1.5 rounded-lg px-3 text-xs font-semibold",
-                                    annotation.status === 'done' && "bg-green-500/10 text-green-700 hover:bg-green-500/15 dark:text-green-300"
+                                    annotation.status === 'done' && "bg-success/10 text-success hover:bg-success/15 dark:text-success"
                                 )}
                             >
                                 <CheckCircle2 className="h-3.5 w-3.5" />
                                 {t('log_annotation.done', '已处理')}
                             </Button>
                             {annotationSaving && (
-                                <span className="text-[11px] font-medium text-muted-foreground">{t('common.loading')}</span>
+                                <span className="text-xs font-medium text-muted-foreground">{t('common.loading')}</span>
                             )}
                             <button
                                 type="button"
@@ -1010,7 +1010,7 @@ export function LogDetail({
                         {annotationPanelOpen && annotation.labels?.length ? (
                             <div className="mt-3 flex flex-wrap gap-1.5">
                                 {annotation.labels.map((label) => (
-                                    <Badge key={label} variant="outline" className="border-primary/20 bg-primary/5 text-[11px] font-medium text-primary">
+                                    <Badge key={label} variant="outline" className="border-primary/20 bg-primary/5 text-xs font-medium text-primary">
                                         {label}
                                     </Badge>
                                 ))}
@@ -1019,7 +1019,7 @@ export function LogDetail({
                     </div>
 
                     {/* URL 地址 */}
-                    <div className="rounded-xl border border-border/60 bg-card px-3 py-2">
+                    <div className="rounded-md border border-border/60 bg-card px-3 py-2">
                         <div className="flex items-center gap-2">
                             <button
                                 type="button"
@@ -1029,7 +1029,7 @@ export function LogDetail({
                                 <div className="rounded-md bg-muted p-1.5 text-muted-foreground group-hover:text-primary">
                                     <Globe className="h-3.5 w-3.5" />
                                 </div>
-                                <span className="shrink-0 text-xs font-bold text-foreground">{t('log_detail.url')}</span>
+                                <span className="shrink-0 text-xs font-medium text-foreground">{t('log_detail.url')}</span>
                                 <span className="min-w-0 flex-1" />
                                 {expandedSections.url ? (
                                     <ChevronUp className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -1048,46 +1048,46 @@ export function LogDetail({
 
                     {/* 错误详情 */}
                     {displayLog.error && (
-                        <div className="overflow-hidden rounded-2xl border border-red-500/20 bg-red-500/5 p-4">
-                            <div className="mb-3 flex items-center gap-2 text-red-500 font-bold text-xs uppercase tracking-wider">
+                        <div className="overflow-hidden rounded-lg border border-danger/20 bg-danger/5 p-4">
+                            <div className="mb-3 flex items-center gap-2 text-danger font-medium text-xs">
                                 <AlertTriangle className="h-4 w-4" />
                                 {t('common.error')}
                             </div>
-                            <pre className="text-xs text-red-600 dark:text-red-400 font-mono whitespace-pre-wrap leading-relaxed">{displayLog.error}</pre>
+                            <pre className="text-xs text-danger font-mono whitespace-pre-wrap leading-relaxed">{displayLog.error}</pre>
                         </div>
                     )}
 
                     {(displayLog.request_override_applied || displayLog.request_override_error) && (
-                        <div className="overflow-hidden rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
-                            <div className="mb-3 flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-xs uppercase tracking-wider">
+                        <div className="overflow-hidden rounded-lg border border-warning/20 bg-warning/5 p-4">
+                            <div className="mb-3 flex items-center gap-2 text-warning font-medium text-xs">
                                 <AlertTriangle className="h-4 w-4" />
                                 {t('log_detail.request_override', 'Request Override')}
                             </div>
                             {displayLog.request_override_rules?.length ? (
                                 <div className="mb-3 flex flex-wrap gap-2">
                                     {displayLog.request_override_rules.map((rule) => (
-                                        <Badge key={rule} variant="outline" className="border-amber-500/30 bg-background/60 text-[11px] font-semibold text-foreground">
+                                        <Badge key={rule} variant="outline" className="border-warning/30 bg-background/60 text-xs font-semibold text-foreground">
                                             {rule}
                                         </Badge>
                                     ))}
                                 </div>
                             ) : null}
                             {displayLog.request_override_error && (
-                                <pre className="text-xs text-amber-700 dark:text-amber-300 font-mono whitespace-pre-wrap leading-relaxed">{displayLog.request_override_error}</pre>
+                                <pre className="text-xs text-warning font-mono whitespace-pre-wrap leading-relaxed">{displayLog.request_override_error}</pre>
                             )}
                             {displayLog.request_header_override_applied && displayLog.request_header_override_changes?.length ? (
                                 <div className="mt-3 space-y-1.5">
-                                    <div className="text-[11px] font-bold tracking-wider text-amber-600 dark:text-amber-400">
+                                    <div className="text-xs font-medium text-warning">
                                         {t('log_detail.header_changes', 'Header Changes')}
                                     </div>
                                     <div className="space-y-1 font-mono text-xs">
                                         {displayLog.request_header_override_changes.map((change, idx) => (
                                             <div key={idx} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 leading-relaxed">
                                                 <Badge variant="outline" className={cn(
-                                                    "h-5 shrink-0 rounded px-1.5 text-[10px] font-bold uppercase",
+                                                    "h-5 shrink-0 rounded px-1.5 text-xs font-medium",
                                                     change.op === 'set'
-                                                        ? "border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400"
-                                                        : "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400"
+                                                        ? "border-info/30 bg-info/10 text-info"
+                                                        : "border-danger/30 bg-danger/10 text-danger"
                                                 )}>
                                                     {change.op}
                                                 </Badge>
@@ -1107,8 +1107,8 @@ export function LogDetail({
                     )}
 
                     {hasUsage && (
-                        <div className="overflow-hidden rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4">
-                            <div className="mb-3 flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold text-xs uppercase tracking-wider">
+                        <div className="overflow-hidden rounded-lg border border-success/20 bg-success/5 p-4">
+                            <div className="mb-3 flex items-center gap-2 text-success font-medium text-xs">
                                 <CircleDot className="h-4 w-4" />
                                 {t('log_detail.usage', 'Usage')}
                             </div>
@@ -1118,7 +1118,7 @@ export function LogDetail({
                                 <UsageMetric label={t('log_detail.usage_total', 'Total')} value={displayLog.usage_total_tokens} />
                             </div>
                             {displayLog.usage_source && (
-                                <div className="mt-3 font-mono text-[11px] text-muted-foreground">
+                                <div className="mt-3 font-mono text-xs text-muted-foreground">
                                     {displayLog.usage_source}
                                 </div>
                             )}
@@ -1127,7 +1127,7 @@ export function LogDetail({
 
                     {/* 请求体 & 请求头 */}
                     <div className={cn(sectionCardClassName, "space-y-4")}>
-                        <div className="text-[11px] font-bold tracking-widest text-muted-foreground">
+                        <div className="text-xs font-medium text-muted-foreground">
                             {t('log_detail.request')}
                         </div>
                         <div className="space-y-2">
@@ -1137,9 +1137,9 @@ export function LogDetail({
                                 icon={FileCode}
                                 extra={
                                     <div className="flex items-center gap-2">
-                                        <span className="text-xs font-bold text-muted-foreground">{formatSize(requestBodyDisplaySize)}</span>
+                                        <span className="text-xs font-medium text-muted-foreground">{formatSize(requestBodyDisplaySize)}</span>
                                         {displayLog.truncated && (
-                                            <Badge variant="outline" className="h-5 text-[11px] border-yellow-500/40 text-yellow-600 dark:text-yellow-500 bg-yellow-500/5 px-1.5 font-semibold">
+                                            <Badge variant="outline" className="h-5 text-xs border-warning/40 text-warning bg-warning/5 px-1.5 font-semibold">
                                                 {t('log_detail.truncated_tag', 'TRUNCATED')}
                                             </Badge>
                                         )}
@@ -1166,7 +1166,7 @@ export function LogDetail({
                                     )}
 
                                     {showsOriginalRequestBody && (
-                                        <Badge variant="outline" className="w-fit border-amber-500/30 bg-amber-500/5 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+                                        <Badge variant="outline" className="w-fit border-warning/30 bg-warning/5 text-xs font-semibold text-warning">
                                             {t('log_detail.request_body_original_fallback', 'Original body before failed override')}
                                         </Badge>
                                     )}
@@ -1239,7 +1239,7 @@ export function LogDetail({
                                             </div>
                                         </div>
                                     ) : (
-                                        <div className={cn(emptyStateClassName, "text-[11px] italic text-muted-foreground")}>
+                                        <div className={cn(emptyStateClassName, "text-xs italic text-muted-foreground")}>
                                             {loading ? t('common.loading') : t('log_detail.no_body', '--- EMPTY BODY ---')}
                                         </div>
                                     )}
@@ -1252,13 +1252,13 @@ export function LogDetail({
                                 title={t('log_detail.request') + ' ' + t('log_detail.headers')}
                                 section="requestHeaders"
                                 icon={ListTree}
-                                extra={<span className="text-xs font-bold text-muted-foreground">{Object.keys(displayLog.request_headers ?? {}).length} KEYS</span>}
+                                extra={<span className="text-xs font-medium text-muted-foreground">{Object.keys(displayLog.request_headers ?? {}).length} KEYS</span>}
                             />
                             {expandedSections.requestHeaders && displayLog.request_headers && (
-                                <div className={cn(contentCardClassName, "space-y-2 font-mono text-[11px] leading-relaxed")}>
+                                <div className={cn(contentCardClassName, "space-y-2 font-mono text-xs leading-relaxed")}>
                                     {Object.entries(displayLog.request_headers).map(([key, vv]) => (
                                         <div key={key} className="flex flex-col sm:flex-row sm:gap-2 group/line">
-                                            <span className="text-primary shrink-0 font-bold">{key}:</span>
+                                            <span className="text-primary shrink-0 font-semibold">{key}:</span>
                                             <div className="flex flex-col">
                                                 {vv.map((v, i) => (
                                                     <span key={i} className="text-foreground break-all select-text">{v}{i < vv.length - 1 ? ';' : ''}</span>
@@ -1273,7 +1273,7 @@ export function LogDetail({
 
                     {/* 响应体 & 响应头 */}
                     <div className={cn(sectionCardClassName, "space-y-4")}>
-                        <div className="text-[11px] font-bold tracking-widest text-muted-foreground">
+                        <div className="text-xs font-medium text-muted-foreground">
                             {t('log_detail.response')}
                         </div>
                         <div className="space-y-2">
@@ -1283,9 +1283,9 @@ export function LogDetail({
                                 icon={FileCode}
                                 extra={
                                     <div className="flex items-center gap-2">
-                                        <span className="text-xs font-bold text-muted-foreground">{formatSize(displayLog.response_body_size)}</span>
+                                        <span className="text-xs font-medium text-muted-foreground">{formatSize(displayLog.response_body_size)}</span>
                                         {displayLog.truncated && (
-                                            <Badge variant="outline" className="h-5 text-[11px] border-yellow-500/40 text-yellow-600 dark:text-yellow-500 bg-yellow-500/5 px-1.5 font-semibold">
+                                            <Badge variant="outline" className="h-5 text-xs border-warning/40 text-warning bg-warning/5 px-1.5 font-semibold">
                                                 {t('log_detail.truncated_tag', 'TRUNCATED')}
                                             </Badge>
                                         )}
@@ -1295,7 +1295,7 @@ export function LogDetail({
                             {expandedSections.responseBody && (
                                 <div className="space-y-3">
                                     {displayLog.streaming && responseViewMode === 'merged' && mergedResponse && (
-                                        <div className="flex items-center gap-1.5 px-1 text-[11px] font-mono text-muted-foreground">
+                                        <div className="flex items-center gap-1.5 px-1 text-xs font-mono text-muted-foreground">
                                             <Layers className="h-3 w-3 shrink-0" />
                                             <span>
                                                 {t('log_detail.stream_merge_info', { count: mergedResponse.chunks })}
@@ -1376,7 +1376,7 @@ export function LogDetail({
                                                     mergedResponse ? (
                                                         <JsonViewer data={mergedResponse.merged} expandMode={responseExpandMode} searchTerm={effectiveResponseSearchTerm || undefined} searchPlan={responseJsonSearchPlan} />
                                                     ) : (
-                                                        <div className={cn(emptyStateClassName, "text-[11px] italic text-muted-foreground")}>
+                                                        <div className={cn(emptyStateClassName, "text-xs italic text-muted-foreground")}>
                                                             {t('log_detail.stream_merge_unavailable', '当前无法生成合并视图，请切换到 Raw 查看原始内容。')}
                                                         </div>
                                                     )
@@ -1386,7 +1386,7 @@ export function LogDetail({
                                             </div>
                                         </div>
                                     ) : (
-                                        <div className={cn(emptyStateClassName, "text-[11px] italic text-muted-foreground")}>
+                                        <div className={cn(emptyStateClassName, "text-xs italic text-muted-foreground")}>
                                             {loading ? t('common.loading') : t('log_detail.no_body', '--- EMPTY BODY ---')}
                                         </div>
                                     )}
@@ -1399,13 +1399,13 @@ export function LogDetail({
                                 title={t('log_detail.response') + ' ' + t('log_detail.headers')}
                                 section="responseHeaders"
                                 icon={ListTree}
-                                extra={<span className="text-xs font-bold text-muted-foreground">{Object.keys(displayLog.response_headers ?? {}).length} KEYS</span>}
+                                extra={<span className="text-xs font-medium text-muted-foreground">{Object.keys(displayLog.response_headers ?? {}).length} KEYS</span>}
                             />
                             {expandedSections.responseHeaders && displayLog.response_headers && (
-                                <div className={cn(contentCardClassName, "space-y-2 font-mono text-[11px] leading-relaxed")}>
+                                <div className={cn(contentCardClassName, "space-y-2 font-mono text-xs leading-relaxed")}>
                                     {Object.entries(displayLog.response_headers).map(([key, vv]) => (
                                         <div key={key} className="flex flex-col sm:flex-row sm:gap-2 group/line">
-                                            <span className="text-green-600 dark:text-green-400 shrink-0 font-bold">{key}:</span>
+                                            <span className="text-success shrink-0 font-semibold">{key}:</span>
                                             <div className="flex flex-col">
                                                 {vv.map((v, i) => (
                                                     <span key={i} className="text-foreground break-all select-text">{v}{i < vv.length - 1 ? ';' : ''}</span>

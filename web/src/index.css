@@ -26,9 +26,22 @@
   --color-ring: hsl(var(--ring));
   --radius-radius: var(--radius);
 
-  /* 卡片柔和阴影 - 配合背景明度差制造"浮起"的层级感 */
-  --shadow-card: 0 1px 3px 0 hsl(222 47% 11% / 0.06), 0 4px 16px -3px hsl(222 47% 11% / 0.10);
-  --shadow-card-hover: 0 2px 6px 0 hsl(222 47% 11% / 0.08), 0 12px 28px -4px hsl(222 47% 11% / 0.16);
+  /* 最小字号 12px -> 13px。两个原因:
+     1. 中文字形密度远高于拉丁,12px 中文的可读性约等于 10px 英文;
+     2. Noto Sans SC 没有 Windows 级别的 hinting,12px 在 DPR 1 下发糊,
+        13px 明显缓解。字号标度: 13 / 14 / 16 / 20 / 24 */
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.4;
+
+  /* 语义色 - 状态表达统一走这四个,不要再直接用 green-500/amber-600 之类的调色板类 */
+  --color-success: hsl(var(--success));
+  --color-warning: hsl(var(--warning));
+  --color-danger: hsl(var(--destructive));
+  --color-info: hsl(var(--info));
+
+  /* 平铺元素一律不用阴影,层级由 1px 边框表达;阴影只留给真浮层(弹窗/抽屉) */
+  --shadow-card: none;
+  --shadow-card-hover: none;
 }
 
 /* 全局样式变量 */
@@ -44,28 +57,35 @@
   --color-prism-red: 0 85% 55%;
 
   /* --- 亮色模式 (Light Mode) --- */
-  /* 背景比卡片略深(浅灰),让纯白卡片浮起来 = 层级感的物理基础 */
-  --background: 210 40% 97%;
-  --foreground: 222 47% 11%;
+  /* 表面层级: 画布 98.5% / 卡片 100% / 次级面 96%,对比极低,分隔靠 1px 线。
+     中性色一律零饱和度,任何色相都会让界面显得"有滤镜"。
+     参考 Cloudflare Kumo 的 canvas #fbfbfb / base #fff / hairline #e9e9e9 */
+  --background: 0 0% 97.5%;
+  --foreground: 0 0% 13%;
   --card: 0 0% 100%;
-  --card-foreground: 222 47% 11%;
+  --card-foreground: 0 0% 13%;
   --popover: 0 0% 100%;
-  --popover-foreground: 222 47% 11%;
-  --primary: 263 70% 50%;
-  --primary-foreground: 210 40% 98%;
-  /* 次级面比背景(97%)再深一档,确保悬停/次级元素在浅灰画布上仍可辨 */
-  --secondary: 210 40% 93%;
-  --secondary-foreground: 222 47% 11%;
-  --muted: 210 40% 93%;
-  --muted-foreground: 215 16% 47%;
-  --accent: 210 40% 93%;
-  --accent-foreground: 222 47% 11%;
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 210 40% 98%;
-  --border: 214 32% 91%;
-  --input: 214 32% 91%;
-  --ring: 263 70% 50%;
-  --radius: 0.4rem;
+  --popover-foreground: 0 0% 13%;
+  --primary: 263 65% 48%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 0% 96%;
+  --secondary-foreground: 0 0% 13%;
+  --muted: 0 0% 96%;
+  --muted-foreground: 0 0% 42%;
+  --accent: 0 0% 96%;
+  --accent-foreground: 0 0% 13%;
+  --destructive: 0 72% 45%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 152 62% 30%;
+  --warning: 32 88% 38%;
+  --info: 212 80% 42%;
+  /* 白画布上边框要承担全部分隔职责,比常规再深一档才读得出来 */
+  --border: 0 0% 89%;
+  --input: 0 0% 89%;
+  --ring: 263 65% 48%;
+  /* 两档圆角: 容器 rounded-lg = 8px,控件 rounded-md = 6px。
+     容器比控件更圆,层级才立得住;一刀切会显得平板 */
+  --radius: 0.5rem;
 
   --chart-1: 263 70% 50%;
   --chart-2: 215 70% 50%;
@@ -76,32 +96,38 @@
 
 .dark {
   /* --- 暗色模式 (Dark Mode) --- */
-  /* 背景压暗、卡片提亮,拉开明度差(原来仅差 1% 几乎无感) */
-  --background: 222 47% 9%;
-  --foreground: 210 40% 98%;
-  --card: 222 40% 14%;
-  --card-foreground: 210 40% 98%;
-  --popover: 222 40% 14%;
-  --popover-foreground: 210 40% 98%;
-  --primary: 263 75% 68%;
-  --primary-foreground: 222 47% 11%;
-  --secondary: 217 33% 17%;
-  --secondary-foreground: 210 40% 98%;
-  --muted: 217 33% 17%;
-  --muted-foreground: 215 20% 65%;
-  --accent: 217 33% 17%;
-  --accent-foreground: 210 40% 98%;
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 210 40% 98%;
-  --border: 217 33% 25%;
-  --input: 217 33% 25%;
-  --ring: 263 75% 68%;
+  /* 与亮色对称:画布和卡片同色,靠边框分层 */
+  --background: 0 0% 6%;
+  --foreground: 0 0% 96%;
+  --card: 0 0% 10%;
+  --card-foreground: 0 0% 96%;
+  --popover: 0 0% 13%;
+  --popover-foreground: 0 0% 96%;
+  --primary: 263 75% 70%;
+  --primary-foreground: 0 0% 8%;
+  --secondary: 0 0% 16%;
+  --secondary-foreground: 0 0% 96%;
+  --muted: 0 0% 16%;
+  --muted-foreground: 0 0% 63%;
+  --accent: 0 0% 16%;
+  --accent-foreground: 0 0% 96%;
+  --destructive: 0 72% 62%;
+  --destructive-foreground: 0 0% 8%;
+  --success: 152 50% 50%;
+  --warning: 38 85% 58%;
+  --info: 212 80% 62%;
+  --border: 0 0% 20%;
+  --input: 0 0% 20%;
+  --ring: 263 75% 70%;
 }
 
 
 @layer base {
   body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Roboto, sans-serif;
+    /* Inter 负责拉丁,Noto Sans SC 负责中文。两者 x-height 接近,
+       混排时不会出现中文比英文粗一档、大一号的割裂感。
+       Noto Sans SC 只打包了 UI 文案用到的字形,见 scripts/build-font.mjs */
+    font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
     min-height: 100vh;
   }
 
@@ -161,7 +187,7 @@ input[type="number"] {
 /* 代码块样式 */
 pre,
 code {
-  font-family: 'Fira Code', 'JetBrains Mono', Consolas, Monaco, 'PingFang SC', 'Microsoft YaHei', monospace;
+  font-family: 'Fira Code', 'JetBrains Mono', Consolas, Monaco, 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace;
 }
 
 /* 动画 */

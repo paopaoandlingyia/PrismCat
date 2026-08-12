@@ -36,7 +36,7 @@ export function BlobPanel({
 
     return (
         <div className="rounded-lg border border-border/60 bg-muted/40 px-3 py-2">
-            <div className="flex flex-wrap items-center gap-2 text-[11px]">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
                 {binary ? (
                     isImage ? <Image className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> : <FileArchive className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 ) : (
@@ -46,17 +46,17 @@ export function BlobPanel({
                     {binary ? t('log_detail.binary_response', 'Binary response') : isLoaded ? t('log_detail.blob_loaded') : t('log_detail.blob_detached')}
                 </span>
                 {mediaType && (
-                    <span className="rounded-md bg-background/70 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                    <span className="rounded-md bg-background/70 px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
                         {mediaType}
                     </span>
                 )}
                 {typeof bodySize === 'number' && bodySize > 0 && (
-                    <span className="rounded-md bg-background/70 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                    <span className="rounded-md bg-background/70 px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
                         {formatSize(bodySize)}
                     </span>
                 )}
                 {hash && (
-                    <span className="rounded-md bg-background/70 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                    <span className="rounded-md bg-background/70 px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
                         sha256:{hash}
                     </span>
                 )}
@@ -70,7 +70,7 @@ export function BlobPanel({
                             <Info className="h-3 w-3" />
                         </button>
                     </TooltipTrigger>
-                    <TooltipContent side="top" sideOffset={4} className="max-w-none font-mono text-[11px] break-all">
+                    <TooltipContent side="top" sideOffset={4} className="max-w-none font-mono text-xs break-all">
                         {blobRef}
                     </TooltipContent>
                 </Tooltip>
@@ -80,7 +80,7 @@ export function BlobPanel({
                             variant="ghost"
                             size="sm"
                             onClick={onUsePreview}
-                            className="h-7 px-2 text-[11px] font-medium"
+                            className="h-7 px-2 text-xs font-medium"
                         >
                             {t('log_detail.use_preview')}
                         </Button>
@@ -90,7 +90,7 @@ export function BlobPanel({
                             size="sm"
                             onClick={onLoad}
                             disabled={loading}
-                            className="h-7 px-2 text-[11px] font-medium text-primary hover:bg-primary/10 hover:text-primary"
+                            className="h-7 px-2 text-xs font-medium text-primary hover:bg-primary/10 hover:text-primary"
                         >
                             {loading ? t('common.loading') : t('log_detail.load_full')}
                         </Button>
@@ -99,14 +99,14 @@ export function BlobPanel({
                         href={blobUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                        className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                     >
                         <ExternalLink className="h-3 w-3" />
                         {t('log_detail.open_raw')}
                     </a>
                     <a
                         href={downloadUrl}
-                        className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                        className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                     >
                         <Download className="h-3 w-3" />
                         {t('log_detail.download', 'Download')}
@@ -124,7 +124,7 @@ export function BlobPanel({
                 </div>
             )}
             {error && (
-                <div className="mt-1 font-mono text-[11px] text-red-500">{error}</div>
+                <div className="mt-1 font-mono text-xs text-danger">{error}</div>
             )}
         </div>
     )

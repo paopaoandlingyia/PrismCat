@@ -15,13 +15,13 @@ import { Separator } from '@/components/ui/separator'
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const
 
 const METHOD_COLORS: Record<string, string> = {
-    GET: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30',
-    POST: 'bg-blue-500/10 text-blue-600 border-blue-500/30',
-    PUT: 'bg-amber-500/10 text-amber-600 border-amber-500/30',
-    PATCH: 'bg-orange-500/10 text-orange-600 border-orange-500/30',
-    DELETE: 'bg-red-500/10 text-red-600 border-red-500/30',
-    HEAD: 'bg-purple-500/10 text-purple-600 border-purple-500/30',
-    OPTIONS: 'bg-gray-500/10 text-gray-600 border-gray-500/30',
+    GET: 'bg-success/10 text-success border-success/30',
+    POST: 'bg-info/10 text-info border-info/30',
+    PUT: 'bg-warning/10 text-warning border-warning/30',
+    PATCH: 'bg-warning/10 text-warning border-warning/30',
+    DELETE: 'bg-danger/10 text-danger border-danger/30',
+    HEAD: 'bg-primary/10 text-primary border-primary/30',
+    OPTIONS: 'bg-muted text-muted-foreground border-border',
 }
 
 interface HeaderEntry {
@@ -234,7 +234,7 @@ export function Playground() {
     }, [targetMode, upstream, targetUrl, method, path, headers, body])
 
     const RawBodyViewer = ({ text }: { text: string }) => (
-        <pre className="whitespace-pre-wrap break-all text-[11px] font-mono leading-relaxed text-foreground select-text">
+        <pre className="whitespace-pre-wrap break-all text-xs font-mono leading-relaxed text-foreground select-text">
             {text}
         </pre>
     )
@@ -258,7 +258,7 @@ export function Playground() {
                     size="sm"
                     onClick={() => onChange(option.value)}
                     className={cn(
-                        'h-6 px-2 text-[10px] font-bold uppercase tracking-wider',
+                        'h-6 px-2 text-xs font-medium',
                         value === option.value && 'shadow-none'
                     )}
                 >
@@ -284,13 +284,13 @@ export function Playground() {
         <div className="mx-auto w-full max-w-7xl space-y-5 animate-fade-in">
 
             {/* Unified Address Bar */}
-            <div className="flex flex-wrap items-center gap-2 bg-muted/10 p-1.5 rounded-2xl">
+            <div className="flex flex-wrap items-center gap-2 bg-muted/10 p-1.5 rounded-lg">
                 {/* Method Selector */}
                 <div className="relative shrink-0">
                     <button
                         onClick={() => setMethodOpen(!methodOpen)}
                         className={cn(
-                            'flex items-center gap-1 px-3 py-2.5 rounded-xl border text-xs font-black uppercase tracking-wider transition-all min-w-[80px] justify-between',
+                            'flex items-center gap-1 px-3 py-2.5 rounded-md border text-xs font-semibold transition-all min-w-[80px] justify-between',
                             METHOD_COLORS[method] || METHOD_COLORS['GET']
                         )}
                     >
@@ -300,13 +300,13 @@ export function Playground() {
                     {methodOpen && (
                         <>
                             <div className="fixed inset-0 z-40" onClick={() => setMethodOpen(false)} />
-                            <div className="absolute top-full left-0 mt-2 z-50 bg-popover border border-border shadow-xl py-1 min-w-[120px] rounded-lg">
+                            <div className="absolute top-full left-0 mt-2 z-50 bg-popover border border-border py-1 min-w-[120px] rounded-lg">
                                 {HTTP_METHODS.map((m) => (
                                     <button
                                         key={m}
                                         onClick={() => { setMethod(m); setMethodOpen(false) }}
                                         className={cn(
-                                            'w-full px-3 py-1.5 text-left text-xs font-bold uppercase tracking-wider hover:bg-accent transition-colors',
+                                            'w-full px-3 py-1.5 text-left text-xs font-medium hover:bg-accent transition-colors',
                                             m === method && 'bg-accent'
                                         )}
                                     >
@@ -318,7 +318,7 @@ export function Playground() {
                     )}
                 </div>
 
-                <div className="flex shrink-0 items-center gap-1 rounded-xl border border-border/40 bg-background/70 p-1 shadow-sm">
+                <div className="flex shrink-0 items-center gap-1 rounded-md border border-border/40 bg-background/70 p-1">
                     {([
                         { value: 'upstream', label: t('playground.target_upstream', 'Upstream') },
                         { value: 'url', label: t('playground.target_url', 'URL') },
@@ -328,9 +328,9 @@ export function Playground() {
                             type="button"
                             onClick={() => setTargetMode(option.value)}
                             className={cn(
-                                'h-7 rounded-lg px-2.5 text-[10px] font-black uppercase tracking-wider transition-all',
+                                'h-7 rounded-lg px-2.5 text-xs font-semibold transition-all',
                                 targetMode === option.value
-                                    ? 'bg-secondary text-foreground shadow-sm'
+                                    ? 'bg-secondary text-foreground'
                                     : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                             )}
                         >
@@ -346,8 +346,8 @@ export function Playground() {
                             <button
                                 onClick={() => setUpstreamOpen(!upstreamOpen)}
                                 className={cn(
-                                    'flex items-center gap-1 px-3 py-2.5 rounded-xl border bg-background/80 text-xs font-bold hover:bg-accent transition-all min-w-[90px] justify-between shadow-sm',
-                                    selectedUpstreamMissing ? 'border-amber-500/50 text-amber-600' : 'border-input'
+                                    'flex items-center gap-1 px-3 py-2.5 rounded-md border bg-background/80 text-xs font-medium hover:bg-accent transition-all min-w-[90px] justify-between',
+                                    selectedUpstreamMissing ? 'border-warning/50 text-warning' : 'border-input'
                                 )}
                             >
                                 <span className="text-foreground/80 truncate max-w-[100px]">{upstream || t('playground.select_upstream')}</span>
@@ -356,17 +356,17 @@ export function Playground() {
                             {upstreamOpen && (
                                 <>
                                     <div className="fixed inset-0 z-40" onClick={() => setUpstreamOpen(false)} />
-                                    <div className="absolute top-full left-0 mt-2 z-50 bg-popover border border-border shadow-xl py-1 min-w-[180px] rounded-lg">
+                                    <div className="absolute top-full left-0 mt-2 z-50 bg-popover border border-border py-1 min-w-[180px] rounded-lg">
                                         {upstreams.map((u) => (
                                             <button
                                                 key={u.name}
                                                 onClick={() => { setUpstream(u.name); setUpstreamOpen(false) }}
                                                 className={cn(
-                                                    'w-full px-3 py-1.5 text-left text-xs font-bold hover:bg-accent transition-colors',
+                                                    'w-full px-3 py-1.5 text-left text-xs font-medium hover:bg-accent transition-colors',
                                                     u.name === upstream && 'bg-accent'
                                                 )}
                                             >
-                                                <span className="font-black">{u.name}</span>
+                                                <span className="font-semibold">{u.name}</span>
                                                 <span className="ml-2 text-muted-foreground font-normal truncate">{u.target}</span>
                                             </button>
                                         ))}
@@ -386,7 +386,7 @@ export function Playground() {
                             value={path}
                             onChange={(e) => setPath(e.target.value)}
                             placeholder="/v1/chat/completions"
-                            className="flex-1 min-w-[220px] px-3 py-2.5 rounded-xl bg-background border border-input text-sm font-mono placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                            className="flex-1 min-w-[220px] px-3 py-2.5 rounded-md bg-background border border-input text-sm font-mono placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                         />
                     </>
                 ) : (
@@ -395,7 +395,7 @@ export function Playground() {
                         value={targetUrl}
                         onChange={(e) => setTargetUrl(e.target.value)}
                         placeholder={t('playground.custom_url_placeholder', 'https://api.openai.com/v1/chat/completions')}
-                        className="flex-1 min-w-[260px] px-3 py-2.5 rounded-xl bg-background border border-input text-sm font-mono placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                        className="flex-1 min-w-[260px] px-3 py-2.5 rounded-md bg-background border border-input text-sm font-mono placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                     />
                 )}
 
@@ -406,7 +406,7 @@ export function Playground() {
                         sending ||
                         (targetMode === 'upstream' ? !upstream || selectedUpstreamMissing : !targetUrl.trim())
                     }
-                    className="shrink-0 px-5 py-2.5 h-auto font-black gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all"
+                    className="shrink-0 px-5 py-2.5 h-auto font-semibold gap-2 bg-primary hover:bg-primary/90 transition-all"
                 >
                     {sending ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -424,7 +424,7 @@ export function Playground() {
                     <button
                         onClick={() => setActiveTab('body')}
                         className={cn(
-                            'px-4 py-2.5 text-xs font-black uppercase tracking-wider transition-all border-b-2 -mb-px',
+                            'px-4 py-2.5 text-xs font-semibold transition-all border-b-2 -mb-px',
                             activeTab === 'body'
                                 ? 'border-primary text-foreground'
                                 : 'border-transparent text-muted-foreground/50 hover:text-muted-foreground/80'
@@ -435,7 +435,7 @@ export function Playground() {
                     <button
                         onClick={() => setActiveTab('headers')}
                         className={cn(
-                            'px-4 py-2.5 text-xs font-black uppercase tracking-wider transition-all border-b-2 -mb-px flex items-center gap-1.5',
+                            'px-4 py-2.5 text-xs font-semibold transition-all border-b-2 -mb-px flex items-center gap-1.5',
                             activeTab === 'headers'
                                 ? 'border-primary text-foreground'
                                 : 'border-transparent text-muted-foreground/50 hover:text-muted-foreground/80'
@@ -444,7 +444,7 @@ export function Playground() {
                         {t('playground.headers')}
                         {headers.length > 0 && (
                             <span className={cn(
-                                'text-[9px] font-bold px-1.5 py-0.5 rounded-full',
+                                'text-xs font-medium px-1.5 py-0.5 rounded-md',
                                 activeTab === 'headers' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground/50'
                             )}>
                                 {headers.length}
@@ -462,10 +462,10 @@ export function Playground() {
                                     <Badge
                                         variant="outline"
                                         className={cn(
-                                            'h-6 border-none px-2 text-[10px] font-bold',
+                                            'h-6 border-none px-2 text-xs font-medium',
                                             requestBodyJsonError
-                                                ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                                                : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                                                ? 'bg-warning/10 text-warning'
+                                                : 'bg-success/10 text-success'
                                         )}
                                         title={requestBodyJsonError || undefined}
                                     >
@@ -480,7 +480,7 @@ export function Playground() {
                                     size="sm"
                                     onClick={formatRequestBody}
                                     disabled={!body.trim() || !!requestBodyJsonError}
-                                    className="h-7 gap-1.5 px-2.5 text-[11px] font-bold"
+                                    className="h-7 gap-1.5 px-2.5 text-xs font-medium"
                                 >
                                     <Braces className="h-3.5 w-3.5" />
                                     {t('playground.format_json', 'Format')}
@@ -497,7 +497,7 @@ export function Playground() {
                                         variant={requestBodyViewMode === option.value ? 'secondary' : 'ghost'}
                                         size="sm"
                                         onClick={() => setRequestBodyViewMode(option.value)}
-                                        className="h-6 px-2 text-[10px] font-bold uppercase tracking-wider"
+                                        className="h-6 px-2 text-xs font-medium"
                                     >
                                         {option.label}
                                     </Button>
@@ -509,15 +509,15 @@ export function Playground() {
                                 value={body}
                                 onChange={(e) => setBody(e.target.value)}
                                 placeholder='{ "model": "gpt-4", "messages": [...] }'
-                                className="w-full h-[260px] px-4 py-3 rounded-xl bg-background border border-input text-xs font-mono leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none custom-scrollbar transition-all shadow-sm"
+                                className="w-full h-[260px] px-4 py-3 rounded-md bg-background border border-input text-xs font-mono leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none custom-scrollbar transition-all"
                                 spellCheck={false}
                             />
                         ) : (
-                            <div className="h-[260px] overflow-auto rounded-xl border border-input bg-background px-4 py-3 shadow-sm custom-scrollbar">
+                            <div className="h-[260px] overflow-auto rounded-md border border-input bg-background px-4 py-3 custom-scrollbar">
                                 {body.trim() ? (
                                     <JsonViewer data={parsedRequestBody ?? body} />
                                 ) : (
-                                    <div className="flex h-full items-center justify-center text-[11px] italic text-muted-foreground/40">
+                                    <div className="flex h-full items-center justify-center text-xs italic text-muted-foreground/40">
                                         {t('playground.empty_state', 'Configure request parameters and send')}
                                     </div>
                                 )}
@@ -537,18 +537,18 @@ export function Playground() {
                                         value={h.key}
                                         onChange={(e) => handleHeaderChange(h.id, 'key', e.target.value)}
                                         placeholder="Header Name"
-                                        className="w-[35%] sm:w-[30%] px-3 py-2 rounded-lg bg-background border border-input shadow-sm text-xs font-mono font-bold placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                                        className="w-[35%] sm:w-[30%] px-3 py-2 rounded-lg bg-background border border-input text-xs font-mono font-medium placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                                     />
                                     <input
                                         type="text"
                                         value={h.value}
                                         onChange={(e) => handleHeaderChange(h.id, 'value', e.target.value)}
                                         placeholder="Value"
-                                        className="flex-1 px-3 py-2 rounded-lg bg-background border border-input shadow-sm text-xs font-mono placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                                        className="flex-1 px-3 py-2 rounded-lg bg-background border border-input text-xs font-mono placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                                     />
                                     <button
                                         onClick={() => handleRemoveHeader(h.id)}
-                                        className="p-1.5 rounded-lg text-muted-foreground/20 hover:text-red-500 hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100"
+                                        className="p-1.5 rounded-lg text-muted-foreground/20 hover:text-danger hover:bg-danger/10 transition-all opacity-0 group-hover:opacity-100"
                                     >
                                         <Trash2 className="h-3.5 w-3.5" />
                                     </button>
@@ -559,7 +559,7 @@ export function Playground() {
                             variant="ghost"
                             size="sm"
                             onClick={handleAddHeader}
-                            className="h-8 px-3 text-[11px] font-bold gap-1.5 text-muted-foreground/50 hover:text-foreground"
+                            className="h-8 px-3 text-xs font-medium gap-1.5 text-muted-foreground/50 hover:text-foreground"
                         >
                             <Plus className="h-3 w-3" />
                             {t('playground.add_header')}
@@ -570,14 +570,14 @@ export function Playground() {
 
             {/* Response */}
             {(response || error || sending) && (
-                <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+                <div className="rounded-lg border border-border bg-card overflow-hidden">
                     {/* Response Header */}
                     <div className="px-4 py-3 border-b border-border/20 flex flex-wrap items-center gap-3">
-                        <span className="text-xs font-black uppercase tracking-wider text-muted-foreground/60">
+                        <span className="text-xs font-semibold text-muted-foreground/60">
                             {t('playground.response')}
                         </span>
                         {sending && (
-                            <div className="flex items-center gap-2 text-[10px] font-black uppercase text-primary animate-pulse">
+                            <div className="flex items-center gap-2 text-xs font-semibold text-primary">
                                 <Loader2 className="h-3 w-3 animate-spin" />
                                 {t('common.loading')}
                             </div>
@@ -587,22 +587,22 @@ export function Playground() {
                                 <Badge
                                     variant="outline"
                                     className={cn(
-                                        'font-black text-xs border-none',
+                                        'font-semibold text-xs border-none',
                                         getStatusColor(response.status_code)
                                     )}
                                 >
                                     {response.status_code}
                                 </Badge>
                                 {elapsed !== null && (
-                                    <span className="text-[10px] font-mono text-muted-foreground/50">
+                                    <span className="text-xs font-mono text-muted-foreground/50">
                                         {elapsed}ms
                                     </span>
                                 )}
                                 {response.body && (
-                                    <span className="text-[10px] font-mono text-muted-foreground/50">
+                                    <span className="text-xs font-mono text-muted-foreground/50">
                                         {formatSize(response.body.length)}
                                         {response.truncated && (
-                                            <span className="ml-1 text-amber-500 font-black">
+                                            <span className="ml-1 text-warning font-semibold">
                                                 (TRUNCATED)
                                             </span>
                                         )}
@@ -611,7 +611,7 @@ export function Playground() {
                                 {response.body_decoded && (
                                     <Badge
                                         variant="outline"
-                                        className="h-5 border-sky-500/30 bg-sky-500/5 px-1.5 text-[10px] font-bold text-sky-600 dark:text-sky-400"
+                                        className="h-5 border-info/30 bg-info/5 px-1.5 text-xs font-medium text-info"
                                     >
                                         {t('playground.body_decoded', {
                                             encoding: (response.body_decoded_from || 'gzip').toUpperCase(),
@@ -629,7 +629,7 @@ export function Playground() {
                                         onClick={() => copyToClipboard(response.body, 'resp')}
                                     >
                                         {copiedField === 'resp' ? (
-                                            <Check className="h-3.5 w-3.5 text-green-500" />
+                                            <Check className="h-3.5 w-3.5 text-success" />
                                         ) : (
                                             <Copy className="h-3.5 w-3.5 text-muted-foreground/50" />
                                         )}
@@ -641,21 +641,21 @@ export function Playground() {
 
                     {/* Error */}
                     {error && (
-                        <div className="p-4 bg-red-500/5 border-b border-red-500/10">
-                            <pre className="text-xs text-red-500 font-mono whitespace-pre-wrap">{error}</pre>
+                        <div className="p-4 bg-danger/5 border-b border-danger/10">
+                            <pre className="text-xs text-danger font-mono whitespace-pre-wrap">{error}</pre>
                         </div>
                     )}
 
                     {/* Response Headers */}
                     {response?.headers && Object.keys(response.headers).length > 0 && (
                         <details className="group">
-                            <summary className="px-4 py-2 cursor-pointer text-[10px] font-black uppercase tracking-wider text-muted-foreground/40 hover:text-muted-foreground transition-colors select-none">
+                            <summary className="px-4 py-2 cursor-pointer text-xs font-semibold text-muted-foreground/40 hover:text-muted-foreground transition-colors select-none">
                                 {t('playground.response_headers')} ({Object.keys(response.headers).length})
                             </summary>
-                            <div className="px-4 pb-3 space-y-1 font-mono text-[11px]">
+                            <div className="px-4 pb-3 space-y-1 font-mono text-xs">
                                 {Object.entries(response.headers).map(([k, vv]) => (
                                     <div key={k} className="flex flex-col sm:flex-row sm:gap-2">
-                                        <span className="text-green-500/70 shrink-0 font-bold">{k}:</span>
+                                        <span className="text-success/70 shrink-0 font-semibold">{k}:</span>
                                         <div className="flex flex-col">
                                             {vv.map((v, i) => (
                                                 <span key={i} className="text-foreground/70 break-all">{v}{i < vv.length - 1 ? ';' : ''}</span>
@@ -681,7 +681,7 @@ export function Playground() {
 
                     {/* Empty response */}
                     {response && !response.body && !error && (
-                        <div className="p-8 text-center text-[11px] text-muted-foreground/40 italic">
+                        <div className="p-8 text-center text-xs text-muted-foreground/40 italic">
                             {t('playground.empty_response')}
                         </div>
                     )}

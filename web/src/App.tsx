@@ -10,7 +10,7 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { Toaster } from '@/components/ui/sonner'
 import { Suspense, lazy, useState, useEffect } from 'react'
 import { fetchAuthStatus, fetchConfig, login, logout as logoutRequest, setupPassword } from '@/lib/api'
-import { logRequestDiffRoute } from '@/lib/routes'
+import { logRequestDiffRoute, settingsTabLabelKeys, settingsTabPath, settingsTabs } from '@/lib/routes'
 import { Login } from '@/pages/Login'
 
 const PlaygroundPage = lazy(async () => {
@@ -63,82 +63,125 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
     { to: '/settings', labelKey: 'nav.settings', icon: SettingsIcon },
   ]
 
+  const isNavActive = (to: string) =>
+    to === '/' ? location.pathname === '/' : location.pathname.startsWith(to)
+
+  const pageTitle = navItems.find(item => isNavActive(item.to))?.labelKey ?? 'app.title'
+
   const routeFallback = (
-    <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4">
-      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-      <div className="text-sm font-medium text-muted-foreground">
-        {t('common.loading')}
-      </div>
+    <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3">
+      <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      <div className="text-sm text-muted-foreground">{t('common.loading')}</div>
     </div>
   )
 
   return (
-    <div className="relative isolate flex min-h-screen flex-col bg-background">
-      {/* Background Decorative Blur - Global */}
-      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute left-[4%] top-[10%] h-72 w-72 rounded-full bg-primary/[0.10] blur-[110px] dark:bg-primary/[0.15]" />
-        <div className="absolute right-[6%] top-[25%] h-80 w-80 rounded-full bg-sky-400/[0.08] blur-[125px] dark:bg-sky-400/[0.12]" />
-        <div className="absolute left-1/2 bottom-[20%] h-72 w-[42rem] -translate-x-1/2 rounded-full bg-emerald-300/[0.08] blur-[130px] dark:bg-emerald-300/[0.10]" />
-      </div>
-      {/* 头部 */}
-      <header className="sticky top-0 z-40 backdrop-blur-md bg-background/80">
-        <div className="mx-auto w-full max-w-[1600px] px-4 py-3 sm:px-6 sm:py-4">
-          <div className="flex items-start justify-between gap-3 sm:items-center">
-            <div className="flex min-w-0 items-center gap-3 sm:gap-6">
-              {/* Logo */}
-              <a
-                href="https://github.com/paopaoandlingyia/PrismCat"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex min-w-0 items-center gap-2.5 transition-opacity hover:opacity-80 sm:gap-3"
-              >
-                <div className="relative">
-                  <PrismCatLogo className="h-9 w-9" />
-                </div>
-                <h1 className="truncate text-lg font-bold prism-gradient-text tracking-tight sm:text-xl">
-                  {t('app.title')}
-                </h1>
-              </a>
+    <div className="min-h-screen bg-background">
+      {/* 侧边栏 - 桌面 */}
+      <aside
+        className="fixed inset-y-0 left-0 z-40 hidden w-[200px] flex-col border-r border-border bg-muted/40 md:flex"
+      >
+        <a
+          href="https://github.com/paopaoandlingyia/PrismCat"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3 transition-colors hover:bg-accent/60"
+        >
+          <PrismCatLogo className="h-5 w-5 shrink-0" />
+          <span className="truncate text-sm font-medium text-foreground">{t('app.title')}</span>
+        </a>
 
-              {/* 导航 */}
-              <nav className="hidden md:flex items-center gap-2 ml-10">
-                {navItems.map((item) => {
-                  const isActive = item.to === '/'
-                    ? location.pathname === '/'
-                    : location.pathname.startsWith(item.to)
-                  const Icon = item.icon
-                  return (
-                    <NavLink
-                      key={item.to}
-                      to={item.to}
-                      className={cn(
-                        'relative flex items-center justify-center gap-2.5 px-6 py-2.5 rounded-lg text-sm font-bold transition-all duration-200 group min-w-[110px] uppercase tracking-tighter',
-                        isActive
-                          ? 'text-primary bg-primary/10'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
-                      )}
-                    >
-                      <Icon className={cn("h-4 w-4 transition-colors", isActive ? "text-primary" : "text-muted-foreground group-hover:text-primary")} />
-                      <span>{t(item.labelKey)}</span>
-                    </NavLink>
-                  )
-                })}
-              </nav>
+        <nav className="flex-1 space-y-0.5 overflow-y-auto p-2">
+          {navItems.map((item) => {
+            const Icon = item.icon
+            return (
+              <div key={item.to}>
+                <NavLink
+                  // 有子项时直接进第一个分区,保证 URL 总是带分区、子项高亮不落空
+                  to={item.to === '/settings' ? settingsTabPath('routing') : item.to}
+                  className={cn(
+                    'flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors',
+                    isNavActive(item.to)
+                      // 有子项时父项只加重文字、不上底色,底色留给子项,层级才分得开
+                      ? item.to === '/settings'
+                        ? 'font-medium text-foreground'
+                        : 'bg-accent font-medium text-foreground'
+                      : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'
+                  )}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{t(item.labelKey)}</span>
+                </NavLink>
+
+                {/* 设置的四个分区常驻展开:侧栏本来就空,且位置固定不会跳 */}
+                {item.to === '/settings' && (
+                  <div className="mt-0.5 ml-[1.4rem] space-y-0.5 border-l border-border pl-2">
+                    {settingsTabs.map((tab) => (
+                      <NavLink
+                        key={tab}
+                        to={settingsTabPath(tab)}
+                        className={({ isActive }) => cn(
+                          'block truncate rounded-md px-2 py-1 text-sm transition-colors',
+                          isActive
+                            ? 'bg-accent font-medium text-foreground'
+                            : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'
+                        )}
+                      >
+                        {t(settingsTabLabelKeys[tab])}
+                      </NavLink>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </nav>
+
+        <div className="shrink-0 border-t border-border p-2">
+          <div className="flex items-center gap-1">
+            <ThemeToggle />
+            <button
+              onClick={() => i18n.changeLanguage(i18n.language === 'zh' ? 'en' : 'zh')}
+              className="flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              aria-label={t('auth.switch_language')}
+            >
+              <Globe className="h-3.5 w-3.5" />
+              <span>{i18n.language === 'zh' ? 'EN' : '中'}</span>
+            </button>
+            <button
+              onClick={onSignOut}
+              className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              aria-label={t('auth.sign_out')}
+              title={t('auth.sign_out')}
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
+          <p className="mt-2 select-none px-1 text-xs text-muted-foreground/70">PrismCat {version}</p>
+        </div>
+      </aside>
+
+      <div className="flex min-h-screen flex-col md:pl-[200px]">
+        {/* 移动端顶栏 */}
+        <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-md md:hidden">
+          <div className="flex items-center justify-between gap-3 px-4 py-2.5">
+            <div className="flex min-w-0 items-center gap-2">
+              <PrismCatLogo className="h-5 w-5 shrink-0" />
+              <span className="truncate text-sm font-medium">{t('app.title')}</span>
             </div>
-
-            {/* 右侧操作 */}
-            <div className="shrink-0 flex items-center gap-2 sm:gap-4">
+            <div className="flex shrink-0 items-center gap-1">
               <ThemeToggle />
               <button
                 onClick={() => i18n.changeLanguage(i18n.language === 'zh' ? 'en' : 'zh')}
-                className="flex h-10 items-center justify-center gap-2 rounded-lg border border-border/50 bg-accent/50 px-3 text-[11px] font-black uppercase tracking-widest text-muted-foreground transition-all hover:border-border hover:bg-accent hover:text-foreground active:scale-95 sm:min-w-[110px] sm:px-4"
+                className="flex h-8 items-center justify-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                aria-label={t('auth.switch_language')}
               >
                 <Globe className="h-3.5 w-3.5" />
-                <span>{i18n.language === 'zh' ? 'English' : '中文'}</span>
+                <span>{i18n.language === 'zh' ? 'EN' : '中'}</span>
               </button>
               <button
                 onClick={onSignOut}
-                className="flex h-10 w-10 items-center justify-center rounded-lg border border-border/50 bg-accent/50 text-muted-foreground transition-all hover:border-border hover:bg-accent hover:text-foreground active:scale-95"
+                className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 aria-label={t('auth.sign_out')}
                 title={t('auth.sign_out')}
               >
@@ -146,56 +189,50 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
               </button>
             </div>
           </div>
-
-          {/* 移动端导航 */}
-          <nav className="mt-3 flex items-center gap-1.5 md:hidden sm:mt-4 sm:-mx-2 sm:gap-2">
+          <nav className="flex items-center gap-1 overflow-x-auto px-2 pb-2">
             {navItems.map((item) => {
-              const isActive = item.to === '/'
-                ? location.pathname === '/'
-                : location.pathname.startsWith(item.to)
               const Icon = item.icon
               return (
                 <NavLink
                   key={item.to}
                   to={item.to}
                   className={cn(
-                    'flex-1 flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-medium transition-all sm:px-4 sm:py-3 sm:text-sm',
-                    isActive
-                      ? 'bg-primary/10 text-primary shadow-sm'
-                      : 'text-muted-foreground hover:text-white hover:bg-white/5'
+                    'flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-xs transition-colors',
+                    isNavActive(item.to)
+                      ? 'bg-accent font-medium text-foreground'
+                      : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'
                   )}
                 >
-                  <Icon className="h-5 w-5" />
+                  <Icon className="h-4 w-4 shrink-0" />
                   <span>{t(item.labelKey)}</span>
                 </NavLink>
               )
             })}
           </nav>
-        </div>
-      </header>
+        </header>
 
-      {/* 主内容 */}
-      <main className="relative z-0 w-full flex-1 bg-background px-4 py-5 space-y-6 sm:px-6 sm:py-6">
-        <div className="mx-auto w-full max-w-[1600px]">
-        <Suspense fallback={routeFallback}>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path={logRequestDiffRoute} element={<LogDiffPage />} />
-            <Route path="/traces" element={<Traces />} />
-            <Route path="/traces/:traceId" element={<TraceDetailPage />} />
-            <Route path="/playground" element={<PlaygroundPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-          </Routes>
-        </Suspense>
+        {/* 页面标题栏 - 给内容区一个"顶" */}
+        <div className="sticky top-0 z-20 hidden h-12 shrink-0 items-center border-b border-border bg-background/90 px-5 backdrop-blur-md md:flex">
+          <h1 className="text-sm font-medium text-foreground">{t(pageTitle)}</h1>
         </div>
-      </main>
 
-      {/* 页脚版本号 */}
-      <footer className="relative z-0 flex w-full items-center justify-center bg-background px-4 py-4 sm:px-6">
-        <p className="text-muted-foreground/20 text-[10px] font-bold tracking-[0.2em] uppercase select-none">
-          PrismCat {version}
-        </p>
-      </footer>
+        {/* 主内容 */}
+        <main className="w-full flex-1 px-4 py-4 sm:px-5">
+          <div className="mx-auto w-full max-w-[1600px]">
+            <Suspense fallback={routeFallback}>
+              <Routes>
+                <Route path="/" element={<Dashboard />} />
+                <Route path={logRequestDiffRoute} element={<LogDiffPage />} />
+                <Route path="/traces" element={<Traces />} />
+                <Route path="/traces/:traceId" element={<TraceDetailPage />} />
+                <Route path="/playground" element={<PlaygroundPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/settings/:tab" element={<SettingsPage />} />
+              </Routes>
+            </Suspense>
+          </div>
+        </main>
+      </div>
     </div>
   )
 }
@@ -252,11 +289,9 @@ function AppContent() {
 
   if (isCheckingAuth) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-        <div className="text-sm font-medium text-muted-foreground">
-          {t('common.loading')}
-        </div>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <div className="text-sm text-muted-foreground">{t('common.loading')}</div>
       </div>
     )
   }
@@ -280,5 +315,3 @@ function App() {
 }
 
 export default App
-
-

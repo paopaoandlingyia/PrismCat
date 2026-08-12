@@ -48,7 +48,7 @@ export function Login({ setupRequired, onSignedIn }: LoginProps) {
         <div className="flex min-w-0 items-center gap-3">
           <PrismCatLogo className="h-9 w-9" />
           <div className="min-w-0">
-            <p className="truncate text-lg font-bold prism-gradient-text">
+            <p className="truncate text-lg font-semibold prism-gradient-text">
               {t('app.title')}
             </p>
           </div>
@@ -57,7 +57,7 @@ export function Login({ setupRequired, onSignedIn }: LoginProps) {
           <ThemeToggle />
           <button
             onClick={() => i18n.changeLanguage(i18n.language === 'zh' ? 'en' : 'zh')}
-            className="flex h-10 items-center justify-center gap-2 rounded-lg border border-border/50 bg-accent/50 px-3 text-[11px] font-black uppercase tracking-widest text-muted-foreground transition-all hover:border-border hover:bg-accent hover:text-foreground active:scale-95 sm:min-w-[110px] sm:px-4"
+            className="flex h-10 items-center justify-center gap-2 rounded-lg border border-border/50 bg-accent/50 px-3 text-xs font-semibold text-muted-foreground transition-all hover:border-border hover:bg-accent hover:text-foreground active:scale-95 sm:min-w-[110px] sm:px-4"
             aria-label={t('auth.switch_language')}
           >
             <Globe className="h-3.5 w-3.5" />
@@ -67,37 +67,35 @@ export function Login({ setupRequired, onSignedIn }: LoginProps) {
       </header>
 
       <main className="grid min-h-[calc(100vh-76px)] place-items-center px-4 py-8 sm:px-6">
-        <div className="grid w-full max-w-5xl overflow-hidden rounded-lg border border-border bg-card shadow-2xl shadow-black/5 md:grid-cols-[1fr_420px]">
-          <section className="relative hidden min-h-[560px] overflow-hidden border-r border-border bg-slate-950 text-white md:block">
-            <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(59,130,246,0.22),transparent_36%),linear-gradient(45deg,rgba(20,184,166,0.20),transparent_42%),linear-gradient(180deg,rgba(250,204,21,0.10),transparent_58%)]" />
-            <div className="absolute inset-0 opacity-25 [background-image:linear-gradient(rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] [background-size:48px_48px]" />
+        <div className="grid w-full max-w-5xl overflow-hidden rounded-lg border border-border bg-card md:grid-cols-[1fr_420px]">
+          <section className="relative hidden min-h-[560px] overflow-hidden border-r border-border bg-muted/40 md:block">
             <div className="relative flex h-full flex-col justify-between p-10">
               <div>
-                <div className="mb-8 inline-flex h-12 w-12 items-center justify-center rounded-lg border border-white/15 bg-white/10">
-                  <ShieldCheck className="h-6 w-6 text-cyan-200" />
+                <div className="mb-8 inline-flex h-12 w-12 items-center justify-center rounded-lg border border-border bg-card">
+                  <ShieldCheck className="h-6 w-6 text-muted-foreground" />
                 </div>
                 <h1 className="max-w-md text-3xl font-semibold leading-tight">
                   {t('auth.hero_title')}
                 </h1>
-                <p className="mt-4 max-w-md text-sm leading-6 text-slate-300">
+                <p className="mt-4 max-w-md text-sm leading-6 text-muted-foreground">
                   {t('auth.hero_description')}
                 </p>
               </div>
 
               <div className="grid gap-3">
-                <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.06] px-4 py-3">
+                <div className="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3">
                   <div className="flex items-center gap-3">
-                    <Server className="h-4 w-4 text-emerald-200" />
+                    <Server className="h-4 w-4 text-success" />
                     <span className="text-sm font-medium">{t('auth.server_ready')}</span>
                   </div>
-                  <span className="h-2 w-2 rounded-full bg-emerald-300" />
+                  <span className="h-2 w-2 rounded-full bg-success" />
                 </div>
-                <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.06] px-4 py-3">
+                <div className="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3">
                   <div className="flex items-center gap-3">
-                    <LockKeyhole className="h-4 w-4 text-amber-200" />
+                    <LockKeyhole className="h-4 w-4 text-warning" />
                     <span className="text-sm font-medium">{t('auth.session_ready')}</span>
                   </div>
-                  <span className="h-2 w-2 rounded-full bg-amber-300" />
+                  <span className="h-2 w-2 rounded-full bg-warning" />
                 </div>
               </div>
             </div>
