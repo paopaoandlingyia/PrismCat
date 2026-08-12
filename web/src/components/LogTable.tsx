@@ -163,7 +163,7 @@ function MobileLogCard({
                             </span>
                         )}
                         {log.request_override_applied && (
-                            <span className="inline-flex items-center gap-1 rounded-md bg-warning/10 px-2.5 py-1 text-xs font-medium text-warning">
+                            <span className="inline-flex items-center gap-1 rounded-md border border-border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
                                 <AlertTriangle className="h-3 w-3" />
                                 {modifiedLabel}
                             </span>
@@ -175,7 +175,7 @@ function MobileLogCard({
                             </span>
                         )}
                         {log.tag && (
-                            <span className="inline-flex items-center gap-1 rounded-md bg-warning/10 px-2.5 py-1 text-xs font-medium text-warning">
+                            <span className="inline-flex items-center gap-1 rounded-md border border-border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
                                 <TagIcon className="h-3 w-3" />
                                 <span className="truncate max-w-[120px]">{log.tag}</span>
                             </span>
@@ -359,7 +359,7 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                                         {log.tag && (
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
-                                                    <span className="shrink-0 inline-flex items-center h-[18px] px-1.5 rounded-md text-xs font-semibold tracking-tight bg-warning/15 text-warning">
+                                                    <span className="shrink-0 inline-flex items-center h-[18px] px-1.5 rounded-md border border-border text-xs font-medium bg-muted text-muted-foreground">
                                                         {log.tag}
                                                     </span>
                                                 </TooltipTrigger>
@@ -383,7 +383,7 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                                         {log.request_override_applied && (
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
-                                                    <span className="shrink-0 inline-flex items-center h-[18px] px-1.5 rounded-md text-xs font-semibold tracking-tight bg-warning/15 text-warning">
+                                                    <span className="shrink-0 inline-flex items-center h-[18px] px-1.5 rounded-md border border-border text-xs font-medium bg-muted text-muted-foreground">
                                                         {t('log_detail.modified', 'MODIFIED')}
                                                     </span>
                                                 </TooltipTrigger>
