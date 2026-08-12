@@ -417,7 +417,7 @@ function OutboundProxyControl({
             >
                 <SelectTrigger
                     className={cn(
-                        "h-full rounded-none border-0 bg-transparent text-sm shadow-none focus:ring-0 focus:ring-offset-0",
+                        "h-full rounded-none border-0 bg-transparent text-sm shadow-none",
                         mode === 'custom'
                             ? "absolute inset-y-0 right-0 z-10 w-10 justify-center px-0 hover:bg-muted/40"
                             : "w-full",

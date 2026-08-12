@@ -51,6 +51,19 @@ export function getStatusColor(code: number): string {
 // 方法颜色 - HTTP 方法不携带成败语义,统一中性,不再按方法分色
 export const METHOD_CLASS = 'text-muted-foreground'
 
+/**
+ * 焦点环。给裸 <input>/<textarea> 用 —— 走 Input/Textarea 组件的地方已经自带了,
+ * 这里是为了让手写的那些跟组件保持同一套,别再各写一份淡的。
+ *
+ * 焦点指示是可访问性要求(WCAG 2.4.7 / 2.4.13),不是装饰,所以品牌色用在这里
+ * 是它该出现的地方。用 focus-visible 而不是 focus:鼠标点击不该画环,
+ * 但浏览器对文本输入框仍会判定为 focus-visible,键盘用户不受影响。
+ */
+export const FOCUS_RING = 'outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]'
+
+/** 校验失败时的焦点环,配合 border-danger 使用 */
+export const FOCUS_RING_DANGER = 'outline-none focus-visible:border-danger focus-visible:ring-danger/50 focus-visible:ring-[3px]'
+
 // JSON 语法高亮
 export function syntaxHighlightJson(json: string): string {
   if (!json) return ''

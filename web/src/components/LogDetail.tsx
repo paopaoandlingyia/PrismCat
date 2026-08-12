@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import { cn, formatDate, formatLatency, formatSize, getStatusColor, METHOD_CLASS } from '@/lib/utils'
+import { cn, formatDate, formatLatency, formatSize, getStatusColor, METHOD_CLASS, FOCUS_RING } from '@/lib/utils'
 import { copyText } from '@/lib/clipboard'
 import { Copy, Check, Zap, AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsDownUp, ChevronsUpDown, FileCode, ListTree, Globe, Layers, RotateCcw, Maximize2, Minimize2, ExternalLink, Terminal, Bookmark, BookmarkCheck, CheckCircle2, CircleDot, Tags, Search, X } from 'lucide-react'
 import { fetchBlob, fetchLogBody, updateLogAnnotation } from '@/lib/api'
@@ -982,7 +982,7 @@ export function LogDetail({
                                     value={annotationNote}
                                     onChange={(event) => setAnnotationNote(event.target.value)}
                                     placeholder={t('log_annotation.note_placeholder', '写下为什么保存这条日志，或后续要检查什么...')}
-                                    className="min-h-20 resize-y rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm leading-relaxed outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary/40 focus:bg-background"
+                                    className={cn('min-h-20 resize-y rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm leading-relaxed transition-colors placeholder:text-muted-foreground/70 focus-visible:bg-background', FOCUS_RING)}
                                 />
                                 <div className="space-y-2">
                                     <div className="relative">
@@ -991,7 +991,7 @@ export function LogDetail({
                                             value={annotationLabels}
                                             onChange={(event) => setAnnotationLabels(event.target.value)}
                                             placeholder={t('log_annotation.labels_placeholder', '标签，用逗号分隔')}
-                                            className="h-10 w-full rounded-lg border border-border bg-muted/40 pl-9 pr-3 text-sm outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary/40 focus:bg-background"
+                                            className={cn('h-10 w-full rounded-lg border border-border bg-muted/40 pl-9 pr-3 text-sm transition-colors placeholder:text-muted-foreground/70 focus-visible:bg-background', FOCUS_RING)}
                                         />
                                     </div>
                                     <Button

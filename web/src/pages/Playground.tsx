@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useLocation } from 'react-router-dom'
 import { Send, Plus, Trash2, Loader2, Copy, Check, ChevronDown, Braces, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
-import { cn, getStatusColor, formatSize, generateId } from '@/lib/utils'
+import { cn, getStatusColor, formatSize, generateId, FOCUS_RING, FOCUS_RING_DANGER } from '@/lib/utils'
 import { copyText } from '@/lib/clipboard'
 import { fetchUpstreams, sendReplay } from '@/lib/api'
 import type { Upstream, ReplayResponse } from '@/lib/api'
@@ -387,7 +387,7 @@ export function Playground() {
                             value={path}
                             onChange={(e) => setPath(e.target.value)}
                             placeholder="/v1/chat/completions"
-                            className="flex-1 min-w-[220px] px-3 py-2.5 rounded-md bg-background border border-input text-sm font-mono placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                            className={cn('flex-1 min-w-[220px] px-3 py-2.5 rounded-md bg-background border border-input text-sm font-mono placeholder:text-muted-foreground/40 transition-all', FOCUS_RING)}
                         />
                     </>
                 ) : (
@@ -396,7 +396,7 @@ export function Playground() {
                         value={targetUrl}
                         onChange={(e) => setTargetUrl(e.target.value)}
                         placeholder={t('playground.custom_url_placeholder', 'https://api.openai.com/v1/chat/completions')}
-                        className="flex-1 min-w-[260px] px-3 py-2.5 rounded-md bg-background border border-input text-sm font-mono placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                        className={cn('flex-1 min-w-[260px] px-3 py-2.5 rounded-md bg-background border border-input text-sm font-mono placeholder:text-muted-foreground/40 transition-all', FOCUS_RING)}
                     />
                 )}
 
@@ -511,10 +511,9 @@ export function Playground() {
                                 onChange={(e) => setBody(e.target.value)}
                                 placeholder='{ "model": "gpt-4", "messages": [...] }'
                                 className={cn(
-                                    'w-full h-[260px] px-4 py-3 rounded-md bg-background border text-xs font-mono leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 resize-none custom-scrollbar transition-all',
-                                    requestBodyJsonError
-                                        ? 'border-danger focus:ring-danger/20'
-                                        : 'border-input focus:ring-primary/20'
+                                    'w-full h-[260px] px-4 py-3 rounded-md bg-background border text-xs font-mono leading-relaxed placeholder:text-muted-foreground/40 resize-none custom-scrollbar transition-all',
+                                    requestBodyJsonError ? 'border-danger' : 'border-input',
+                                    requestBodyJsonError ? FOCUS_RING_DANGER : FOCUS_RING,
                                 )}
                                 spellCheck={false}
                                 aria-invalid={requestBodyJsonError ? true : undefined}
@@ -556,14 +555,14 @@ export function Playground() {
                                         value={h.key}
                                         onChange={(e) => handleHeaderChange(h.id, 'key', e.target.value)}
                                         placeholder="Header Name"
-                                        className="w-[35%] sm:w-[30%] px-3 py-2 rounded-lg bg-background border border-input text-xs font-mono font-medium placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                                        className={cn('w-[35%] sm:w-[30%] px-3 py-2 rounded-lg bg-background border border-input text-xs font-mono font-medium placeholder:text-muted-foreground/40 transition-all', FOCUS_RING)}
                                     />
                                     <input
                                         type="text"
                                         value={h.value}
                                         onChange={(e) => handleHeaderChange(h.id, 'value', e.target.value)}
                                         placeholder="Value"
-                                        className="flex-1 px-3 py-2 rounded-lg bg-background border border-input text-xs font-mono placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                                        className={cn('flex-1 px-3 py-2 rounded-lg bg-background border border-input text-xs font-mono placeholder:text-muted-foreground/40 transition-all', FOCUS_RING)}
                                     />
                                     <button
                                         onClick={() => handleRemoveHeader(h.id)}
