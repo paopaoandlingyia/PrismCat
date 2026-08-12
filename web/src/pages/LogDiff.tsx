@@ -8,7 +8,7 @@ import { TextDiffViewer } from '@/components/TextDiffViewer'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { fetchLog, type RequestLog } from '@/lib/api'
-import { cn, formatDate, formatSize, getMethodColor, getStatusColor } from '@/lib/utils'
+import { cn, formatDate, formatSize, METHOD_CLASS, getStatusColor } from '@/lib/utils'
 import { copyText } from '@/lib/clipboard'
 
 interface LogDiffState {
@@ -111,7 +111,7 @@ export function LogDiff() {
                 <div className="flex flex-col gap-4 rounded-lg border border-border/60 bg-card px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0 space-y-3">
                         <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant="outline" className={cn('rounded-md px-2 py-0.5 text-xs font-medium', getMethodColor(log.method))}>
+                            <Badge variant="outline" className={cn('rounded-md px-2 py-0.5 text-xs font-medium', METHOD_CLASS)}>
                                 {log.method}
                             </Badge>
                             <span className={cn('font-mono text-lg font-semibold tracking-tight', getStatusColor(log.status_code))}>

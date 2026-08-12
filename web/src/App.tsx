@@ -66,6 +66,8 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
   const isNavActive = (to: string) =>
     to === '/' ? location.pathname === '/' : location.pathname.startsWith(to)
 
+  const pageTitle = navItems.find(item => isNavActive(item.to))?.labelKey ?? 'app.title'
+
   const routeFallback = (
     <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3">
       <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -183,6 +185,11 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
             })}
           </nav>
         </header>
+
+        {/* 页面标题栏 - 给内容区一个"顶" */}
+        <div className="sticky top-0 z-20 hidden h-12 shrink-0 items-center border-b border-border bg-background/90 px-5 backdrop-blur-md md:flex">
+          <h1 className="text-sm font-medium text-foreground">{t(pageTitle)}</h1>
+        </div>
 
         {/* 主内容 */}
         <main className="w-full flex-1 px-4 py-4 sm:px-5">

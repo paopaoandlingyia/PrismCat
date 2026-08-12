@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import { cn, formatDate, formatLatency, formatSize, getStatusColor, getMethodColor } from '@/lib/utils'
+import { cn, formatDate, formatLatency, formatSize, getStatusColor, METHOD_CLASS } from '@/lib/utils'
 import { copyText } from '@/lib/clipboard'
 import { Copy, Check, Zap, AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsDownUp, ChevronsUpDown, FileCode, ListTree, Globe, Layers, RotateCcw, Maximize2, Minimize2, ExternalLink, Terminal, Bookmark, BookmarkCheck, CheckCircle2, CircleDot, Tags, Search, X } from 'lucide-react'
 import { fetchBlob, fetchLogBody, updateLogAnnotation } from '@/lib/api'
@@ -717,7 +717,7 @@ export function LogDetail({
                         <div
                                 className={cn(
                                     "w-14 py-0.5 rounded-md text-xs text-center font-medium border",
-                                    getMethodColor(displayLog.method)
+                                    METHOD_CLASS
                                 )}
                         >
                             {displayLog.method}

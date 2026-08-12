@@ -48,10 +48,8 @@ export function getStatusColor(code: number): string {
   return 'text-muted-foreground'
 }
 
-// 方法颜色 - HTTP 方法不携带成败语义,统一中性,只靠等宽字重区分
-export function getMethodColor(_method?: string): string {
-  return 'text-muted-foreground'
-}
+// 方法颜色 - HTTP 方法不携带成败语义,统一中性,不再按方法分色
+export const METHOD_CLASS = 'text-muted-foreground'
 
 // JSON 语法高亮
 export function syntaxHighlightJson(json: string): string {

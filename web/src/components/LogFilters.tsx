@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils'
-import { Search, RotateCcw, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Download } from 'lucide-react'
+import { Search, RotateCcw, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Download, SlidersHorizontal } from 'lucide-react'
 import type { Upstream, LogFilter } from '@/lib/api'
 import { Suspense, lazy, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -39,9 +39,9 @@ const DateRangePicker = lazy(async () => {
 function DateRangePickerFallback() {
     return (
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-            <div className="h-10 rounded-lg border border-border/50 bg-background/50 sm:min-w-[170px]" />
+            <div className="h-8 rounded-md border border-border/50 bg-background/50 sm:min-w-[170px]" />
             <span className="hidden text-muted-foreground/30 text-sm font-medium mx-1 sm:inline">/</span>
-            <div className="h-10 rounded-lg border border-border/50 bg-background/50 sm:min-w-[170px]" />
+            <div className="h-8 rounded-md border border-border/50 bg-background/50 sm:min-w-[170px]" />
         </div>
     )
 }
@@ -133,10 +133,17 @@ export function LogFilters({
     const hasChanges = isPathChanged || isUpstreamChanged || isMethodChanged || isStatusCodeChanged || isTraceIdChanged || isTagChanged ||
         isSavedChanged || isAnnotationStatusChanged || isAnnotationLabelChanged || isTimeChanged
 
+    // 次级筛选默认收起,但只要有生效的条件就展开,避免"筛了却看不见"
+    const activeAdvancedCount = [
+        draft.upstream, draft.method, draft.status_code, draft.tag,
+        draft.saved, draft.annotation_status, draft.annotation_label,
+    ].filter(value => value !== undefined && value !== '').length
+    const [showAdvanced, setShowAdvanced] = useState(activeAdvancedCount > 0)
+
     return (
-        <div className="flex flex-col gap-4 px-0 py-2 sm:px-4 sm:pr-6">
-            {/* 第一层级：核心查询 (搜索 + 时间) */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex flex-col gap-2 px-0 py-2 sm:px-4 sm:pr-6">
+            {/* 工具条：搜索 + 时间 + 筛选开关 + 操作 */}
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <div className="relative flex-1 group">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/75 transition-colors group-focus-within:text-primary" />
                     <Input
@@ -147,20 +154,15 @@ export function LogFilters({
                             if (e.key === 'Enter') handleSearch()
                         }}
                         className={cn(
-                            "h-9 pl-9 border border-input bg-background transition-all hover:bg-accent focus-visible:bg-background",
+                            "h-8 pl-9 border border-input bg-background transition-all hover:bg-accent focus-visible:bg-background",
                             isPathChanged && "border-primary/50 ring-1 ring-primary/20"
                         )}
                     />
-                    {isPathChanged && (
-                        <Badge className="absolute right-2 top-2 h-6 px-1.5 text-xs font-semibold bg-primary/20 text-primary border-none">
-                            Edited
-                        </Badge>
-                    )}
                 </div>
 
                 <div className={cn(
-                    "w-full sm:w-auto rounded-lg transition-all",
-                    isTimeChanged && "ring-2 ring-primary/20 border-primary/40"
+                    "w-full sm:w-auto rounded-md transition-all",
+                    isTimeChanged && "ring-1 ring-primary/20"
                 )}>
                     <Suspense fallback={<DateRangePickerFallback />}>
                         <DateRangePicker
@@ -171,17 +173,87 @@ export function LogFilters({
                         />
                     </Suspense>
                 </div>
+
+                <button
+                    type="button"
+                    onClick={() => setShowAdvanced(value => !value)}
+                    className={cn(
+                        'flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-input px-2.5 text-xs transition-colors hover:bg-accent',
+                        activeAdvancedCount > 0 ? 'text-foreground' : 'text-muted-foreground',
+                    )}
+                >
+                    <SlidersHorizontal className="h-3.5 w-3.5" />
+                    <span>{t('filters.advanced', '筛选')}</span>
+                    {activeAdvancedCount > 0 && (
+                        <span className="rounded-sm bg-primary/10 px-1 font-mono text-primary">{activeAdvancedCount}</span>
+                    )}
+                    <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', showAdvanced && 'rotate-180')} />
+                </button>
+
+                <div className="flex shrink-0 items-center gap-1.5">
+                    <TooltipProvider delayDuration={200}>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    variant="default"
+                                    size="icon"
+                                    onClick={handleSearch}
+                                    disabled={loading}
+                                    className={cn('h-8 w-8 shrink-0', hasChanges && 'ring-2 ring-primary/30')}
+                                >
+                                    <Search className={cn('h-4 w-4', loading && 'animate-spin')} />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>{t('filters.search')}</p>
+                            </TooltipContent>
+                        </Tooltip>
+
+                        {onExport && (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        onClick={handleExport}
+                                        className="h-8 w-8 shrink-0 border border-input bg-background text-muted-foreground hover:bg-accent hover:text-foreground"
+                                    >
+                                        <Download className="h-4 w-4" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>{t('filters.export_jsonl')}</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        )}
+
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={handleReset}
+                                    className="h-8 w-8 shrink-0 border border-input bg-background text-muted-foreground hover:bg-accent hover:text-foreground"
+                                >
+                                    <RotateCcw className="h-4 w-4" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>{t('filters.reset')}</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                </div>
             </div>
 
-            {/* 第二层级：属性筛选 (Grid对其) + 操作按钮 */}
-            <div className="flex flex-col xl:flex-row gap-4 items-start xl:items-center justify-between">
-                <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3 w-full xl:w-auto xl:flex-1">
+            {showAdvanced && (
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7">
                     <Select
                         value={draft.upstream || "all"}
                         onValueChange={(val) => setDraft({ ...draft, upstream: val === "all" ? "" : val })}
                     >
                         <SelectTrigger className={cn(
-                            "w-full h-9 bg-background border border-input hover:bg-accent",
+                            "w-full h-8 bg-background border border-input hover:bg-accent",
                             isUpstreamChanged && "border-primary/50 ring-1 ring-primary/20"
                         )}>
                             <SelectValue placeholder={t('filters.all_upstreams')} />
@@ -201,7 +273,7 @@ export function LogFilters({
                         onValueChange={(val) => setDraft({ ...draft, method: val === "all" ? "" : val })}
                     >
                         <SelectTrigger className={cn(
-                            "w-full h-9 bg-background border border-input hover:bg-accent",
+                            "w-full h-8 bg-background border border-input hover:bg-accent",
                             isMethodChanged && "border-primary/50 ring-1 ring-primary/20"
                         )}>
                             <SelectValue placeholder={t('filters.all_methods')} />
@@ -226,7 +298,7 @@ export function LogFilters({
                             if (e.key === 'Enter') handleSearch()
                         }}
                         className={cn(
-                            "w-full h-9 border border-input bg-background transition-all hover:bg-accent focus-visible:bg-background",
+                            "w-full h-8 border border-input bg-background transition-all hover:bg-accent focus-visible:bg-background",
                             isStatusCodeChanged && "border-primary/50 ring-1 ring-primary/20"
                         )}
                     />
@@ -239,7 +311,7 @@ export function LogFilters({
                             if (e.key === 'Enter') handleSearch()
                         }}
                         className={cn(
-                            "w-full h-9 border border-input bg-background transition-all hover:bg-accent focus-visible:bg-background",
+                            "w-full h-8 border border-input bg-background transition-all hover:bg-accent focus-visible:bg-background",
                             isTagChanged && "border-primary/50 ring-1 ring-primary/20"
                         )}
                     />
@@ -252,7 +324,7 @@ export function LogFilters({
                         })}
                     >
                         <SelectTrigger className={cn(
-                            "w-full h-9 bg-background border border-input hover:bg-accent",
+                            "w-full h-8 bg-background border border-input hover:bg-accent",
                             isSavedChanged && "border-primary/50 ring-1 ring-primary/20"
                         )}>
                             <SelectValue placeholder={t('filters.saved_all')} />
@@ -269,7 +341,7 @@ export function LogFilters({
                         onValueChange={(val) => setDraft({ ...draft, annotation_status: val === 'all' ? undefined : val as LogFilter['annotation_status'] })}
                     >
                         <SelectTrigger className={cn(
-                            "w-full h-9 bg-background border border-input hover:bg-accent",
+                            "w-full h-8 bg-background border border-input hover:bg-accent",
                             isAnnotationStatusChanged && "border-primary/50 ring-1 ring-primary/20"
                         )}>
                             <SelectValue placeholder={t('filters.annotation_status')} />
@@ -289,73 +361,12 @@ export function LogFilters({
                             if (e.key === 'Enter') handleSearch()
                         }}
                         className={cn(
-                            "w-full h-9 border border-input bg-background transition-all hover:bg-accent focus-visible:bg-background",
+                            "w-full h-8 border border-input bg-background transition-all hover:bg-accent focus-visible:bg-background",
                             isAnnotationLabelChanged && "border-primary/50 ring-1 ring-primary/20"
                         )}
                     />
                 </div>
-
-                {/* 按钮部分 - 使用仅图标按钮 + Tooltip */}
-                <div className="flex items-center gap-2 w-full xl:w-auto shrink-0">
-                    <TooltipProvider delayDuration={200}>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    variant="default"
-                                    size="icon"
-                                    onClick={handleSearch}
-                                    disabled={loading}
-                                    className={cn(
-                                        "h-9 w-9 shrink-0 transition-all",
-                                        hasChanges
-                                            ? "bg-primary hover:bg-primary/90 scale-105"
-                                            : "bg-primary/80 hover:bg-primary"
-                                    )}
-                                >
-                                    <Search className={cn("h-4 w-4", loading && "animate-spin")} />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>{t('filters.search')}</p>
-                            </TooltipContent>
-                        </Tooltip>
-
-                        {onExport && (
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button
-                                        variant="outline"
-                                        size="icon"
-                                        onClick={handleExport}
-                                        className="h-9 w-9 shrink-0 border border-input bg-background text-muted-foreground hover:bg-accent hover:text-foreground"
-                                    >
-                                        <Download className="h-4 w-4" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                    <p>{t('filters.export_jsonl')}</p>
-                                </TooltipContent>
-                            </Tooltip>
-                        )}
-
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    variant="outline"
-                                    size="icon"
-                                    onClick={handleReset}
-                                    className="h-9 w-9 shrink-0 border border-input bg-background text-muted-foreground hover:bg-accent hover:text-foreground"
-                                >
-                                    <RotateCcw className="h-4 w-4" />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>{t('filters.reset')}</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-                </div>
-            </div>
+            )}
 
             {/* 分页 */}
             <div className="flex flex-col gap-3 border-t border-border/40 pt-4 sm:flex-row sm:items-center sm:justify-between">

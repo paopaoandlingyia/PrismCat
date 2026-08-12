@@ -1,4 +1,4 @@
-import { cn, formatDate, formatLatency, getMethodColor, getStatusColor } from '@/lib/utils'
+import { cn, formatDate, formatLatency, METHOD_CLASS, getStatusColor } from '@/lib/utils'
 import { AlertTriangle, BookmarkCheck, CheckCircle2, ChevronRight, CircleDot, Clock3, Network, Server, Tag as TagIcon, Tags, Zap } from 'lucide-react'
 import type { RequestLog } from '@/lib/api'
 import { useNavigate } from 'react-router-dom'
@@ -11,7 +11,6 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
-import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
     Tooltip,
@@ -75,7 +74,7 @@ function DesktopLogSkeleton({ t }: { t: (key: string) => string }) {
                         <TableHead>{t('log_table.path')}</TableHead>
                         <TableHead className="w-[80px] text-right">{t('log_table.latency')}</TableHead>
                         <TableHead className="w-[160px] text-right">{t('log_table.time')}</TableHead>
-                        <TableHead className="w-[100px]"></TableHead>
+                        <TableHead className="w-10"></TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -138,7 +137,7 @@ function MobileLogCard({
                         <span
                             className={cn(
                                 'inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold',
-                                getMethodColor(log.method)
+                                METHOD_CLASS
                             )}
                         >
                             {log.method}
@@ -295,23 +294,25 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                             )}
                             <TableHead className="w-[100px] font-medium text-xs text-right">{t('log_table.latency')}</TableHead>
                             <TableHead className="w-[180px] font-medium text-xs text-right">{t('log_table.time')}</TableHead>
-                            <TableHead className="w-[100px]"></TableHead>
+                            <TableHead className="w-10"></TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {logs.map((log) => (
                             <TableRow
                                 key={log.id}
+                                onClick={() => onSelect(log)}
+                                aria-label={t('common.details')}
                                 className={cn(
-                                    'transition-colors border-b',
-                                    selectedId === log.id ? 'bg-primary/10 hover:bg-primary/15' : 'hover:bg-muted/40'
+                                    'group cursor-pointer border-b transition-colors',
+                                    selectedId === log.id ? 'bg-accent hover:bg-accent' : 'hover:bg-muted/60'
                                 )}
                             >
                                 <TableCell>
                                     <div
                                         className={cn(
                                             'inline-flex items-center justify-center min-w-[56px] h-6 px-2 rounded-md text-xs font-semibold',
-                                            getMethodColor(log.method)
+                                            METHOD_CLASS
                                         )}
                                     >
                                         {log.method}
@@ -452,22 +453,14 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                                         {formatDate(log.created_at, i18n.language)}
                                     </span>
                                 </TableCell>
-                                <TableCell>
-                                    <div className="flex justify-end transition-opacity">
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className={cn(
-                                                'h-7 text-xs font-semibold px-6 min-w-[80px] rounded-md transition-all active:scale-95',
-                                                selectedId === log.id
-                                                    ? 'bg-primary text-primary-foreground'
-                                                    : 'text-muted-foreground hover:bg-primary hover:text-primary-foreground dark:hover:bg-primary dark:hover:text-primary-foreground'
-                                            )}
-                                            onClick={() => onSelect(log)}
-                                        >
-                                            {t('common.details')}
-                                        </Button>
-                                    </div>
+                                <TableCell className="text-right">
+                                    <ChevronRight
+                                        className={cn(
+                                            'ml-auto h-4 w-4 text-muted-foreground transition-opacity',
+                                            selectedId === log.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                                        )}
+                                        aria-hidden="true"
+                                    />
                                 </TableCell>
                             </TableRow>
                         ))}

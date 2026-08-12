@@ -6,7 +6,7 @@ import {
   ChevronRight,
 } from 'lucide-react'
 import { fetchTraceDetail, type TraceDetail as TraceDetailType, type RequestLog } from '@/lib/api'
-import { cn, formatLatency, formatDate, getStatusColor, getMethodColor } from '@/lib/utils'
+import { cn, formatLatency, formatDate, getStatusColor, METHOD_CLASS } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { LogDetail } from '@/components/LogDetail'
 import { toast } from 'sonner'
@@ -189,7 +189,7 @@ export function TraceDetail() {
                   {/* Method */}
                   <span className={cn(
                     'px-1.5 py-0.5 rounded text-xs font-medium',
-                    getMethodColor(req.method),
+                    METHOD_CLASS,
                   )}>
                     {req.method}
                   </span>
