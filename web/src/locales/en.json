@@ -211,6 +211,8 @@
         "target_url_required": "Every target preset requires a URL",
         "target_switched": "Switched to target {{target}}",
         "timeout": "Total timeout (s)",
+        "scope_upstream": "Upstream",
+        "scope_target": "Target",
         "list_entry": "Entry URL",
         "list_timeout": "Timeout",
         "list_flags": "Flags",
