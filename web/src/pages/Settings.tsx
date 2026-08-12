@@ -258,6 +258,25 @@ function getBindingRuleNames(binding?: OverrideBinding) {
     return Array.isArray(binding?.rule_names) ? binding.rule_names : []
 }
 
+// 高级设置面板「有改动才默认展开」的判据。记录日志不在其中 —— 它是上游级的,
+// 已经移到面板外面了。
+function hasAdvancedValues(source?: {
+    response_header_timeout?: number
+    response_body_first_byte_timeout?: number
+    response_body_idle_timeout?: number
+    request_overrides?: OverrideBinding
+    usage_extraction?: OverrideBinding
+}) {
+    if (!source) return false
+    return (source.response_header_timeout || 0) > 0
+        || (source.response_body_first_byte_timeout || 0) > 0
+        || (source.response_body_idle_timeout || 0) > 0
+        || (source.request_overrides?.enabled ?? false)
+        || (source.usage_extraction?.enabled ?? false)
+        || getBindingRuleNames(source.request_overrides).length > 0
+        || getBindingRuleNames(source.usage_extraction).length > 0
+}
+
 type RuleRuntimeStatus =
     | { kind: 'active'; enabledUpstreams: string[]; disabledUpstreams: string[] }
     | { kind: 'blocked'; reason: 'global' | 'rule' | 'bindings'; enabledUpstreams: string[]; disabledUpstreams: string[] }
@@ -553,16 +572,21 @@ function AdvancedSettingsGroup({
     description,
     children,
     card = false,
+    divider = false,
 }: {
     title: string
     description?: string
     children: ReactNode
+    /** 独立成卡片。嵌在别的面板里时别用 —— 会叠出第三层边框 */
     card?: boolean
+    /** 用一条分隔线起新段,替代再套一层边框 */
+    divider?: boolean
 }) {
     return (
         <div className={cn(
             "space-y-4",
             card && "rounded-md border border-input bg-background p-4",
+            divider && "border-t border-input pt-6",
         )}>
             <div>
                 <div className="text-xs font-semibold text-foreground/65">{title}</div>
@@ -1449,16 +1473,19 @@ export function Settings() {
         const selectedTarget = usesTargetPresets
             ? (upstream.active_target && targets[upstream.active_target] ? upstream.active_target : Object.keys(targets)[0])
             : ''
-        setUpstreamAdvancedOpen(
-            (upstream.response_header_timeout || 0) > 0 ||
-            (upstream.response_body_first_byte_timeout || 0) > 0 ||
-            (upstream.response_body_idle_timeout || 0) > 0 ||
-            upstream.logging_enabled === false ||
-            (binding?.enabled ?? false) ||
-            (usageBinding?.enabled ?? false) ||
-            getBindingRuleNames(binding).length > 0 ||
-            getBindingRuleNames(usageBinding).length > 0,
-        )
+        // 必须从实际存值的地方读:启用了目标预设的上游,这些字段在 targets[名字] 里,
+        // 上游级一律是 0,绑定还会被 delete 掉 —— 原来的判断对它们永远为假
+        setUpstreamAdvancedOpen(hasAdvancedValues(
+            usesTargetPresets
+                ? targets[selectedTarget]
+                : {
+                    response_header_timeout: upstream.response_header_timeout,
+                    response_body_first_byte_timeout: upstream.response_body_first_byte_timeout,
+                    response_body_idle_timeout: upstream.response_body_idle_timeout,
+                    request_overrides: binding,
+                    usage_extraction: usageBinding,
+                },
+        ))
         const editing: EditingUpstream = {
             name: upstream.name,
             target: upstream.target,
@@ -1497,10 +1524,15 @@ export function Settings() {
     }
 
     const handleSelectTargetPreset = (targetName: string) => {
+        // 切到一个有高级设置的预设时把面板展开,否则那些非默认值是看不见的。
+        // 只展开不收起 —— 自动关掉用户手动打开的面板更烦人。
+        // commitSelectedTarget 只回写当前选中的那个,所以这里读切换前的状态等价
+        if (hasAdvancedValues(editingUpstream?.targets[targetName])) {
+            setUpstreamAdvancedOpen(true)
+        }
         setEditingUpstream(current => {
             if (!current) return current
-            const committed = commitSelectedTarget(current)
-            return loadTargetBuffer(committed, targetName)
+            return loadTargetBuffer(commitSelectedTarget(current), targetName)
         })
     }
 
@@ -1758,7 +1790,10 @@ export function Settings() {
                                                         </button>
                                                     ))}
                                                 </div>
-                                                <div className="ml-auto flex items-center gap-1.5">
+                                                {/* 不用 ml-auto:宽屏时它会把这组控件顶到最右边,
+                                                    和左边的切换器之间留出一大片空,窄屏时又变成
+                                                    单独一行右对齐的孤儿。紧跟着切换器排就行 */}
+                                                <div className="flex items-center gap-1.5">
                                                     <Input
                                                         value={newTargetPresetName}
                                                         onChange={event => setNewTargetPresetName(event.target.value)}
@@ -1769,7 +1804,7 @@ export function Settings() {
                                                             }
                                                         }}
                                                         placeholder={t('upstream_manager.new_target_name')}
-                                                        className="h-8 w-[168px] rounded-md border-input bg-background text-xs"
+                                                        className="h-8 w-[200px] rounded-md border-input bg-background text-xs"
                                                     />
                                                     <Button
                                                         type="button"
@@ -1802,19 +1837,18 @@ export function Settings() {
                                         'space-y-5',
                                         editingUpstream.usesTargetPresets && 'rounded-md border border-input bg-muted/15 p-4',
                                     )}>
-                                        <div className={cn(
-                                            'grid gap-5',
-                                            upstreamAdvancedOpen && 'lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:gap-6',
-                                        )}>
+                                        {/* 基础字段整宽排、高级设置整宽排在下面。原来是左右两栏,
+                                            左栏只有三个字段、右栏是一大块面板,右边一展开左下就空一片 */}
+                                        <div className="space-y-5">
                                             <div className="space-y-5">
                                                 <FieldBlock label={t('upstream_manager.target')}>
                                                     <Input
                                                         value={editingUpstream.target}
                                                         onChange={e => setEditingUpstream(current => current ? { ...current, target: e.target.value } : current)}
-                                                        className="h-9 rounded-md border-input bg-background font-mono text-sm"
+                                                        className="h-9 max-w-2xl rounded-md border-input bg-background font-mono text-sm"
                                                     />
                                                 </FieldBlock>
-                                                <div className="grid grid-cols-1 gap-5 sm:grid-cols-[minmax(120px,0.8fr)_minmax(0,2.2fr)]">
+                                                <div className="grid grid-cols-1 gap-5 sm:grid-cols-[140px_minmax(0,1fr)] sm:max-w-2xl">
                                                     <FieldBlock label={t('upstream_manager.timeout')}>
                                                         <Input
                                                             type="number"
@@ -1844,9 +1878,8 @@ export function Settings() {
                                                 <AdvancedSettingsGroup
                                                     title={t('upstream_manager.timeout_strategy')}
                                                     description={t('upstream_manager.timeout_strategy_hint')}
-                                                    card
                                                 >
-                                                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                                                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
                                                         <FieldBlock
                                                             label={t('upstream_manager.response_header_timeout')}
                                                             hint={t('upstream_manager.response_header_timeout_hint')}
@@ -1886,7 +1919,7 @@ export function Settings() {
                                                     </div>
                                                 </AdvancedSettingsGroup>
 
-                                                <AdvancedSettingsGroup title={t('upstream_manager.request_overrides')} card>
+                                                <AdvancedSettingsGroup title={t('upstream_manager.request_overrides')} divider>
                                                         <ToggleSetting
                                                             label={t('upstream_manager.override_enabled')}
                                                             description={t('upstream_manager.override_enabled_hint')}
@@ -1903,7 +1936,7 @@ export function Settings() {
                                                                         {t('upstream_manager.no_rules')}
                                                                     </div>
                                                                 ) : (
-                                                                    <div className="grid gap-2 sm:grid-cols-2">
+                                                                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                                                                         {parsedOverrideRules.map((ruleName, ruleIndex) => {
                                                                             const rule = overrideRuleObjects[ruleIndex]
                                                                             const ruleEnabled = getOverrideRuleEnabled(rule)
@@ -1937,7 +1970,7 @@ export function Settings() {
                                                         )}
                                                 </AdvancedSettingsGroup>
 
-                                                <AdvancedSettingsGroup title={t('upstream_manager.usage_stats')} card>
+                                                <AdvancedSettingsGroup title={t('upstream_manager.usage_stats')} divider>
                                                         <ToggleSetting
                                                             label={t('upstream_manager.usage_enabled')}
                                                             description={t('upstream_manager.usage_enabled_hint')}
@@ -1954,7 +1987,7 @@ export function Settings() {
                                                                         {t('upstream_manager.no_usage_rules')}
                                                                     </div>
                                                                 ) : (
-                                                                    <div className="grid gap-2 sm:grid-cols-2">
+                                                                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                                                                         {parsedUsageRules.map((ruleName, ruleIndex) => {
                                                                             const rule = usageRuleObjects[ruleIndex]
                                                                             const ruleEnabled = getOverrideRuleEnabled(rule)
@@ -2238,16 +2271,14 @@ export function Settings() {
                                                                 </div>
                                                             </AdvancedSettingsGroup>
 
-                                                            <div className="border-t border-input pt-5">
-                                                                <AdvancedSettingsGroup title={t('upstream_manager.request_logging')}>
-                                                                    <ToggleSetting
-                                                                        label={t('upstream_manager.logging_enabled')}
-                                                                        description={t('upstream_manager.logging_enabled_hint')}
-                                                                        checked={newLoggingEnabled}
-                                                                        onCheckedChange={setNewLoggingEnabled}
-                                                                    />
-                                                                </AdvancedSettingsGroup>
-                                                            </div>
+                                                            <AdvancedSettingsGroup title={t('upstream_manager.request_logging')} divider>
+                                                                <ToggleSetting
+                                                                    label={t('upstream_manager.logging_enabled')}
+                                                                    description={t('upstream_manager.logging_enabled_hint')}
+                                                                    checked={newLoggingEnabled}
+                                                                    onCheckedChange={setNewLoggingEnabled}
+                                                                />
+                                                            </AdvancedSettingsGroup>
                                                         </AdvancedSettings>
                                                     </div>
 

@@ -205,7 +205,7 @@
         "enable_target_presets": "Enable target presets",
         "active_target": "Active",
         "set_active_target": "Set active",
-        "remove_target": "Remove target",
+        "remove_target": "Delete this preset",
         "new_target_name": "New target ID, e.g. backup",
         "target_name_duplicate": "That target name already exists",
         "target_url_required": "Every target preset requires a URL",

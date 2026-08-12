@@ -205,7 +205,7 @@
         "enable_target_presets": "启用目标预设",
         "active_target": "当前",
         "set_active_target": "设为当前",
-        "remove_target": "删除目标",
+        "remove_target": "删除此预设",
         "new_target_name": "新目标标识，例如 backup",
         "target_name_duplicate": "目标名称已存在",
         "target_url_required": "每个目标预设都必须填写 URL",
