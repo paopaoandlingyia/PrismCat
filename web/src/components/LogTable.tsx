@@ -44,7 +44,7 @@ function MobileLogSkeleton() {
     return (
         <div className="space-y-3 md:hidden">
             {Array.from({ length: 6 }).map((_, index) => (
-                <div key={index} className="rounded-lg bg-card/20 p-4 space-y-3">
+                <div key={index} className="rounded-lg bg-card p-4 space-y-3">
                     <div className="flex items-center gap-2">
                         <Skeleton className="h-6 w-16 rounded-md bg-muted/50" />
                         <Skeleton className="h-6 w-14 rounded-md bg-muted/50" />
@@ -64,7 +64,7 @@ function MobileLogSkeleton() {
 
 function DesktopLogSkeleton({ t }: { t: (key: string) => string }) {
     return (
-        <div className="hidden rounded-lg overflow-hidden bg-card/20 md:block">
+        <div className="hidden rounded-lg overflow-hidden bg-card md:block">
             <Table>
                 <TableHeader className="bg-muted">
                     <TableRow>
@@ -128,7 +128,7 @@ function MobileLogCard({
                 'w-full rounded-lg p-4 text-left transition-all active:scale-[0.99]',
                 selected
                     ? 'bg-primary/10'
-                    : 'bg-card/20 hover:bg-card/40'
+                    : 'bg-card hover:bg-card/40'
             )}
         >
             <div className="flex items-start gap-3">
@@ -150,7 +150,7 @@ function MobileLogCard({
                         >
                             {log.status_code || '---'}
                         </span>
-                        <span className="inline-flex items-center gap-1 rounded-md bg-background/60 px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                        <span className="inline-flex items-center gap-1 rounded-md bg-background px-2.5 py-1 text-xs font-semibold text-muted-foreground">
                             <Server className="h-3 w-3" />
                             <span className="truncate max-w-[160px]">
                                 {log.upstream}{log.upstream_target ? ` / ${log.upstream_target}` : ''}
@@ -224,7 +224,7 @@ function MobileLogCard({
                     </div>
                 </div>
 
-                <div className="shrink-0 inline-flex items-center gap-1 rounded-md bg-background/60 px-2 py-1 text-xs font-semibold text-muted-foreground">
+                <div className="shrink-0 inline-flex items-center gap-1 rounded-md bg-background px-2 py-1 text-xs font-semibold text-muted-foreground">
                     <span>{detailLabel}</span>
                     <ChevronRight className="h-3.5 w-3.5" />
                 </div>
@@ -249,7 +249,7 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
 
     if (logs.length === 0) {
         return (
-            <div className="flex flex-col items-center justify-center py-20 sm:py-24 text-muted-foreground bg-card/10 rounded-lg px-6">
+            <div className="flex flex-col items-center justify-center py-20 sm:py-24 text-muted-foreground bg-card rounded-lg px-6">
                 <div className="text-5xl sm:text-6xl mb-6 grayscale opacity-50">📭</div>
                 <div className="text-lg sm:text-xl font-semibold tracking-tight text-foreground/70 text-center">{t('log_table.no_logs')}</div>
                 <p className="text-sm mt-2 max-w-[280px] text-center leading-relaxed font-medium text-muted-foreground/80">
@@ -281,7 +281,7 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                 ))}
             </div>
 
-            <div className="hidden rounded-lg overflow-hidden bg-card/20 md:block">
+            <div className="hidden rounded-lg overflow-hidden bg-card md:block">
                 <Table>
                     <TableHeader className="bg-muted">
                         <TableRow className="hover:bg-transparent">

@@ -7,8 +7,8 @@ import {
     type FormEvent,
     type ReactNode,
 } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { isSettingsTab, settingsTabPath, type SettingsTab } from '@/lib/routes'
+import { useParams } from 'react-router-dom'
+import { isSettingsTab, type SettingsTab } from '@/lib/routes'
 import {
     Plus,
     Trash2,
@@ -19,11 +19,7 @@ import {
     AlertTriangle,
     Pencil,
     ExternalLink,
-    Activity,
-    Cpu,
-    MemoryStick,
     RefreshCw,
-    Timer,
     Download,
     Database,
     Archive,
@@ -570,7 +566,7 @@ function AdvancedSettingsGroup({
     return (
         <div className={cn(
             "space-y-4",
-            card && "rounded-md border border-input bg-background/70 p-4",
+            card && "rounded-md border border-input bg-background p-4",
         )}>
             <div>
                 <div className="text-xs font-semibold text-foreground/65">{title}</div>
@@ -658,27 +654,18 @@ function HeaderValueInput({
 }
 
 function MetricCard({
-    icon,
     label,
     value,
     detail,
 }: {
-    icon: ReactNode
     label: string
     value: string
     detail?: string
 }) {
     return (
-        <div className="rounded-md border border-input bg-background/45 px-4 py-4">
-            <div className="mb-4 flex items-center justify-between gap-3">
-                <div className="text-xs font-semibold text-muted-foreground">
-                    {label}
-                </div>
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    {icon}
-                </div>
-            </div>
-            <div className="text-2xl font-semibold text-foreground">{value}</div>
+        <div className="rounded-lg border border-border bg-card px-4 py-3">
+            <div className="text-xs text-muted-foreground">{label}</div>
+            <div className="mt-1 text-xl tabular-nums text-foreground">{value}</div>
             {detail && (
                 <div className="mt-2 text-xs leading-5 text-muted-foreground">
                     {detail}
@@ -700,7 +687,7 @@ function SettingSection({
     children: ReactNode
 }) {
     return (
-        <section className="overflow-hidden rounded-lg border border-input bg-card/40">
+        <section className="overflow-hidden rounded-lg border border-input bg-card">
             <div className="flex items-start justify-between gap-4 border-b border-input px-6 py-4">
                 <div className="min-w-0">
                     <h3 className="text-sm font-semibold text-foreground">{title}</h3>
@@ -723,15 +710,10 @@ export function Settings() {
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [showAddForm, setShowAddForm] = useState(false)
-    // 分区由 URL 决定。/settings 不带分区时落到 routing,不做重定向,
-    // 免得在保存栏有未提交改动时因为地址跳转丢状态。
+    // 分区由 URL 决定,导航入口只有侧边栏一处。/settings 不带分区时落到 routing,
+    // 不做重定向,免得在保存栏有未提交改动时因为地址跳转丢状态。
     const { tab: tabParam } = useParams()
-    const navigate = useNavigate()
     const activeTab: SettingsTab = isSettingsTab(tabParam) ? tabParam : 'routing'
-    const setActiveTab = useCallback(
-        (next: SettingsTab) => navigate(settingsTabPath(next)),
-        [navigate],
-    )
     const [activeRuleTab, setActiveRuleTab] = useState<RuleTab>('request_overrides')
     const [metrics, setMetrics] = useState<SystemMetrics | null>(null)
     const [metricsLoading, setMetricsLoading] = useState(false)
@@ -1738,7 +1720,7 @@ export function Settings() {
                                             <div className="mt-4 space-y-3">
                                                 <div className="flex flex-wrap items-center gap-2">
                                                     <Select value={editingUpstream.selectedTarget} onValueChange={handleSelectTargetPreset}>
-                                                        <SelectTrigger className="h-9 min-w-[180px] flex-1 rounded-lg bg-background/70">
+                                                        <SelectTrigger className="h-9 min-w-[180px] flex-1 rounded-lg bg-background">
                                                             <SelectValue />
                                                         </SelectTrigger>
                                                         <SelectContent>
@@ -1781,7 +1763,7 @@ export function Settings() {
                                                             }
                                                         }}
                                                         placeholder={t('upstream_manager.new_target_name')}
-                                                        className="h-9 rounded-lg bg-background/70"
+                                                        className="h-9 rounded-lg bg-background"
                                                     />
                                                     <Button type="button" variant="secondary" size="sm" onClick={handleAddTargetPreset} disabled={!newTargetPresetName.trim()}>
                                                         <Plus className="mr-1.5 h-3.5 w-3.5" />
@@ -2000,61 +1982,10 @@ export function Settings() {
                 </DialogContent>
             </Dialog>
 
-                <div className="relative z-10 w-full space-y-10 pb-20 px-4 sm:px-10 pt-6 animate-fade-in">
-
-                    {/* Header & Tabs */}
-                    <div className="flex items-center gap-2 border-b border-input pb-5">
-
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={() => setActiveTab('routing')}
-                                className={cn(
-                                    "px-5 py-2.5 rounded-md text-base font-medium transition-all duration-200",
-                                    activeTab === 'routing'
-                                        ? "bg-primary/10 text-primary"
-                                        : "text-foreground/85 hover:bg-muted/50 hover:text-foreground"
-                                )}
-                            >
-                                {t('settings.tabs.upstreams')}
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('logging')}
-                                className={cn(
-                                    "px-5 py-2.5 rounded-md text-base font-medium transition-all duration-200",
-                                    activeTab === 'logging'
-                                        ? "bg-primary/10 text-primary"
-                                        : "text-foreground/70 hover:bg-muted/50 hover:text-foreground"
-                                )}
-                            >
-                                {t('settings.tabs.logging')}
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('overrides')}
-                                className={cn(
-                                    "px-5 py-2.5 rounded-md text-base font-medium transition-all duration-200",
-                                    activeTab === 'overrides'
-                                        ? "bg-primary/10 text-primary"
-                                        : "text-foreground/70 hover:bg-muted/50 hover:text-foreground"
-                                )}
-                            >
-                                {t('settings.tabs.overrides')}
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('system')}
-                                className={cn(
-                                    "px-5 py-2.5 rounded-md text-base font-medium transition-all duration-200",
-                                    activeTab === 'system'
-                                        ? "bg-primary/10 text-primary"
-                                        : "text-foreground/70 hover:bg-muted/50 hover:text-foreground"
-                                )}
-                            >
-                                {t('settings.tabs.system')}
-                            </button>
-                        </div>
-                    </div>
+                <div className="relative z-10 w-full space-y-6 pb-16 animate-fade-in">
 
                     {/* Content Area */}
-                    <div className="pt-2">
+                    <div>
                         {activeTab === 'routing' && (
                             <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 motion-reduce:animate-none motion-reduce:duration-0">
                                 <div className="mx-auto max-w-7xl space-y-6">
@@ -2118,7 +2049,7 @@ export function Settings() {
                                     >
                                     <div className="w-full">
                                         {showAddForm && (
-                                            <div className="mb-8 w-full rounded-lg bg-background p-6 ring-1 ring-border/20 backdrop-blur-sm">
+                                            <div className="mb-8 w-full rounded-lg bg-background p-6 border border-border">
                                                 <form onSubmit={handleAddUpstream} className="grid grid-cols-1 gap-6 md:grid-cols-12 md:items-end">
                                                     <div className="md:col-span-3">
                                                         <FieldBlock label={t('upstream_manager.name')} htmlFor="name">
@@ -2588,7 +2519,6 @@ export function Settings() {
 
                                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                                     <MetricCard
-                                        icon={<Activity className="h-4 w-4" />}
                                         label={t('settings.system_process_memory')}
                                         value={formatBytes(metrics?.process.rss_bytes)}
                                         detail={t('settings.system_heap_detail', {
@@ -2597,7 +2527,6 @@ export function Settings() {
                                         })}
                                     />
                                     <MetricCard
-                                        icon={<Cpu className="h-4 w-4" />}
                                         label={t('settings.system_process_cpu')}
                                         value={formatPercent(metrics?.process.cpu_percent)}
                                         detail={t('settings.system_cpu_detail', {
@@ -2605,7 +2534,6 @@ export function Settings() {
                                         })}
                                     />
                                     <MetricCard
-                                        icon={<MemoryStick className="h-4 w-4" />}
                                         label={t('settings.system_total_memory')}
                                         value={formatPercent(memoryUsedPercent)}
                                         detail={t('settings.system_memory_detail', {
@@ -2615,7 +2543,6 @@ export function Settings() {
                                         })}
                                     />
                                     <MetricCard
-                                        icon={<Timer className="h-4 w-4" />}
                                         label={t('settings.system_uptime')}
                                         value={formatDuration(metrics?.runtime.uptime_seconds)}
                                         detail={t('settings.system_runtime_detail', {
@@ -2626,7 +2553,7 @@ export function Settings() {
                                 </div>
 
                                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                                    <div className="rounded-md border border-input bg-background/45 px-5 py-4">
+                                    <div className="rounded-md border border-input bg-background px-5 py-4">
                                         <div className="mb-3 text-xs font-semibold text-muted-foreground">
                                             {t('settings.system_runtime')}
                                         </div>
@@ -2639,7 +2566,7 @@ export function Settings() {
                                             <dd className="break-all font-mono text-foreground">{metrics?.runtime.go_version || '-'}</dd>
                                         </dl>
                                     </div>
-                                    <div className="rounded-md border border-input bg-background/45 px-5 py-4">
+                                    <div className="rounded-md border border-input bg-background px-5 py-4">
                                         <div className="mb-3 flex items-center justify-between gap-3">
                                             <div className="text-xs font-semibold text-muted-foreground">
                                                 {t('settings.system_snapshot')}
@@ -2667,7 +2594,7 @@ export function Settings() {
                                     </div>
                                 </div>
 
-                                <div className="rounded-md border border-input bg-background/45 px-5 py-4">
+                                <div className="rounded-md border border-input bg-background px-5 py-4">
                                     <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                                         <div>
                                             <div className="text-xs font-semibold text-muted-foreground">
@@ -2744,7 +2671,7 @@ export function Settings() {
                                     </div>
                                 </div>
 
-                                <div className="rounded-md border border-input bg-background/45 px-5 py-4">
+                                <div className="rounded-md border border-input bg-background px-5 py-4">
                                     <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                                         <div>
                                             <div className="text-xs font-semibold text-muted-foreground">
@@ -3499,7 +3426,7 @@ export function Settings() {
                         )}
                     </div>
                     {(activeTab === 'routing' || activeTab === 'logging' || activeTab === 'overrides') && (
-                        <div className="sticky bottom-0 z-30 -mx-4 border-t border-input bg-background/85 px-4 py-3 backdrop-blur-md sm:-mx-10 sm:px-10">
+                        <div className="sticky bottom-0 z-30 -mx-4 border-t border-input bg-background px-4 py-3 sm:-mx-10 sm:px-10">
                             <div className="mx-auto flex max-w-7xl items-center justify-end gap-4">
                                 <Button
                                     type="button"

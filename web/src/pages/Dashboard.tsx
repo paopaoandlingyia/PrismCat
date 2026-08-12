@@ -121,7 +121,7 @@ export function Dashboard() {
     }, [])
 
     const logDetailFallback = selectedLog ? (
-        <div className="fixed inset-y-0 right-0 z-50 w-full border-l border-border/60 bg-background sm:max-w-2xl">
+        <div className="fixed inset-y-0 right-0 z-50 w-full border-l border-border bg-background sm:max-w-2xl">
             <div className="flex h-full flex-col items-center justify-center gap-4">
                 <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                 <div className="text-sm font-medium text-muted-foreground">

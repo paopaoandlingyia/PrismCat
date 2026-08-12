@@ -175,9 +175,9 @@ export function TraceDetail() {
                 onClick={() => setSelectedLog(req)}
                 className={cn(
                   'flex-1 rounded-md p-3 mb-1 text-left transition-all',
-                  'bg-card/20 hover:bg-card/50 border border-border/40 hover:border-border',
+                  'bg-card hover:bg-card/50 border border-border hover:border-border',
                   'active:scale-[0.995]',
-                  selectedLog?.id === req.id && 'ring-1 ring-info/40 bg-card/40',
+                  selectedLog?.id === req.id && 'ring-1 ring-info/40 bg-card',
                 )}
               >
                 <div className="flex items-center gap-2 flex-wrap">
@@ -294,7 +294,7 @@ function SummaryCard({
   accent: string
 }) {
   return (
-    <div className="rounded-md border border-border/50 bg-card/20 p-3 space-y-1">
+    <div className="rounded-md border border-border bg-card p-3 space-y-1">
       <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
         <Icon className={cn('h-3 w-3', accent)} />
         {label}

@@ -181,7 +181,7 @@ function LargeTextPreview({ text, searchTerm, maxMatches }: { text: string; sear
                     {expanded ? t('json_viewer.collapse') : t('json_viewer.expand')}
                 </button>
             </div>
-            <pre className="whitespace-pre-wrap break-all rounded-md border border-border/60 bg-background p-3 text-xs font-mono">
+            <pre className="whitespace-pre-wrap break-all rounded-md border border-border bg-background p-3 text-xs font-mono">
                 {searchTerm && searchRanges.length && !expanded ? (
                     <LargeTextSearchSnippets text={text} ranges={searchRanges} />
                 ) : expanded || text.length <= preview.length ? (
@@ -200,7 +200,7 @@ function LargeTextSearchSnippets({ text, ranges }: { text: string; ranges: Array
                 const start = Math.max(0, range.start - contextLength);
                 const end = Math.min(text.length, range.end + contextLength);
                 return (
-                    <span key={`${range.start}:${range.end}`} className="block border-b border-border/40 py-1 last:border-b-0">
+                    <span key={`${range.start}:${range.end}`} className="block border-b border-border py-1 last:border-b-0">
                         {start > 0 ? '…' : ''}
                         {text.slice(start, range.start)}
                         <mark className="bg-warning/30 text-inherit rounded-md" data-search-match="">
@@ -567,17 +567,17 @@ function Base64Placeholder({ value, detection, dataUriPrefix }: {
 
             {imgSrc && (
                 <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-                    <DialogContent className="max-h-[90vh] max-w-3xl overflow-hidden rounded-lg border border-border/60 bg-card p-1">
-                        <DialogHeader className="border-b border-border/60 bg-muted/30 p-4">
+                    <DialogContent className="max-h-[90vh] max-w-3xl overflow-hidden rounded-lg border border-border bg-card p-1">
+                        <DialogHeader className="border-b border-border bg-muted/30 p-4">
                             <DialogTitle className="text-xs font-medium flex items-center gap-2">
                                 <ImageIcon className="h-3.5 w-3.5" />
                                 {t('json_viewer.image_preview')} · {detection.label} ({formatSize(value.length)})
                             </DialogTitle>
                         </DialogHeader>
                         <div className="flex flex-1 items-center justify-center overflow-auto bg-muted/30 p-8">
-                            <img src={imgSrc} alt="Preview" className="max-h-full max-w-full rounded-md border border-border/60 bg-background" />
+                            <img src={imgSrc} alt="Preview" className="max-h-full max-w-full rounded-md border border-border bg-background" />
                         </div>
-                        <div className="flex justify-end gap-2 border-t border-border/60 bg-muted/30 p-4">
+                        <div className="flex justify-end gap-2 border-t border-border bg-muted/30 p-4">
                             <Button variant="outline" size="sm" onClick={copyToClipboard} className="text-xs font-medium h-8">
                                 <Copy className="h-3 w-3 mr-2" />
                                 {t('json_viewer.copy')}

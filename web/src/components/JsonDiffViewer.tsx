@@ -57,7 +57,7 @@ export function JsonDiffViewer({ beforeText, afterText }: JsonDiffViewerProps) {
 
     if (diff.changes.length === 0) {
         return (
-            <div className="rounded-lg border border-dashed border-border/50 bg-background/60 px-4 py-8 text-center text-xs font-medium text-muted-foreground">
+            <div className="rounded-lg border border-dashed border-border bg-background px-4 py-8 text-center text-xs font-medium text-muted-foreground">
                 {t('json_diff.no_changes', 'No JSON changes')}
             </div>
         )
@@ -97,8 +97,8 @@ function DiffChangeRow({ change }: { change: JsonDiffChange }) {
     const { t } = useTranslation()
 
     return (
-        <div className="overflow-hidden rounded-lg border border-border/60 bg-background">
-            <div className="flex flex-wrap items-center gap-2 border-b border-border/50 bg-muted/25 px-3 py-2">
+        <div className="overflow-hidden rounded-lg border border-border bg-background">
+            <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/25 px-3 py-2">
                 <Badge variant="outline" className={cn('h-5 rounded-md px-1.5 text-xs font-medium', typeClassNames[change.type])}>
                     {t(`json_diff.${change.type}`, change.type)}
                 </Badge>
@@ -158,7 +158,7 @@ function DiffValuePanel({
                 {title}
             </div>
             {value === undefined ? (
-                <div className="rounded-md border border-dashed border-border/60 bg-background/45 px-3 py-4 text-xs italic text-muted-foreground">
+                <div className="rounded-md border border-dashed border-border bg-background px-3 py-4 text-xs italic text-muted-foreground">
                     {t('json_diff.missing', 'Missing')}
                 </div>
             ) : (
@@ -191,7 +191,7 @@ function stringifyJsonValue(value: JsonValue): string {
 function RawSideBySide({ beforeText, afterText }: JsonDiffViewerProps) {
     const { t } = useTranslation()
     return (
-        <div className="grid gap-px overflow-hidden rounded-lg border border-border/60 bg-border/50 sm:grid-cols-2">
+        <div className="grid gap-px overflow-hidden rounded-lg border border-border bg-border/50 sm:grid-cols-2">
             <RawPanel title={t('json_diff.before', 'Before')} text={beforeText} />
             <RawPanel title={t('json_diff.after', 'After')} text={afterText} />
         </div>

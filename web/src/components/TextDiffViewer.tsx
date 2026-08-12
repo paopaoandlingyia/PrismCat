@@ -20,7 +20,7 @@ export function TextDiffViewer({ beforeText, afterText }: TextDiffViewerProps) {
     const rows = useMemo(() => buildRows(prettyJsonText(beforeText), prettyJsonText(afterText)), [beforeText, afterText])
 
     return (
-        <div className="overflow-hidden rounded-md border border-border/70 bg-background">
+        <div className="overflow-hidden rounded-md border border-border bg-background">
             <div className="custom-scrollbar max-h-[72vh] overflow-auto">
                 <div className="min-w-[760px] font-mono text-xs leading-5">
                     {rows.map((row, index) => (
@@ -46,7 +46,7 @@ function DiffLine({ row }: { row: DiffRow }) {
             <LineNumber value={row.newLine} tone={row.kind} />
             <div
                 className={cn(
-                    'select-none border-r border-border/40 px-2 text-center',
+                    'select-none border-r border-border px-2 text-center',
                     row.kind === 'added' && 'text-success',
                     row.kind === 'removed' && 'text-danger',
                     row.kind === 'context' && 'text-muted-foreground'
@@ -63,7 +63,7 @@ function LineNumber({ value, tone }: { value?: number; tone: DiffRow['kind'] }) 
     return (
         <div
             className={cn(
-                'select-none border-r border-border/40 px-2 py-0.5 text-right text-muted-foreground/70',
+                'select-none border-r border-border px-2 py-0.5 text-right text-muted-foreground/70',
                 tone === 'added' && 'bg-success/[0.08] text-success/75',
                 tone === 'removed' && 'bg-danger/[0.08] text-danger/75'
             )}

@@ -133,7 +133,7 @@ export function Traces() {
       ) : (
         <>
           {/* Desktop table */}
-          <div className="hidden md:block rounded-lg overflow-hidden bg-card/20 border border-border">
+          <div className="hidden md:block rounded-lg overflow-hidden bg-card border border-border">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b bg-muted/30">
@@ -209,7 +209,7 @@ export function Traces() {
               <button
                 key={trace.trace_id}
                 onClick={() => navigate(`/traces/${encodeURIComponent(trace.trace_id)}`)}
-                className="w-full rounded-lg p-4 text-left transition-all active:scale-[0.99] bg-card/20 hover:bg-card/40 border border-border/50"
+                className="w-full rounded-lg p-4 text-left transition-all active:scale-[0.99] bg-card hover:bg-card/40 border border-border"
               >
                 <div className="flex items-center gap-2 mb-2">
                   <Network className="h-3.5 w-3.5 text-info shrink-0" />

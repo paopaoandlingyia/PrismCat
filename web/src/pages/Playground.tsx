@@ -246,7 +246,7 @@ export function Playground() {
         value: ResponseViewMode
         onChange: (value: ResponseViewMode) => void
     }) => (
-        <div className="flex items-center gap-1 rounded-md border border-border/40 bg-background/70 p-1">
+        <div className="flex items-center gap-1 rounded-md border border-border bg-background p-1">
             {([
                 { value: 'pretty', label: t('log_detail.view_pretty', 'Pretty') },
                 { value: 'raw', label: t('log_detail.view_raw', 'Raw') },
@@ -318,7 +318,7 @@ export function Playground() {
                     )}
                 </div>
 
-                <div className="flex shrink-0 items-center gap-1 rounded-md border border-border/40 bg-background/70 p-1">
+                <div className="flex shrink-0 items-center gap-1 rounded-md border border-border bg-background p-1">
                     {([
                         { value: 'upstream', label: t('playground.target_upstream', 'Upstream') },
                         { value: 'url', label: t('playground.target_url', 'URL') },
@@ -346,7 +346,7 @@ export function Playground() {
                             <button
                                 onClick={() => setUpstreamOpen(!upstreamOpen)}
                                 className={cn(
-                                    'flex items-center gap-1 px-3 py-2.5 rounded-md border bg-background/80 text-xs font-medium hover:bg-accent transition-all min-w-[90px] justify-between',
+                                    'flex items-center gap-1 px-3 py-2.5 rounded-md border bg-background text-xs font-medium hover:bg-accent transition-all min-w-[90px] justify-between',
                                     selectedUpstreamMissing ? 'border-warning/50 text-warning' : 'border-input'
                                 )}
                             >
@@ -420,7 +420,7 @@ export function Playground() {
             {/* Request Config Tabs */}
             <div className="space-y-0">
                 {/* Tab Headers */}
-                <div className="flex items-center gap-1 border-b border-border/30">
+                <div className="flex items-center gap-1 border-b border-border">
                     <button
                         onClick={() => setActiveTab('body')}
                         className={cn(
@@ -486,7 +486,7 @@ export function Playground() {
                                     {t('playground.format_json', 'Format')}
                                 </Button>
                             </div>
-                            <div className="flex items-center gap-1 rounded-md border border-border/40 bg-background/70 p-1">
+                            <div className="flex items-center gap-1 rounded-md border border-border bg-background p-1">
                                 {([
                                     { value: 'raw', label: t('log_detail.view_raw', 'Raw') },
                                     { value: 'pretty', label: t('log_detail.view_pretty', 'Pretty') },
@@ -572,7 +572,7 @@ export function Playground() {
             {(response || error || sending) && (
                 <div className="rounded-lg border border-border bg-card overflow-hidden">
                     {/* Response Header */}
-                    <div className="px-4 py-3 border-b border-border/20 flex flex-wrap items-center gap-3">
+                    <div className="px-4 py-3 border-b border-border flex flex-wrap items-center gap-3">
                         <span className="text-xs font-semibold text-muted-foreground/60">
                             {t('playground.response')}
                         </span>

@@ -10,7 +10,7 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { Toaster } from '@/components/ui/sonner'
 import { Suspense, lazy, useState, useEffect } from 'react'
 import { fetchAuthStatus, fetchConfig, login, logout as logoutRequest, setupPassword } from '@/lib/api'
-import { logRequestDiffRoute, settingsTabLabelKeys, settingsTabPath, settingsTabs } from '@/lib/routes'
+import { isSettingsTab, logRequestDiffRoute, settingsTabLabelKeys, settingsTabPath, settingsTabs } from '@/lib/routes'
 import { Login } from '@/pages/Login'
 
 const PlaygroundPage = lazy(async () => {
@@ -66,7 +66,13 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
   const isNavActive = (to: string) =>
     to === '/' ? location.pathname === '/' : location.pathname.startsWith(to)
 
-  const pageTitle = navItems.find(item => isNavActive(item.to))?.labelKey ?? 'app.title'
+  // 设置有子分区,标题栏显示分区名而不是笼统的"设置"
+  const settingsTab = location.pathname.startsWith('/settings/')
+    ? location.pathname.slice('/settings/'.length)
+    : null
+  const pageTitle = isSettingsTab(settingsTab)
+    ? settingsTabLabelKeys[settingsTab]
+    : navItems.find(item => isNavActive(item.to))?.labelKey ?? 'app.title'
 
   const routeFallback = (
     <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3">
@@ -163,7 +169,7 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
 
       <div className="flex min-h-screen flex-col md:pl-[200px]">
         {/* 移动端顶栏 */}
-        <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-md md:hidden">
+        <header className="sticky top-0 z-30 border-b border-border bg-background md:hidden">
           <div className="flex items-center justify-between gap-3 px-4 py-2.5">
             <div className="flex min-w-0 items-center gap-2">
               <PrismCatLogo className="h-5 w-5 shrink-0" />
@@ -212,7 +218,7 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
         </header>
 
         {/* 页面标题栏 - 给内容区一个"顶" */}
-        <div className="sticky top-0 z-20 hidden h-12 shrink-0 items-center border-b border-border bg-background/90 px-5 backdrop-blur-md md:flex">
+        <div className="sticky top-0 z-20 hidden h-12 shrink-0 items-center border-b border-border bg-background px-5 md:flex">
           <h1 className="text-sm font-medium text-foreground">{t(pageTitle)}</h1>
         </div>
 

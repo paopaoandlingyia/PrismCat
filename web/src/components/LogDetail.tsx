@@ -122,7 +122,7 @@ function RawBodyViewer({ text, searchTerm, maxMatches }: { text: string; searchT
 
 function UsageMetric({ label, value }: { label: string; value?: number }) {
     return (
-        <div className="rounded-lg border border-border/40 bg-background/60 px-3 py-2">
+        <div className="rounded-lg border border-border bg-background px-3 py-2">
             <div className="text-xs font-medium text-muted-foreground">{label}</div>
             <div className="mt-1 font-mono text-sm font-medium text-foreground">
                 {typeof value === 'number' ? value.toLocaleString() : '-'}
@@ -157,7 +157,7 @@ function BodySearchBar({
                 ? t('body_search.match_count', { count: matchCount })
                 : t('body_search.no_matches', 'No matches')
     return (
-        <div className="flex items-center gap-2 border-b border-border/60 px-3 py-1.5 bg-muted/20">
+        <div className="flex items-center gap-2 border-b border-border px-3 py-1.5 bg-muted/20">
             <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
             <input
                 autoFocus
@@ -556,13 +556,13 @@ export function LogDetail({
 
     const sheetWidthClassName = cn(
         "w-full p-0 flex flex-col bg-background",
-        panelWidthMode === 'wide' && "border-l border-border/60 sm:rounded-l-2xl sm:max-w-6xl",
+        panelWidthMode === 'wide' && "border-l border-border sm:rounded-l-2xl sm:max-w-6xl",
         panelWidthMode === 'full' && "border-0 sm:rounded-none sm:max-w-none"
     )
-    const sectionCardClassName = "rounded-lg border border-border/60 bg-card p-5"
+    const sectionCardClassName = "rounded-lg border border-border bg-card p-5"
     const contentCardClassName = "rounded-lg bg-muted/50 p-3.5"
     const codeCardClassName = "rounded-lg bg-muted/50"
-    const emptyStateClassName = "rounded-lg border border-dashed border-border/50 bg-muted/50 px-4 py-6 text-center"
+    const emptyStateClassName = "rounded-lg border border-dashed border-border bg-muted/50 px-4 py-6 text-center"
 
     const CopyButton = ({ text, field }: { text: string; field: string }) => {
         const label = copiedField === field ? t('common.copied', '已复制') : t('common.copy', '复制')
@@ -632,7 +632,7 @@ export function LogDetail({
                     className={cn(
                         "h-6 rounded-md px-2 text-xs font-medium transition-all",
                         value === option.value
-                            ? "border border-border/70 bg-background text-foreground hover:bg-background"
+                            ? "border border-border bg-background text-foreground hover:bg-background"
                             : "text-muted-foreground hover:bg-background/70 hover:text-foreground"
                     )}
                 >
@@ -712,7 +712,7 @@ export function LogDetail({
         <Sheet open={!!log} onOpenChange={(open) => !open && onClose()}>
             <SheetContent className={sheetWidthClassName}>
                 {/* 头部固定区域 */}
-                <SheetHeader className="border-b border-border/60 bg-card px-5 py-3.5">
+                <SheetHeader className="border-b border-border bg-card px-5 py-3.5">
                     <div className="flex flex-wrap items-center gap-2.5">
                         <div
                                 className={cn(
@@ -787,7 +787,7 @@ export function LogDetail({
                         {!loading && (
                             <div className="ml-auto mr-10 flex flex-wrap items-center justify-end gap-2">
                                 {onNavigateLog && (
-                                    <div className="flex items-center gap-1 rounded-lg border border-border/50 bg-background/60 p-0.5">
+                                    <div className="flex items-center gap-1 rounded-lg border border-border bg-background p-0.5">
                                         <Tooltip>
                                             <TooltipTrigger asChild>
                                                 <Button
@@ -852,7 +852,7 @@ export function LogDetail({
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    className="h-7 gap-1.5 border-border/60 bg-background/60 px-2.5 text-xs font-semibold transition-all hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
+                                    className="h-7 gap-1.5 border-border bg-background px-2.5 text-xs font-semibold transition-all hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
                                     onClick={copyCurlCommand}
                                 >
                                     {copiedField === 'curl' ? (
@@ -907,7 +907,7 @@ export function LogDetail({
 
                 {/* 主内容区域 */}
                 <div className="custom-scrollbar flex-1 space-y-4 overflow-y-auto bg-muted/30 px-5 py-4">
-                    <div className="rounded-md border border-border/60 bg-card px-3 py-2.5">
+                    <div className="rounded-md border border-border bg-card px-3 py-2.5">
                         <div className="flex flex-wrap items-center gap-2">
                             <Button
                                 type="button"
@@ -981,7 +981,7 @@ export function LogDetail({
                                     value={annotationNote}
                                     onChange={(event) => setAnnotationNote(event.target.value)}
                                     placeholder={t('log_annotation.note_placeholder', '写下为什么保存这条日志，或后续要检查什么...')}
-                                    className="min-h-20 resize-y rounded-lg border border-border/60 bg-muted/40 px-3 py-2 text-sm leading-relaxed outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary/40 focus:bg-background"
+                                    className="min-h-20 resize-y rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm leading-relaxed outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary/40 focus:bg-background"
                                 />
                                 <div className="space-y-2">
                                     <div className="relative">
@@ -990,7 +990,7 @@ export function LogDetail({
                                             value={annotationLabels}
                                             onChange={(event) => setAnnotationLabels(event.target.value)}
                                             placeholder={t('log_annotation.labels_placeholder', '标签，用逗号分隔')}
-                                            className="h-10 w-full rounded-lg border border-border/60 bg-muted/40 pl-9 pr-3 text-sm outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary/40 focus:bg-background"
+                                            className="h-10 w-full rounded-lg border border-border bg-muted/40 pl-9 pr-3 text-sm outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary/40 focus:bg-background"
                                         />
                                     </div>
                                     <Button
@@ -1019,7 +1019,7 @@ export function LogDetail({
                     </div>
 
                     {/* URL 地址 */}
-                    <div className="rounded-md border border-border/60 bg-card px-3 py-2">
+                    <div className="rounded-md border border-border bg-card px-3 py-2">
                         <div className="flex items-center gap-2">
                             <button
                                 type="button"
@@ -1066,7 +1066,7 @@ export function LogDetail({
                             {displayLog.request_override_rules?.length ? (
                                 <div className="mb-3 flex flex-wrap gap-2">
                                     {displayLog.request_override_rules.map((rule) => (
-                                        <Badge key={rule} variant="outline" className="border-warning/30 bg-background/60 text-xs font-semibold text-foreground">
+                                        <Badge key={rule} variant="outline" className="border-warning/30 bg-background text-xs font-semibold text-foreground">
                                             {rule}
                                         </Badge>
                                     ))}
@@ -1173,7 +1173,7 @@ export function LogDetail({
 
                                     {effectiveRequestBody && !(requestBodyIsBinary && displayLog.request_body_ref) ? (
                                         <div className={cn(codeCardClassName, "flex max-h-[500px] flex-col")}>
-                                            <div className="flex items-center justify-between gap-2 border-b border-border/60 px-2 py-1">
+                                            <div className="flex items-center justify-between gap-2 border-b border-border px-2 py-1">
                                                 <ViewToggle
                                                     value={requestViewMode}
                                                     options={[
@@ -1326,7 +1326,7 @@ export function LogDetail({
 
                                     {effectiveResponseBody && !(responseBodyIsBinary && displayLog.response_body_ref) ? (
                                         <div className={cn(codeCardClassName, "flex max-h-[500px] flex-col")}>
-                                            <div className="flex items-center justify-between gap-2 border-b border-border/60 px-2 py-1">
+                                            <div className="flex items-center justify-between gap-2 border-b border-border px-2 py-1">
                                                 <ViewToggle
                                                     value={responseViewMode}
                                                     options={displayLog.streaming

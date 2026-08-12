@@ -57,7 +57,7 @@ export function Login({ setupRequired, onSignedIn }: LoginProps) {
           <ThemeToggle />
           <button
             onClick={() => i18n.changeLanguage(i18n.language === 'zh' ? 'en' : 'zh')}
-            className="flex h-10 items-center justify-center gap-2 rounded-lg border border-border/50 bg-accent/50 px-3 text-xs font-semibold text-muted-foreground transition-all hover:border-border hover:bg-accent hover:text-foreground active:scale-95 sm:min-w-[110px] sm:px-4"
+            className="flex h-10 items-center justify-center gap-2 rounded-lg border border-border bg-accent/50 px-3 text-xs font-semibold text-muted-foreground transition-all hover:border-border hover:bg-accent hover:text-foreground active:scale-95 sm:min-w-[110px] sm:px-4"
             aria-label={t('auth.switch_language')}
           >
             <Globe className="h-3.5 w-3.5" />

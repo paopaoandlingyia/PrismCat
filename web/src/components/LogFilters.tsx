@@ -39,9 +39,9 @@ const DateRangePicker = lazy(async () => {
 function DateRangePickerFallback() {
     return (
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-            <div className="h-8 rounded-md border border-border/50 bg-background/50 sm:min-w-[170px]" />
+            <div className="h-8 rounded-md border border-border bg-background sm:min-w-[170px]" />
             <span className="hidden text-muted-foreground/30 text-sm font-medium mx-1 sm:inline">/</span>
-            <div className="h-8 rounded-md border border-border/50 bg-background/50 sm:min-w-[170px]" />
+            <div className="h-8 rounded-md border border-border bg-background sm:min-w-[170px]" />
         </div>
     )
 }
@@ -373,7 +373,7 @@ export function LogFilters({
             )}
 
             {/* 分页 */}
-            <div className="flex flex-col gap-3 border-t border-border/40 pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-2">
                     <span className="text-xs font-medium text-muted-foreground/60">
                         {t('filters.total_count', { count: total })}

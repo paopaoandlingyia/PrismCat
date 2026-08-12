@@ -35,7 +35,7 @@ export function BlobPanel({
     const hash = shortBlobHash(blobRef)
 
     return (
-        <div className="rounded-lg border border-border/60 bg-muted/40 px-3 py-2">
+        <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
             <div className="flex flex-wrap items-center gap-2 text-xs">
                 {binary ? (
                     isImage ? <Image className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> : <FileArchive className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -46,17 +46,17 @@ export function BlobPanel({
                     {binary ? t('log_detail.binary_response', 'Binary response') : isLoaded ? t('log_detail.blob_loaded') : t('log_detail.blob_detached')}
                 </span>
                 {mediaType && (
-                    <span className="rounded-md bg-background/70 px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+                    <span className="rounded-md bg-background px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
                         {mediaType}
                     </span>
                 )}
                 {typeof bodySize === 'number' && bodySize > 0 && (
-                    <span className="rounded-md bg-background/70 px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+                    <span className="rounded-md bg-background px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
                         {formatSize(bodySize)}
                     </span>
                 )}
                 {hash && (
-                    <span className="rounded-md bg-background/70 px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+                    <span className="rounded-md bg-background px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
                         sha256:{hash}
                     </span>
                 )}
@@ -114,7 +114,7 @@ export function BlobPanel({
                 </div>
             </div>
             {isImage && (
-                <div className="mt-3 overflow-hidden rounded-md border border-border/60 bg-background">
+                <div className="mt-3 overflow-hidden rounded-md border border-border bg-background">
                     <img
                         src={blobUrl}
                         alt={t('log_detail.binary_image_preview', 'Binary image preview')}
