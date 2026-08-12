@@ -25,6 +25,7 @@ import {
     Archive,
     FileCode,
     ChevronDown,
+    Route,
     Eye,
     EyeOff,
 } from 'lucide-react'
@@ -2228,12 +2229,12 @@ export function Settings() {
                                                 <TableHeader className="bg-muted">
                                                     <TableRow>
                                                         <TableHead className="w-[106px]">{t('upstream_manager.name')}</TableHead>
-                                                        <TableHead className="w-[250px]">{t('upstream_manager.list_entry')}</TableHead>
+                                                        <TableHead className="w-[264px]">{t('upstream_manager.list_entry')}</TableHead>
                                                         <TableHead className="w-[120px]">{t('upstream_manager.target_presets')}</TableHead>
                                                         <TableHead>{t('upstream_manager.target')}</TableHead>
                                                         <TableHead className="w-[190px]">{t('upstream_manager.outbound_proxy')}</TableHead>
                                                         <TableHead className="w-[68px]">{t('upstream_manager.list_timeout')}</TableHead>
-                                                        <TableHead className="w-[156px]">{t('upstream_manager.list_flags')}</TableHead>
+                                                        <TableHead className="w-[140px]">{t('upstream_manager.list_flags')}</TableHead>
                                                         <TableHead className="w-[72px]">{t('upstream_manager.actions')}</TableHead>
                                                     </TableRow>
                                                 </TableHeader>
@@ -2245,7 +2246,13 @@ export function Settings() {
                                                         const targetNames = upstream.targets ? Object.keys(upstream.targets) : []
                                                         const activeTarget = upstream.active_target || targetNames[0]
                                                         const proxyIsCustom = outboundProxyMode(upstream.outbound_proxy) === 'custom'
-                                                        const hasFlags = overrideEnabled || upstream.logging_enabled === false
+                                                        const flagLabels: string[] = []
+                                                        if (overrideEnabled) {
+                                                            flagLabels.push(t('log_detail.request_override') + (overrideRuleCount ? ' ×' + overrideRuleCount : ''))
+                                                        }
+                                                        if (upstream.logging_enabled === false) {
+                                                            flagLabels.push(t('upstream_manager.logging_disabled_badge'))
+                                                        }
 
                                                         return (
                                                             <TableRow key={upstream.name}>
@@ -2273,11 +2280,14 @@ export function Settings() {
                                                                                     <button
                                                                                         type="button"
                                                                                         onClick={() => handleCopy(getPathProxyUrl(upstream.name))}
-                                                                                        className="shrink-0 rounded-md border border-border bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground transition-colors hover:border-input hover:text-foreground"
+                                                                                        className="shrink-0 rounded-md p-1 text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+                                                                                        aria-label={t('settings.copy_path_proxy_url')}
                                                                                     >
-                                                                                        {normalizedPathPrefix}
+                                                                                        <Route className="h-3.5 w-3.5" />
                                                                                     </button>
                                                                                 </TooltipTrigger>
+                                                                                {/* tooltip 同时说明了「这是什么」和「点了会怎样」:
+                                                                                    图标只对动作成立,状态标签必须留文字 */}
                                                                                 <TooltipContent>{t('settings.copy_path_proxy_url')}</TooltipContent>
                                                                             </Tooltip>
                                                                         )}
@@ -2336,25 +2346,12 @@ export function Settings() {
                                                                 </TableCell>
 
                                                                 {/* badge 数量是会变的,给它专属一列 —— 挂在名称后面会把后面每一列
-                                                                    的起点推到每行不同的位置,那正是原来看着乱的原因 */}
-                                                                <TableCell>
-                                                                    {hasFlags ? (
-                                                                        <div className="flex items-center gap-1">
-                                                                            {overrideEnabled && (
-                                                                                <Badge variant="outline" className="shrink-0 rounded-md border-border bg-muted px-1.5 py-0 text-xs font-normal text-muted-foreground">
-                                                                                    {t('log_detail.request_override')}
-                                                                                    {overrideRuleCount ? ' · ' + overrideRuleCount : ''}
-                                                                                </Badge>
-                                                                            )}
-                                                                            {upstream.logging_enabled === false && (
-                                                                                <Badge variant="outline" className="shrink-0 rounded-md border-border bg-muted px-1.5 py-0 text-xs font-normal text-muted-foreground">
-                                                                                    {t('upstream_manager.logging_disabled_badge')}
-                                                                                </Badge>
-                                                                            )}
-                                                                        </div>
-                                                                    ) : (
-                                                                        <span className="text-xs text-muted-foreground opacity-50">—</span>
-                                                                    )}
+                                                                    的起点推到每行不同的位置,那正是原来看着乱的原因。
+                                                                    不用药丸:列边界已经把它框住了,再加边框和底色是重复的 */}
+                                                                <TableCell className="text-xs text-muted-foreground">
+                                                                    <div className="truncate" title={flagLabels.join(' · ') || undefined}>
+                                                                        {flagLabels.length ? flagLabels.join(' · ') : <span className="opacity-50">—</span>}
+                                                                    </div>
                                                                 </TableCell>
 
                                                                 {/* 常驻而不是 hover 才出现:右边缘每行都有内容,这一列才立得住 */}

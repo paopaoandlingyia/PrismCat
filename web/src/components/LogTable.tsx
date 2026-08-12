@@ -1,5 +1,5 @@
 import { cn, formatDate, formatLatency, METHOD_CLASS, getStatusColor } from '@/lib/utils'
-import { AlertTriangle, BookmarkCheck, CheckCircle2, ChevronRight, CircleDot, Clock3, Network, Server, Tag as TagIcon, Tags, Zap } from 'lucide-react'
+import { BookmarkCheck, CheckCircle2, ChevronRight, CircleDot, Clock3, Network, Server, SlidersHorizontal, Tag as TagIcon, Tags, Zap } from 'lucide-react'
 import type { RequestLog } from '@/lib/api'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -164,7 +164,9 @@ function MobileLogCard({
                         )}
                         {log.request_override_applied && (
                             <span className="inline-flex items-center gap-1 rounded-md border border-border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                                <AlertTriangle className="h-3 w-3" />
+                                {/* 同一个概念在卡片视图和表格视图用同一个字形;
+                                    原来是 AlertTriangle,但生效的参数覆盖是正常行为,不是警告 */}
+                                <SlidersHorizontal className="h-3 w-3" />
                                 {modifiedLabel}
                             </span>
                         )}
@@ -380,12 +382,12 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                                                 </TooltipContent>
                                             </Tooltip>
                                         )}
+                                        {/* 这一格里流式/收藏/待处理/已完成都是图标 + tooltip,
+                                            只有它是文字药丸,在图标序列中间断了节奏 */}
                                         {log.request_override_applied && (
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
-                                                    <span className="shrink-0 inline-flex items-center h-[18px] px-1.5 rounded-md border border-border text-xs font-medium bg-muted text-muted-foreground">
-                                                        {t('log_detail.modified', 'MODIFIED')}
-                                                    </span>
+                                                    <SlidersHorizontal className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                                                 </TooltipTrigger>
                                                 <TooltipContent side="right">
                                                     <p className="text-xs font-medium">{t('log_detail.request_override', 'Request Override')}</p>
