@@ -56,10 +56,11 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
     window.scrollTo({ top: 0, left: 0 })
   }, [location.pathname])
 
+  // 按实际使用频率排序:调用链是给 agent 场景准备的,多数人用不到,不占第二位
   const navItems = [
     { to: '/', labelKey: 'nav.dashboard', icon: LayoutDashboard },
-    { to: '/traces', labelKey: 'nav.traces', icon: Network },
     { to: '/playground', labelKey: 'nav.playground', icon: Zap },
+    { to: '/traces', labelKey: 'nav.traces', icon: Network },
     { to: '/settings', labelKey: 'nav.settings', icon: SettingsIcon },
   ]
 

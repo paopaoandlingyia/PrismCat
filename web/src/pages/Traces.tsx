@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Network, AlertCircle, Search, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Network, AlertCircle, Copy, Search, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { copyText } from '@/lib/clipboard'
 import { fetchTraces, fetchUpstreams, type TraceSummary, type TraceFilter, type Upstream } from '@/lib/api'
 import { cn, formatLatency } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
@@ -61,6 +62,11 @@ export function Traces() {
   }
 
   const maxLatency = traces.reduce((max, t) => Math.max(max, t.total_latency_ms), 1)
+
+  // 只给请求头,不给完整 curl:代理地址取决于上游名与端口,请求路径又因厂商而异
+  // (/v1/messages 与 /v1/chat/completions),拼出来的完整命令大概率是错的。
+  // 请求头是唯一在任何场景下都正确、也正是用户不知道的那部分。
+  const traceExample = '-H "X-PrismCat-Trace-ID: my-task-001"'
 
   return (
     <div className="space-y-6">
@@ -137,10 +143,35 @@ export function Traces() {
 
       {/* Traces table */}
       {traces.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-          <Network className="h-12 w-12 mb-4 opacity-30" />
-          <p className="text-sm font-medium">{t('traces.no_traces')}</p>
-          <p className="text-xs mt-1 opacity-60">{t('traces.no_traces_hint')}</p>
+        <div className="flex flex-col items-center justify-center py-20">
+          <Network className="mb-4 h-10 w-10 text-muted-foreground/40" />
+          <p className="text-sm font-medium text-foreground">{t('traces.no_traces')}</p>
+          <p className="mt-1 max-w-md text-center text-xs text-muted-foreground">
+            {t('traces.no_traces_hint')}
+          </p>
+
+          {/* 空状态负责教会用户怎么触发这个功能 —— 不知道要发这个请求头的人
+              永远看不到这页有内容,会以为功能坏了 */}
+          <div className="mt-6 w-full max-w-xl">
+            <p className="mb-2 text-xs text-muted-foreground">{t('traces.no_traces_example')}</p>
+            <div className="flex items-start gap-2 rounded-lg border border-border bg-muted p-3">
+              <pre className="min-w-0 flex-1 overflow-x-auto font-mono text-xs leading-5 text-foreground">
+                {traceExample}
+              </pre>
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-7 w-7 shrink-0 border border-input bg-background text-muted-foreground hover:bg-accent hover:text-foreground"
+                aria-label={t('json_viewer.copy')}
+                onClick={async () => {
+                  if (await copyText(traceExample)) toast.success(t('log_detail.copy_success'))
+                  else toast.error(t('log_detail.copy_failed'))
+                }}
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
         </div>
       ) : (
         <>
