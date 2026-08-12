@@ -211,6 +211,8 @@
         "target_url_required": "Every target preset requires a URL",
         "target_switched": "Switched to target {{target}}",
         "timeout": "Total timeout (s)",
+        "list_via": "via",
+        "list_timeout": "timeout",
         "advanced_settings": "Advanced settings",
         "advanced_settings_hint": "Usually no changes are needed. Use these options only when finer control over upstream behavior is required.",
         "timeout_strategy": "Timeout strategy",
