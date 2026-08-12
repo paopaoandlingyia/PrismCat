@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useId, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation } from 'react-router-dom'
-import { Send, Plus, Trash2, Loader2, Copy, Check, ChevronDown, Braces } from 'lucide-react'
+import { Send, Plus, Trash2, Loader2, Copy, Check, ChevronDown, Braces, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn, getStatusColor, formatSize, generateId } from '@/lib/utils'
 import { copyText } from '@/lib/clipboard'
@@ -54,6 +54,7 @@ function getErrorMessage(error: unknown, fallback: string) {
 export function Playground() {
     const { t } = useTranslation()
     const location = useLocation()
+    const jsonErrorId = useId()
 
     // Form state
     const [upstreams, setUpstreams] = useState<Upstream[]>([])
@@ -463,11 +464,11 @@ export function Playground() {
                                         variant="outline"
                                         className={cn(
                                             'h-6 border-none px-2 text-xs font-medium',
+                                            // JSON 非法会禁用发送,是错误不是警告
                                             requestBodyJsonError
-                                                ? 'bg-warning/10 text-warning'
+                                                ? 'bg-danger/10 text-danger'
                                                 : 'bg-success/10 text-success'
                                         )}
-                                        title={requestBodyJsonError || undefined}
                                     >
                                         {requestBodyJsonError
                                             ? t('playground.json_invalid', 'Invalid JSON')
@@ -509,8 +510,15 @@ export function Playground() {
                                 value={body}
                                 onChange={(e) => setBody(e.target.value)}
                                 placeholder='{ "model": "gpt-4", "messages": [...] }'
-                                className="w-full h-[260px] px-4 py-3 rounded-md bg-background border border-input text-xs font-mono leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none custom-scrollbar transition-all"
+                                className={cn(
+                                    'w-full h-[260px] px-4 py-3 rounded-md bg-background border text-xs font-mono leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 resize-none custom-scrollbar transition-all',
+                                    requestBodyJsonError
+                                        ? 'border-danger focus:ring-danger/20'
+                                        : 'border-input focus:ring-primary/20'
+                                )}
                                 spellCheck={false}
+                                aria-invalid={requestBodyJsonError ? true : undefined}
+                                aria-describedby={requestBodyJsonError ? jsonErrorId : undefined}
                             />
                         ) : (
                             <div className="h-[260px] overflow-auto rounded-md border border-input bg-background px-4 py-3 custom-scrollbar">
@@ -522,6 +530,17 @@ export function Playground() {
                                     </div>
                                 )}
                             </div>
+                        )}
+
+                        {/* 行内错误提示。原来解析错误只挂在 Badge 的原生 title 上,
+                            要悬停约一秒才出现,等于没提示 —— 而它会禁用发送按钮 */}
+                        {/* 不加 role="alert":那是 assertive 活动区域,每敲一个字符都会重新播报。
+                            textarea 已用 aria-describedby 关联,聚焦时读屏器就会读到 */}
+                        {requestBodyJsonError && (
+                            <p id={jsonErrorId} className="flex items-start gap-1.5 text-xs text-danger">
+                                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                                <span className="min-w-0 break-words font-mono">{requestBodyJsonError}</span>
+                            </p>
                         )}
                     </div>
                 )}
