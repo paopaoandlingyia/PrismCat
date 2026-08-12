@@ -7,6 +7,8 @@ import {
     type FormEvent,
     type ReactNode,
 } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { isSettingsTab, settingsTabPath, type SettingsTab } from '@/lib/routes'
 import {
     Plus,
     Trash2,
@@ -175,7 +177,6 @@ type EditingUpstream = {
 }
 
 type OutboundProxyMode = 'env' | 'direct' | 'custom'
-type SettingsTab = 'routing' | 'logging' | 'overrides' | 'system'
 type RuleTab = 'request_overrides' | 'usage_extraction'
 type OverrideRuleObject = Record<string, unknown>
 type HeaderOp = { op: string; name: string; value?: string }
@@ -722,7 +723,15 @@ export function Settings() {
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [showAddForm, setShowAddForm] = useState(false)
-    const [activeTab, setActiveTab] = useState<SettingsTab>('routing')
+    // 分区由 URL 决定。/settings 不带分区时落到 routing,不做重定向,
+    // 免得在保存栏有未提交改动时因为地址跳转丢状态。
+    const { tab: tabParam } = useParams()
+    const navigate = useNavigate()
+    const activeTab: SettingsTab = isSettingsTab(tabParam) ? tabParam : 'routing'
+    const setActiveTab = useCallback(
+        (next: SettingsTab) => navigate(settingsTabPath(next)),
+        [navigate],
+    )
     const [activeRuleTab, setActiveRuleTab] = useState<RuleTab>('request_overrides')
     const [metrics, setMetrics] = useState<SystemMetrics | null>(null)
     const [metricsLoading, setMetricsLoading] = useState(false)

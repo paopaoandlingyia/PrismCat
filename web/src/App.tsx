@@ -10,7 +10,7 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { Toaster } from '@/components/ui/sonner'
 import { Suspense, lazy, useState, useEffect } from 'react'
 import { fetchAuthStatus, fetchConfig, login, logout as logoutRequest, setupPassword } from '@/lib/api'
-import { logRequestDiffRoute } from '@/lib/routes'
+import { logRequestDiffRoute, settingsTabLabelKeys, settingsTabPath, settingsTabs } from '@/lib/routes'
 import { Login } from '@/pages/Login'
 
 const PlaygroundPage = lazy(async () => {
@@ -95,19 +95,44 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
           {navItems.map((item) => {
             const Icon = item.icon
             return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={cn(
-                  'flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors',
-                  isNavActive(item.to)
-                    ? 'bg-accent font-medium text-foreground'
-                    : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'
+              <div key={item.to}>
+                <NavLink
+                  // 有子项时直接进第一个分区,保证 URL 总是带分区、子项高亮不落空
+                  to={item.to === '/settings' ? settingsTabPath('routing') : item.to}
+                  className={cn(
+                    'flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors',
+                    isNavActive(item.to)
+                      // 有子项时父项只加重文字、不上底色,底色留给子项,层级才分得开
+                      ? item.to === '/settings'
+                        ? 'font-medium text-foreground'
+                        : 'bg-accent font-medium text-foreground'
+                      : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'
+                  )}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{t(item.labelKey)}</span>
+                </NavLink>
+
+                {/* 设置的四个分区常驻展开:侧栏本来就空,且位置固定不会跳 */}
+                {item.to === '/settings' && (
+                  <div className="mt-0.5 ml-[1.4rem] space-y-0.5 border-l border-border pl-2">
+                    {settingsTabs.map((tab) => (
+                      <NavLink
+                        key={tab}
+                        to={settingsTabPath(tab)}
+                        className={({ isActive }) => cn(
+                          'block truncate rounded-md px-2 py-1 text-sm transition-colors',
+                          isActive
+                            ? 'bg-accent font-medium text-foreground'
+                            : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'
+                        )}
+                      >
+                        {t(settingsTabLabelKeys[tab])}
+                      </NavLink>
+                    ))}
+                  </div>
                 )}
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                <span className="truncate">{t(item.labelKey)}</span>
-              </NavLink>
+              </div>
             )
           })}
         </nav>
@@ -202,6 +227,7 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
                 <Route path="/traces/:traceId" element={<TraceDetailPage />} />
                 <Route path="/playground" element={<PlaygroundPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/settings/:tab" element={<SettingsPage />} />
               </Routes>
             </Suspense>
           </div>
