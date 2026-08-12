@@ -32,9 +32,9 @@
   --color-danger: hsl(var(--destructive));
   --color-info: hsl(var(--info));
 
-  /* 卡片阴影 - 仅用于需要脱离页面平面的浮层,平铺卡片用边框表达 */
-  --shadow-card: 0 1px 2px 0 hsl(222 47% 11% / 0.04);
-  --shadow-card-hover: 0 1px 3px 0 hsl(222 47% 11% / 0.07);
+  /* 平铺元素一律不用阴影,层级由 1px 边框表达;阴影只留给真浮层(弹窗/抽屉) */
+  --shadow-card: none;
+  --shadow-card-hover: none;
 }
 
 /* 全局样式变量 */
@@ -50,31 +50,32 @@
   --color-prism-red: 0 85% 55%;
 
   /* --- 亮色模式 (Light Mode) --- */
-  /* 背景比卡片略深(浅灰),让纯白卡片浮起来 = 层级感的物理基础 */
-  --background: 210 40% 97%;
-  --foreground: 222 47% 11%;
+  /* 白画布 + 1px 线分层。灰不给页面用,只留给表头/工具条这类次级条带。
+     中性色统一走 220 度、13% 饱和度的近中性灰,避免整体偏冷发蓝 */
+  --background: 0 0% 100%;
+  --foreground: 220 13% 13%;
   --card: 0 0% 100%;
-  --card-foreground: 222 47% 11%;
+  --card-foreground: 220 13% 13%;
   --popover: 0 0% 100%;
-  --popover-foreground: 222 47% 11%;
-  --primary: 263 70% 50%;
-  --primary-foreground: 210 40% 98%;
-  /* 次级面比背景(97%)再深一档,确保悬停/次级元素在浅灰画布上仍可辨 */
-  --secondary: 210 40% 93%;
-  --secondary-foreground: 222 47% 11%;
-  --muted: 210 40% 93%;
-  --muted-foreground: 215 16% 47%;
-  --accent: 210 40% 93%;
-  --accent-foreground: 222 47% 11%;
+  --popover-foreground: 220 13% 13%;
+  --primary: 263 65% 48%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 14% 96%;
+  --secondary-foreground: 220 13% 13%;
+  --muted: 220 14% 96%;
+  --muted-foreground: 220 9% 43%;
+  --accent: 220 14% 96%;
+  --accent-foreground: 220 13% 13%;
   --destructive: 0 72% 45%;
   --destructive-foreground: 210 40% 98%;
   --success: 152 62% 30%;
   --warning: 32 88% 38%;
   --info: 212 80% 42%;
-  --border: 214 32% 91%;
-  --input: 214 32% 91%;
-  --ring: 263 70% 50%;
-  --radius: 0.4rem;
+  /* 白画布上边框要承担全部分隔职责,比常规再深一档才读得出来 */
+  --border: 220 13% 87%;
+  --input: 220 13% 87%;
+  --ring: 263 65% 48%;
+  --radius: 0.375rem;
 
   --chart-1: 263 70% 50%;
   --chart-2: 215 70% 50%;
@@ -85,29 +86,29 @@
 
 .dark {
   /* --- 暗色模式 (Dark Mode) --- */
-  /* 背景压暗、卡片提亮,拉开明度差(原来仅差 1% 几乎无感) */
-  --background: 222 47% 9%;
-  --foreground: 210 40% 98%;
-  --card: 222 40% 14%;
-  --card-foreground: 210 40% 98%;
-  --popover: 222 40% 14%;
-  --popover-foreground: 210 40% 98%;
-  --primary: 263 75% 68%;
-  --primary-foreground: 222 47% 11%;
-  --secondary: 217 33% 17%;
-  --secondary-foreground: 210 40% 98%;
-  --muted: 217 33% 17%;
-  --muted-foreground: 215 20% 65%;
-  --accent: 217 33% 17%;
-  --accent-foreground: 210 40% 98%;
-  --destructive: 0 75% 65%;
-  --destructive-foreground: 222 47% 11%;
-  --success: 152 55% 55%;
-  --warning: 38 88% 60%;
-  --info: 212 85% 65%;
-  --border: 217 33% 25%;
-  --input: 217 33% 25%;
-  --ring: 263 75% 68%;
+  /* 与亮色对称:画布和卡片同色,靠边框分层 */
+  --background: 220 14% 8%;
+  --foreground: 220 14% 96%;
+  --card: 220 14% 10%;
+  --card-foreground: 220 14% 96%;
+  --popover: 220 14% 12%;
+  --popover-foreground: 220 14% 96%;
+  --primary: 263 75% 70%;
+  --primary-foreground: 220 14% 8%;
+  --secondary: 220 13% 16%;
+  --secondary-foreground: 220 14% 96%;
+  --muted: 220 13% 16%;
+  --muted-foreground: 220 9% 62%;
+  --accent: 220 13% 16%;
+  --accent-foreground: 220 14% 96%;
+  --destructive: 0 72% 62%;
+  --destructive-foreground: 220 14% 8%;
+  --success: 152 50% 50%;
+  --warning: 38 85% 58%;
+  --info: 212 80% 62%;
+  --border: 220 13% 20%;
+  --input: 220 13% 20%;
+  --ring: 263 75% 70%;
 }
 
 

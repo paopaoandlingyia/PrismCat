@@ -87,7 +87,7 @@ export function LogDiff() {
     if (loading) {
         return (
             <div className="flex min-h-[55vh] flex-col items-center justify-center gap-4">
-                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                 <div className="text-sm font-medium text-muted-foreground">{t('common.loading')}</div>
             </div>
         )
@@ -108,10 +108,10 @@ export function LogDiff() {
     return (
         <DiffPageShell>
             <div className="space-y-5">
-                <div className="flex flex-col gap-4 rounded-2xl border border-border/60 bg-card px-5 py-4 shadow-sm lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex flex-col gap-4 rounded-lg border border-border/60 bg-card px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0 space-y-3">
                         <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant="outline" className={cn('rounded-[3px] px-2 py-0.5 text-xs font-medium', getMethodColor(log.method))}>
+                            <Badge variant="outline" className={cn('rounded-md px-2 py-0.5 text-xs font-medium', getMethodColor(log.method))}>
                                 {log.method}
                             </Badge>
                             <span className={cn('font-mono text-lg font-semibold tracking-tight', getStatusColor(log.status_code))}>
@@ -159,7 +159,7 @@ export function LogDiff() {
                 </div>
 
                 {hasDiff ? (
-                    <div className="rounded-2xl border border-border/60 bg-card p-4 shadow-sm">
+                    <div className="rounded-lg border border-border/60 bg-card p-4">
                         <div className="mb-4 flex items-center gap-2 text-xs font-medium text-muted-foreground">
                             <FileCode className="h-4 w-4 text-primary" />
                             {t('log_diff.request_diff', 'Request Diff')}
@@ -196,8 +196,8 @@ function EmptyState({
     message: string
 }) {
     return (
-        <div className="flex min-h-[46vh] flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border/70 bg-card/70 px-6 py-16 text-center">
-            <div className="rounded-xl bg-muted p-3 text-muted-foreground">{icon}</div>
+        <div className="flex min-h-[46vh] flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border/70 bg-card/70 px-6 py-16 text-center">
+            <div className="rounded-md bg-muted p-3 text-muted-foreground">{icon}</div>
             <div className="text-sm font-medium text-foreground">{title}</div>
             <div className="max-w-md text-xs leading-6 text-muted-foreground">{message}</div>
         </div>

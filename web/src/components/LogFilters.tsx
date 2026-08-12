@@ -147,7 +147,7 @@ export function LogFilters({
                             if (e.key === 'Enter') handleSearch()
                         }}
                         className={cn(
-                            "h-9 pl-9 border border-input shadow-sm bg-background transition-all hover:bg-accent focus-visible:bg-background",
+                            "h-9 pl-9 border border-input bg-background transition-all hover:bg-accent focus-visible:bg-background",
                             isPathChanged && "border-primary/50 ring-1 ring-primary/20"
                         )}
                     />
@@ -181,7 +181,7 @@ export function LogFilters({
                         onValueChange={(val) => setDraft({ ...draft, upstream: val === "all" ? "" : val })}
                     >
                         <SelectTrigger className={cn(
-                            "w-full h-9 bg-background border border-input shadow-sm hover:bg-accent",
+                            "w-full h-9 bg-background border border-input hover:bg-accent",
                             isUpstreamChanged && "border-primary/50 ring-1 ring-primary/20"
                         )}>
                             <SelectValue placeholder={t('filters.all_upstreams')} />
@@ -201,7 +201,7 @@ export function LogFilters({
                         onValueChange={(val) => setDraft({ ...draft, method: val === "all" ? "" : val })}
                     >
                         <SelectTrigger className={cn(
-                            "w-full h-9 bg-background border border-input shadow-sm hover:bg-accent",
+                            "w-full h-9 bg-background border border-input hover:bg-accent",
                             isMethodChanged && "border-primary/50 ring-1 ring-primary/20"
                         )}>
                             <SelectValue placeholder={t('filters.all_methods')} />
@@ -226,7 +226,7 @@ export function LogFilters({
                             if (e.key === 'Enter') handleSearch()
                         }}
                         className={cn(
-                            "w-full h-9 border border-input shadow-sm bg-background transition-all hover:bg-accent focus-visible:bg-background",
+                            "w-full h-9 border border-input bg-background transition-all hover:bg-accent focus-visible:bg-background",
                             isStatusCodeChanged && "border-primary/50 ring-1 ring-primary/20"
                         )}
                     />
@@ -239,7 +239,7 @@ export function LogFilters({
                             if (e.key === 'Enter') handleSearch()
                         }}
                         className={cn(
-                            "w-full h-9 border border-input shadow-sm bg-background transition-all hover:bg-accent focus-visible:bg-background",
+                            "w-full h-9 border border-input bg-background transition-all hover:bg-accent focus-visible:bg-background",
                             isTagChanged && "border-primary/50 ring-1 ring-primary/20"
                         )}
                     />
@@ -252,7 +252,7 @@ export function LogFilters({
                         })}
                     >
                         <SelectTrigger className={cn(
-                            "w-full h-9 bg-background border border-input shadow-sm hover:bg-accent",
+                            "w-full h-9 bg-background border border-input hover:bg-accent",
                             isSavedChanged && "border-primary/50 ring-1 ring-primary/20"
                         )}>
                             <SelectValue placeholder={t('filters.saved_all')} />
@@ -269,7 +269,7 @@ export function LogFilters({
                         onValueChange={(val) => setDraft({ ...draft, annotation_status: val === 'all' ? undefined : val as LogFilter['annotation_status'] })}
                     >
                         <SelectTrigger className={cn(
-                            "w-full h-9 bg-background border border-input shadow-sm hover:bg-accent",
+                            "w-full h-9 bg-background border border-input hover:bg-accent",
                             isAnnotationStatusChanged && "border-primary/50 ring-1 ring-primary/20"
                         )}>
                             <SelectValue placeholder={t('filters.annotation_status')} />
@@ -289,7 +289,7 @@ export function LogFilters({
                             if (e.key === 'Enter') handleSearch()
                         }}
                         className={cn(
-                            "w-full h-9 border border-input shadow-sm bg-background transition-all hover:bg-accent focus-visible:bg-background",
+                            "w-full h-9 border border-input bg-background transition-all hover:bg-accent focus-visible:bg-background",
                             isAnnotationLabelChanged && "border-primary/50 ring-1 ring-primary/20"
                         )}
                     />
@@ -306,10 +306,10 @@ export function LogFilters({
                                     onClick={handleSearch}
                                     disabled={loading}
                                     className={cn(
-                                        "h-9 w-9 shrink-0 transition-all shadow-md",
+                                        "h-9 w-9 shrink-0 transition-all",
                                         hasChanges
-                                            ? "bg-primary hover:bg-primary/90 shadow-primary/20 scale-105"
-                                            : "bg-primary/80 hover:bg-primary shadow-primary/10"
+                                            ? "bg-primary hover:bg-primary/90 scale-105"
+                                            : "bg-primary/80 hover:bg-primary"
                                     )}
                                 >
                                     <Search className={cn("h-4 w-4", loading && "animate-spin")} />
@@ -327,7 +327,7 @@ export function LogFilters({
                                         variant="outline"
                                         size="icon"
                                         onClick={handleExport}
-                                        className="h-9 w-9 shrink-0 border border-input shadow-sm bg-background text-muted-foreground hover:bg-accent hover:text-foreground"
+                                        className="h-9 w-9 shrink-0 border border-input bg-background text-muted-foreground hover:bg-accent hover:text-foreground"
                                     >
                                         <Download className="h-4 w-4" />
                                     </Button>
@@ -344,7 +344,7 @@ export function LogFilters({
                                     variant="outline"
                                     size="icon"
                                     onClick={handleReset}
-                                    className="h-9 w-9 shrink-0 border border-input shadow-sm bg-background text-muted-foreground hover:bg-accent hover:text-foreground"
+                                    className="h-9 w-9 shrink-0 border border-input bg-background text-muted-foreground hover:bg-accent hover:text-foreground"
                                 >
                                     <RotateCcw className="h-4 w-4" />
                                 </Button>
@@ -374,7 +374,7 @@ export function LogFilters({
                     <Button
                         variant="outline"
                         size="icon"
-                        className="h-8 w-8 rounded-md border border-border bg-background shadow-sm hover:bg-accent hover:text-accent-foreground transition-all"
+                        className="h-8 w-8 rounded-md border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-all"
                         onClick={() => goToPage(1)}
                         disabled={currentPage <= 1}
                         aria-label={t('filters.first_page')}
@@ -384,14 +384,14 @@ export function LogFilters({
                     <Button
                         variant="outline"
                         size="icon"
-                        className="h-8 w-8 rounded-md border border-border bg-background shadow-sm hover:bg-accent hover:text-accent-foreground transition-all"
+                        className="h-8 w-8 rounded-md border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-all"
                         onClick={() => goToPage(currentPage - 1)}
                         disabled={currentPage <= 1}
                     >
                         <ChevronLeft className="h-4 w-4" />
                     </Button>
 
-                    <div className="flex items-center h-8 rounded-md border border-border shadow-sm bg-background px-2 font-mono text-xs font-medium text-foreground/80">
+                    <div className="flex items-center h-8 rounded-md border border-border bg-background px-2 font-mono text-xs font-medium text-foreground/80">
                         <Input
                             value={pageDraft}
                             inputMode="numeric"
@@ -416,7 +416,7 @@ export function LogFilters({
                     <Button
                         variant="outline"
                         size="icon"
-                        className="h-8 w-8 rounded-md border border-border bg-background shadow-sm hover:bg-accent hover:text-accent-foreground transition-all"
+                        className="h-8 w-8 rounded-md border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-all"
                         onClick={() => goToPage(currentPage + 1)}
                         disabled={currentPage >= totalPages}
                     >
@@ -425,7 +425,7 @@ export function LogFilters({
                     <Button
                         variant="outline"
                         size="icon"
-                        className="h-8 w-8 rounded-md border border-border bg-background shadow-sm hover:bg-accent hover:text-accent-foreground transition-all"
+                        className="h-8 w-8 rounded-md border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-all"
                         onClick={() => goToPage(totalPages)}
                         disabled={currentPage >= totalPages}
                         aria-label={t('filters.last_page')}

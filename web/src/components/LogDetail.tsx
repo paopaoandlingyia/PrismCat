@@ -555,11 +555,11 @@ export function LogDetail({
     if (!displayLog) return null
 
     const sheetWidthClassName = cn(
-        "w-full p-0 flex flex-col bg-background shadow-2xl",
+        "w-full p-0 flex flex-col bg-background",
         panelWidthMode === 'wide' && "border-l border-border/60 sm:rounded-l-2xl sm:max-w-6xl",
         panelWidthMode === 'full' && "border-0 sm:rounded-none sm:max-w-none"
     )
-    const sectionCardClassName = "rounded-2xl border border-border/60 bg-card p-5"
+    const sectionCardClassName = "rounded-lg border border-border/60 bg-card p-5"
     const contentCardClassName = "rounded-lg bg-muted/50 p-3.5"
     const codeCardClassName = "rounded-lg bg-muted/50"
     const emptyStateClassName = "rounded-lg border border-dashed border-border/50 bg-muted/50 px-4 py-6 text-center"
@@ -632,7 +632,7 @@ export function LogDetail({
                     className={cn(
                         "h-6 rounded-md px-2 text-xs font-medium transition-all",
                         value === option.value
-                            ? "border border-border/70 bg-background text-foreground shadow-sm hover:bg-background"
+                            ? "border border-border/70 bg-background text-foreground hover:bg-background"
                             : "text-muted-foreground hover:bg-background/70 hover:text-foreground"
                     )}
                 >
@@ -716,7 +716,7 @@ export function LogDetail({
                     <div className="flex flex-wrap items-center gap-2.5">
                         <div
                                 className={cn(
-                                    "w-14 py-0.5 rounded-[3px] text-xs text-center font-medium border",
+                                    "w-14 py-0.5 rounded-md text-xs text-center font-medium border",
                                     getMethodColor(displayLog.method)
                                 )}
                         >
@@ -787,7 +787,7 @@ export function LogDetail({
                         {!loading && (
                             <div className="ml-auto mr-10 flex flex-wrap items-center justify-end gap-2">
                                 {onNavigateLog && (
-                                    <div className="flex items-center gap-1 rounded-lg border border-border/50 bg-background/60 p-0.5 shadow-sm">
+                                    <div className="flex items-center gap-1 rounded-lg border border-border/50 bg-background/60 p-0.5">
                                         <Tooltip>
                                             <TooltipTrigger asChild>
                                                 <Button
@@ -852,7 +852,7 @@ export function LogDetail({
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    className="h-7 gap-1.5 border-border/60 bg-background/60 px-2.5 text-xs font-semibold shadow-sm transition-all hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
+                                    className="h-7 gap-1.5 border-border/60 bg-background/60 px-2.5 text-xs font-semibold transition-all hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
                                     onClick={copyCurlCommand}
                                 >
                                     {copiedField === 'curl' ? (
@@ -865,7 +865,7 @@ export function LogDetail({
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    className="h-7 gap-1.5 border-primary/20 bg-primary/5 px-2.5 text-xs font-semibold shadow-sm transition-all hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
+                                    className="h-7 gap-1.5 border-primary/20 bg-primary/5 px-2.5 text-xs font-semibold transition-all hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
                                     onClick={async () => {
                                         const navigateToPlayground = (body: string) => {
                                             onClose()
@@ -907,7 +907,7 @@ export function LogDetail({
 
                 {/* 主内容区域 */}
                 <div className="custom-scrollbar flex-1 space-y-4 overflow-y-auto bg-muted/30 px-5 py-4">
-                    <div className="rounded-xl border border-border/60 bg-card px-3 py-2.5">
+                    <div className="rounded-md border border-border/60 bg-card px-3 py-2.5">
                         <div className="flex flex-wrap items-center gap-2">
                             <Button
                                 type="button"
@@ -1019,7 +1019,7 @@ export function LogDetail({
                     </div>
 
                     {/* URL 地址 */}
-                    <div className="rounded-xl border border-border/60 bg-card px-3 py-2">
+                    <div className="rounded-md border border-border/60 bg-card px-3 py-2">
                         <div className="flex items-center gap-2">
                             <button
                                 type="button"
@@ -1048,7 +1048,7 @@ export function LogDetail({
 
                     {/* 错误详情 */}
                     {displayLog.error && (
-                        <div className="overflow-hidden rounded-2xl border border-danger/20 bg-danger/5 p-4">
+                        <div className="overflow-hidden rounded-lg border border-danger/20 bg-danger/5 p-4">
                             <div className="mb-3 flex items-center gap-2 text-danger font-medium text-xs">
                                 <AlertTriangle className="h-4 w-4" />
                                 {t('common.error')}
@@ -1058,7 +1058,7 @@ export function LogDetail({
                     )}
 
                     {(displayLog.request_override_applied || displayLog.request_override_error) && (
-                        <div className="overflow-hidden rounded-2xl border border-warning/20 bg-warning/5 p-4">
+                        <div className="overflow-hidden rounded-lg border border-warning/20 bg-warning/5 p-4">
                             <div className="mb-3 flex items-center gap-2 text-warning font-medium text-xs">
                                 <AlertTriangle className="h-4 w-4" />
                                 {t('log_detail.request_override', 'Request Override')}
@@ -1107,7 +1107,7 @@ export function LogDetail({
                     )}
 
                     {hasUsage && (
-                        <div className="overflow-hidden rounded-2xl border border-success/20 bg-success/5 p-4">
+                        <div className="overflow-hidden rounded-lg border border-success/20 bg-success/5 p-4">
                             <div className="mb-3 flex items-center gap-2 text-success font-medium text-xs">
                                 <CircleDot className="h-4 w-4" />
                                 {t('log_detail.usage', 'Usage')}

@@ -20,7 +20,7 @@ export function TextDiffViewer({ beforeText, afterText }: TextDiffViewerProps) {
     const rows = useMemo(() => buildRows(prettyJsonText(beforeText), prettyJsonText(afterText)), [beforeText, afterText])
 
     return (
-        <div className="overflow-hidden rounded-xl border border-border/70 bg-background shadow-sm">
+        <div className="overflow-hidden rounded-md border border-border/70 bg-background">
             <div className="custom-scrollbar max-h-[72vh] overflow-auto">
                 <div className="min-w-[760px] font-mono text-xs leading-5">
                     {rows.map((row, index) => (

@@ -66,7 +66,7 @@ export function TraceDetail() {
   if (loading) {
     return (
       <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
         <div className="text-sm font-medium text-muted-foreground">{t('common.loading')}</div>
       </div>
     )
@@ -174,7 +174,7 @@ export function TraceDetail() {
                 type="button"
                 onClick={() => setSelectedLog(req)}
                 className={cn(
-                  'flex-1 rounded-xl p-3 mb-1 text-left transition-all',
+                  'flex-1 rounded-md p-3 mb-1 text-left transition-all',
                   'bg-card/20 hover:bg-card/50 border border-border/40 hover:border-border',
                   'active:scale-[0.995]',
                   selectedLog?.id === req.id && 'ring-1 ring-info/40 bg-card/40',
@@ -232,7 +232,7 @@ export function TraceDetail() {
                       <div style={{ width: `${offsetPct}%` }} />
                       <div
                         className={cn(
-                          'h-full rounded-full transition-all duration-500',
+                          'h-full rounded-md transition-all duration-500',
                           req.error ? 'bg-danger/50' :
                           req.status_code >= 400 ? 'bg-warning/50' :
                           'bg-info/50',
@@ -294,7 +294,7 @@ function SummaryCard({
   accent: string
 }) {
   return (
-    <div className="rounded-xl border border-border/50 bg-card/20 p-3 space-y-1">
+    <div className="rounded-md border border-border/50 bg-card/20 p-3 space-y-1">
       <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
         <Icon className={cn('h-3 w-3', accent)} />
         {label}

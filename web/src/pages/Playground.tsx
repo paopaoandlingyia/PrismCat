@@ -284,13 +284,13 @@ export function Playground() {
         <div className="mx-auto w-full max-w-7xl space-y-5 animate-fade-in">
 
             {/* Unified Address Bar */}
-            <div className="flex flex-wrap items-center gap-2 bg-muted/10 p-1.5 rounded-2xl">
+            <div className="flex flex-wrap items-center gap-2 bg-muted/10 p-1.5 rounded-lg">
                 {/* Method Selector */}
                 <div className="relative shrink-0">
                     <button
                         onClick={() => setMethodOpen(!methodOpen)}
                         className={cn(
-                            'flex items-center gap-1 px-3 py-2.5 rounded-xl border text-xs font-semibold transition-all min-w-[80px] justify-between',
+                            'flex items-center gap-1 px-3 py-2.5 rounded-md border text-xs font-semibold transition-all min-w-[80px] justify-between',
                             METHOD_COLORS[method] || METHOD_COLORS['GET']
                         )}
                     >
@@ -300,7 +300,7 @@ export function Playground() {
                     {methodOpen && (
                         <>
                             <div className="fixed inset-0 z-40" onClick={() => setMethodOpen(false)} />
-                            <div className="absolute top-full left-0 mt-2 z-50 bg-popover border border-border shadow-xl py-1 min-w-[120px] rounded-lg">
+                            <div className="absolute top-full left-0 mt-2 z-50 bg-popover border border-border py-1 min-w-[120px] rounded-lg">
                                 {HTTP_METHODS.map((m) => (
                                     <button
                                         key={m}
@@ -318,7 +318,7 @@ export function Playground() {
                     )}
                 </div>
 
-                <div className="flex shrink-0 items-center gap-1 rounded-xl border border-border/40 bg-background/70 p-1 shadow-sm">
+                <div className="flex shrink-0 items-center gap-1 rounded-md border border-border/40 bg-background/70 p-1">
                     {([
                         { value: 'upstream', label: t('playground.target_upstream', 'Upstream') },
                         { value: 'url', label: t('playground.target_url', 'URL') },
@@ -330,7 +330,7 @@ export function Playground() {
                             className={cn(
                                 'h-7 rounded-lg px-2.5 text-xs font-semibold transition-all',
                                 targetMode === option.value
-                                    ? 'bg-secondary text-foreground shadow-sm'
+                                    ? 'bg-secondary text-foreground'
                                     : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                             )}
                         >
@@ -346,7 +346,7 @@ export function Playground() {
                             <button
                                 onClick={() => setUpstreamOpen(!upstreamOpen)}
                                 className={cn(
-                                    'flex items-center gap-1 px-3 py-2.5 rounded-xl border bg-background/80 text-xs font-medium hover:bg-accent transition-all min-w-[90px] justify-between shadow-sm',
+                                    'flex items-center gap-1 px-3 py-2.5 rounded-md border bg-background/80 text-xs font-medium hover:bg-accent transition-all min-w-[90px] justify-between',
                                     selectedUpstreamMissing ? 'border-warning/50 text-warning' : 'border-input'
                                 )}
                             >
@@ -356,7 +356,7 @@ export function Playground() {
                             {upstreamOpen && (
                                 <>
                                     <div className="fixed inset-0 z-40" onClick={() => setUpstreamOpen(false)} />
-                                    <div className="absolute top-full left-0 mt-2 z-50 bg-popover border border-border shadow-xl py-1 min-w-[180px] rounded-lg">
+                                    <div className="absolute top-full left-0 mt-2 z-50 bg-popover border border-border py-1 min-w-[180px] rounded-lg">
                                         {upstreams.map((u) => (
                                             <button
                                                 key={u.name}
@@ -386,7 +386,7 @@ export function Playground() {
                             value={path}
                             onChange={(e) => setPath(e.target.value)}
                             placeholder="/v1/chat/completions"
-                            className="flex-1 min-w-[220px] px-3 py-2.5 rounded-xl bg-background border border-input text-sm font-mono placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                            className="flex-1 min-w-[220px] px-3 py-2.5 rounded-md bg-background border border-input text-sm font-mono placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                         />
                     </>
                 ) : (
@@ -395,7 +395,7 @@ export function Playground() {
                         value={targetUrl}
                         onChange={(e) => setTargetUrl(e.target.value)}
                         placeholder={t('playground.custom_url_placeholder', 'https://api.openai.com/v1/chat/completions')}
-                        className="flex-1 min-w-[260px] px-3 py-2.5 rounded-xl bg-background border border-input text-sm font-mono placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                        className="flex-1 min-w-[260px] px-3 py-2.5 rounded-md bg-background border border-input text-sm font-mono placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                     />
                 )}
 
@@ -406,7 +406,7 @@ export function Playground() {
                         sending ||
                         (targetMode === 'upstream' ? !upstream || selectedUpstreamMissing : !targetUrl.trim())
                     }
-                    className="shrink-0 px-5 py-2.5 h-auto font-semibold gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all"
+                    className="shrink-0 px-5 py-2.5 h-auto font-semibold gap-2 bg-primary hover:bg-primary/90 transition-all"
                 >
                     {sending ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -444,7 +444,7 @@ export function Playground() {
                         {t('playground.headers')}
                         {headers.length > 0 && (
                             <span className={cn(
-                                'text-xs font-medium px-1.5 py-0.5 rounded-full',
+                                'text-xs font-medium px-1.5 py-0.5 rounded-md',
                                 activeTab === 'headers' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground/50'
                             )}>
                                 {headers.length}
@@ -509,11 +509,11 @@ export function Playground() {
                                 value={body}
                                 onChange={(e) => setBody(e.target.value)}
                                 placeholder='{ "model": "gpt-4", "messages": [...] }'
-                                className="w-full h-[260px] px-4 py-3 rounded-xl bg-background border border-input text-xs font-mono leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none custom-scrollbar transition-all shadow-sm"
+                                className="w-full h-[260px] px-4 py-3 rounded-md bg-background border border-input text-xs font-mono leading-relaxed placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none custom-scrollbar transition-all"
                                 spellCheck={false}
                             />
                         ) : (
-                            <div className="h-[260px] overflow-auto rounded-xl border border-input bg-background px-4 py-3 shadow-sm custom-scrollbar">
+                            <div className="h-[260px] overflow-auto rounded-md border border-input bg-background px-4 py-3 custom-scrollbar">
                                 {body.trim() ? (
                                     <JsonViewer data={parsedRequestBody ?? body} />
                                 ) : (
@@ -537,14 +537,14 @@ export function Playground() {
                                         value={h.key}
                                         onChange={(e) => handleHeaderChange(h.id, 'key', e.target.value)}
                                         placeholder="Header Name"
-                                        className="w-[35%] sm:w-[30%] px-3 py-2 rounded-lg bg-background border border-input shadow-sm text-xs font-mono font-medium placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                                        className="w-[35%] sm:w-[30%] px-3 py-2 rounded-lg bg-background border border-input text-xs font-mono font-medium placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                                     />
                                     <input
                                         type="text"
                                         value={h.value}
                                         onChange={(e) => handleHeaderChange(h.id, 'value', e.target.value)}
                                         placeholder="Value"
-                                        className="flex-1 px-3 py-2 rounded-lg bg-background border border-input shadow-sm text-xs font-mono placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                                        className="flex-1 px-3 py-2 rounded-lg bg-background border border-input text-xs font-mono placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                                     />
                                     <button
                                         onClick={() => handleRemoveHeader(h.id)}
@@ -570,7 +570,7 @@ export function Playground() {
 
             {/* Response */}
             {(response || error || sending) && (
-                <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+                <div className="rounded-lg border border-border bg-card overflow-hidden">
                     {/* Response Header */}
                     <div className="px-4 py-3 border-b border-border/20 flex flex-wrap items-center gap-3">
                         <span className="text-xs font-semibold text-muted-foreground/60">

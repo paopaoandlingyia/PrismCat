@@ -67,7 +67,7 @@ export function Login({ setupRequired, onSignedIn }: LoginProps) {
       </header>
 
       <main className="grid min-h-[calc(100vh-76px)] place-items-center px-4 py-8 sm:px-6">
-        <div className="grid w-full max-w-5xl overflow-hidden rounded-lg border border-border bg-card shadow-2xl shadow-black/5 md:grid-cols-[1fr_420px]">
+        <div className="grid w-full max-w-5xl overflow-hidden rounded-lg border border-border bg-card md:grid-cols-[1fr_420px]">
           <section className="relative hidden min-h-[560px] overflow-hidden border-r border-border bg-muted/40 md:block">
             <div className="relative flex h-full flex-col justify-between p-10">
               <div>

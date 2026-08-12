@@ -65,7 +65,7 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
 
   const routeFallback = (
     <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4">
-      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
       <div className="text-sm font-medium text-muted-foreground">
         {t('common.loading')}
       </div>
@@ -169,7 +169,7 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
       </header>
 
       {/* 主内容 */}
-      <main className="relative z-0 w-full flex-1 bg-background px-4 py-5 space-y-6 sm:px-6 sm:py-6">
+      <main className="relative z-0 w-full flex-1 bg-background px-4 py-4 sm:px-6">
         <div className="mx-auto w-full max-w-[1600px]">
         <Suspense fallback={routeFallback}>
           <Routes>
@@ -247,7 +247,7 @@ function AppContent() {
   if (isCheckingAuth) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
         <div className="text-sm font-medium text-muted-foreground">
           {t('common.loading')}
         </div>

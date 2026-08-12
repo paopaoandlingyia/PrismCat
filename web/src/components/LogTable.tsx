@@ -45,17 +45,17 @@ function MobileLogSkeleton() {
     return (
         <div className="space-y-3 md:hidden">
             {Array.from({ length: 6 }).map((_, index) => (
-                <div key={index} className="rounded-2xl bg-card/20 p-4 space-y-3">
+                <div key={index} className="rounded-lg bg-card/20 p-4 space-y-3">
                     <div className="flex items-center gap-2">
-                        <Skeleton className="h-6 w-16 rounded-full bg-muted/50" />
-                        <Skeleton className="h-6 w-14 rounded-full bg-muted/50" />
+                        <Skeleton className="h-6 w-16 rounded-md bg-muted/50" />
+                        <Skeleton className="h-6 w-14 rounded-md bg-muted/50" />
                         <Skeleton className="ml-auto h-5 w-12 rounded-md bg-muted/50" />
                     </div>
                     <Skeleton className="h-4 w-full bg-muted/50" />
                     <Skeleton className="h-4 w-3/4 bg-muted/50" />
                     <div className="flex gap-2">
-                        <Skeleton className="h-5 w-20 rounded-full bg-muted/50" />
-                        <Skeleton className="h-5 w-16 rounded-full bg-muted/50" />
+                        <Skeleton className="h-5 w-20 rounded-md bg-muted/50" />
+                        <Skeleton className="h-5 w-16 rounded-md bg-muted/50" />
                     </div>
                 </div>
             ))}
@@ -65,7 +65,7 @@ function MobileLogSkeleton() {
 
 function DesktopLogSkeleton({ t }: { t: (key: string) => string }) {
     return (
-        <div className="hidden rounded-2xl overflow-hidden bg-card/20 md:block">
+        <div className="hidden rounded-lg overflow-hidden bg-card/20 md:block">
             <Table>
                 <TableHeader className="bg-muted/50">
                     <TableRow>
@@ -126,9 +126,9 @@ function MobileLogCard({
             type="button"
             onClick={() => onSelect(log)}
             className={cn(
-                'w-full rounded-2xl p-4 text-left transition-all active:scale-[0.99]',
+                'w-full rounded-lg p-4 text-left transition-all active:scale-[0.99]',
                 selected
-                    ? 'bg-primary/10 shadow-md shadow-primary/5'
+                    ? 'bg-primary/10'
                     : 'bg-card/20 hover:bg-card/40'
             )}
         >
@@ -137,7 +137,7 @@ function MobileLogCard({
                     <div className="flex flex-wrap items-center gap-2">
                         <span
                             className={cn(
-                                'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold',
+                                'inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold',
                                 getMethodColor(log.method)
                             )}
                         >
@@ -145,56 +145,56 @@ function MobileLogCard({
                         </span>
                         <span
                             className={cn(
-                                'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold',
+                                'inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold',
                                 getStatusBadgeColor(log.status_code)
                             )}
                         >
                             {log.status_code || '---'}
                         </span>
-                        <span className="inline-flex items-center gap-1 rounded-full bg-background/60 px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                        <span className="inline-flex items-center gap-1 rounded-md bg-background/60 px-2.5 py-1 text-xs font-semibold text-muted-foreground">
                             <Server className="h-3 w-3" />
                             <span className="truncate max-w-[160px]">
                                 {log.upstream}{log.upstream_target ? ` / ${log.upstream_target}` : ''}
                             </span>
                         </span>
                         {log.streaming && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+                            <span className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
                                 <Zap className="h-3 w-3" />
                                 {streamingLabel}
                             </span>
                         )}
                         {log.request_override_applied && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2.5 py-1 text-xs font-medium text-warning">
+                            <span className="inline-flex items-center gap-1 rounded-md bg-warning/10 px-2.5 py-1 text-xs font-medium text-warning">
                                 <AlertTriangle className="h-3 w-3" />
                                 {modifiedLabel}
                             </span>
                         )}
                         {log.trace_id && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-info/10 px-2.5 py-1 text-xs font-medium text-info">
+                            <span className="inline-flex items-center gap-1 rounded-md bg-info/10 px-2.5 py-1 text-xs font-medium text-info">
                                 <Network className="h-3 w-3" />
                                 TRACE
                             </span>
                         )}
                         {log.tag && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2.5 py-1 text-xs font-medium text-warning">
+                            <span className="inline-flex items-center gap-1 rounded-md bg-warning/10 px-2.5 py-1 text-xs font-medium text-warning">
                                 <TagIcon className="h-3 w-3" />
                                 <span className="truncate max-w-[120px]">{log.tag}</span>
                             </span>
                         )}
                         {log.annotation?.saved && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+                            <span className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
                                 <BookmarkCheck className="h-3 w-3" />
                                 {savedLabel}
                             </span>
                         )}
                         {log.annotation?.status === 'todo' && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2.5 py-1 text-xs font-medium text-warning">
+                            <span className="inline-flex items-center gap-1 rounded-md bg-warning/10 px-2.5 py-1 text-xs font-medium text-warning">
                                 <CircleDot className="h-3 w-3" />
                                 {todoLabel}
                             </span>
                         )}
                         {log.annotation?.status === 'done' && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2.5 py-1 text-xs font-medium text-success">
+                            <span className="inline-flex items-center gap-1 rounded-md bg-success/10 px-2.5 py-1 text-xs font-medium text-success">
                                 <CheckCircle2 className="h-3 w-3" />
                                 {doneLabel}
                             </span>
@@ -225,7 +225,7 @@ function MobileLogCard({
                     </div>
                 </div>
 
-                <div className="shrink-0 inline-flex items-center gap-1 rounded-full bg-background/60 px-2 py-1 text-xs font-semibold text-muted-foreground">
+                <div className="shrink-0 inline-flex items-center gap-1 rounded-md bg-background/60 px-2 py-1 text-xs font-semibold text-muted-foreground">
                     <span>{detailLabel}</span>
                     <ChevronRight className="h-3.5 w-3.5" />
                 </div>
@@ -250,7 +250,7 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
 
     if (logs.length === 0) {
         return (
-            <div className="flex flex-col items-center justify-center py-20 sm:py-24 text-muted-foreground bg-card/10 rounded-2xl px-6">
+            <div className="flex flex-col items-center justify-center py-20 sm:py-24 text-muted-foreground bg-card/10 rounded-lg px-6">
                 <div className="text-5xl sm:text-6xl mb-6 grayscale opacity-50">📭</div>
                 <div className="text-lg sm:text-xl font-semibold tracking-tight text-foreground/70 text-center">{t('log_table.no_logs')}</div>
                 <p className="text-sm mt-2 max-w-[280px] text-center leading-relaxed font-medium text-muted-foreground/80">
@@ -282,7 +282,7 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                 ))}
             </div>
 
-            <div className="hidden rounded-2xl overflow-hidden bg-card/20 md:block">
+            <div className="hidden rounded-lg overflow-hidden bg-card/20 md:block">
                 <Table>
                     <TableHeader className="bg-muted/30">
                         <TableRow className="hover:bg-transparent">
@@ -344,7 +344,7 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                                                     <span
                                                         role="link"
                                                         onClick={(e) => { e.stopPropagation(); navigate(`/traces/${encodeURIComponent(log.trace_id!)}`) }}
-                                                        className="shrink-0 inline-flex items-center gap-0.5 h-[18px] px-1.5 rounded-[3px] text-xs font-semibold tracking-tight bg-info/10 text-info cursor-pointer hover:bg-info/20 transition-colors"
+                                                        className="shrink-0 inline-flex items-center gap-0.5 h-[18px] px-1.5 rounded-md text-xs font-semibold tracking-tight bg-info/10 text-info cursor-pointer hover:bg-info/20 transition-colors"
                                                     >
                                                         <Network className="h-2.5 w-2.5" />
                                                         TRACE
@@ -358,7 +358,7 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                                         {log.tag && (
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
-                                                    <span className="shrink-0 inline-flex items-center h-[18px] px-1.5 rounded-[3px] text-xs font-semibold tracking-tight bg-warning/15 text-warning">
+                                                    <span className="shrink-0 inline-flex items-center h-[18px] px-1.5 rounded-md text-xs font-semibold tracking-tight bg-warning/15 text-warning">
                                                         {log.tag}
                                                     </span>
                                                 </TooltipTrigger>
@@ -382,7 +382,7 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                                         {log.request_override_applied && (
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
-                                                    <span className="shrink-0 inline-flex items-center h-[18px] px-1.5 rounded-[3px] text-xs font-semibold tracking-tight bg-warning/15 text-warning">
+                                                    <span className="shrink-0 inline-flex items-center h-[18px] px-1.5 rounded-md text-xs font-semibold tracking-tight bg-warning/15 text-warning">
                                                         {t('log_detail.modified', 'MODIFIED')}
                                                     </span>
                                                 </TooltipTrigger>
@@ -424,7 +424,7 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                                         {log.annotation?.labels?.map((label) => (
                                             <Tooltip key={label}>
                                                 <TooltipTrigger asChild>
-                                                    <span className="shrink-0 inline-flex items-center h-[18px] px-1.5 rounded-[3px] text-xs font-semibold tracking-tight bg-primary/10 text-primary">
+                                                    <span className="shrink-0 inline-flex items-center h-[18px] px-1.5 rounded-md text-xs font-semibold tracking-tight bg-primary/10 text-primary">
                                                         {label}
                                                     </span>
                                                 </TooltipTrigger>

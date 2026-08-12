@@ -97,7 +97,7 @@ function DiffChangeRow({ change }: { change: JsonDiffChange }) {
     const { t } = useTranslation()
 
     return (
-        <div className="overflow-hidden rounded-lg border border-border/60 bg-background shadow-sm">
+        <div className="overflow-hidden rounded-lg border border-border/60 bg-background">
             <div className="flex flex-wrap items-center gap-2 border-b border-border/50 bg-muted/25 px-3 py-2">
                 <Badge variant="outline" className={cn('h-5 rounded-md px-1.5 text-xs font-medium', typeClassNames[change.type])}>
                     {t(`json_diff.${change.type}`, change.type)}

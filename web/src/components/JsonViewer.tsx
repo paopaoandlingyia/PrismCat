@@ -53,7 +53,7 @@ export function HighlightText({
     ranges.forEach((range, index) => {
         if (range.start > lastIndex) parts.push(text.slice(lastIndex, range.start));
         parts.push(
-            <mark key={index} className="bg-warning/30 text-inherit rounded-[2px]" data-search-match="">
+            <mark key={index} className="bg-warning/30 text-inherit rounded-md" data-search-match="">
                 {text.slice(range.start, range.end)}
             </mark>
         );
@@ -181,7 +181,7 @@ function LargeTextPreview({ text, searchTerm, maxMatches }: { text: string; sear
                     {expanded ? t('json_viewer.collapse') : t('json_viewer.expand')}
                 </button>
             </div>
-            <pre className="whitespace-pre-wrap break-all rounded-xl border border-border/60 bg-background p-3 text-xs font-mono shadow-xs">
+            <pre className="whitespace-pre-wrap break-all rounded-md border border-border/60 bg-background p-3 text-xs font-mono">
                 {searchTerm && searchRanges.length && !expanded ? (
                     <LargeTextSearchSnippets text={text} ranges={searchRanges} />
                 ) : expanded || text.length <= preview.length ? (
@@ -203,7 +203,7 @@ function LargeTextSearchSnippets({ text, ranges }: { text: string; ranges: Array
                     <span key={`${range.start}:${range.end}`} className="block border-b border-border/40 py-1 last:border-b-0">
                         {start > 0 ? '…' : ''}
                         {text.slice(start, range.start)}
-                        <mark className="bg-warning/30 text-inherit rounded-[2px]" data-search-match="">
+                        <mark className="bg-warning/30 text-inherit rounded-md" data-search-match="">
                             {text.slice(range.start, range.end)}
                         </mark>
                         {text.slice(range.end, end)}
@@ -567,7 +567,7 @@ function Base64Placeholder({ value, detection, dataUriPrefix }: {
 
             {imgSrc && (
                 <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-                    <DialogContent className="max-h-[90vh] max-w-3xl overflow-hidden rounded-2xl border border-border/60 bg-card p-1 shadow-2xl">
+                    <DialogContent className="max-h-[90vh] max-w-3xl overflow-hidden rounded-lg border border-border/60 bg-card p-1">
                         <DialogHeader className="border-b border-border/60 bg-muted/30 p-4">
                             <DialogTitle className="text-xs font-medium flex items-center gap-2">
                                 <ImageIcon className="h-3.5 w-3.5" />
@@ -575,7 +575,7 @@ function Base64Placeholder({ value, detection, dataUriPrefix }: {
                             </DialogTitle>
                         </DialogHeader>
                         <div className="flex flex-1 items-center justify-center overflow-auto bg-muted/30 p-8">
-                            <img src={imgSrc} alt="Preview" className="max-h-full max-w-full rounded-xl border border-border/60 bg-background shadow-2xl" />
+                            <img src={imgSrc} alt="Preview" className="max-h-full max-w-full rounded-md border border-border/60 bg-background" />
                         </div>
                         <div className="flex justify-end gap-2 border-t border-border/60 bg-muted/30 p-4">
                             <Button variant="outline" size="sm" onClick={copyToClipboard} className="text-xs font-medium h-8">
