@@ -255,7 +255,7 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                 <div className="text-5xl sm:text-6xl mb-6 grayscale opacity-50">📭</div>
                 <div className="text-lg sm:text-xl font-semibold tracking-tight text-foreground/70 text-center">{t('log_table.no_logs')}</div>
                 <p className="text-sm mt-2 max-w-[280px] text-center leading-relaxed font-medium text-muted-foreground/80">
-                    {t('log_table.send_requests_hint', '发送一些请求后这里会显示日志')}
+                    {t('log_table.send_requests_hint')}
                 </p>
             </div>
         )
@@ -272,10 +272,10 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                         onSelect={onSelect}
                         dateLabel={formatDate(log.created_at, i18n.language)}
                         detailLabel={t('common.details')}
-                        savedLabel={t('log_annotation.saved', '已保存')}
-                        todoLabel={t('log_annotation.todo', '待处理')}
-                        doneLabel={t('log_annotation.done', '已处理')}
-                        streamingLabel={t('log_detail.streaming', '流式')}
+                        savedLabel={t('log_annotation.saved')}
+                        todoLabel={t('log_annotation.todo')}
+                        doneLabel={t('log_annotation.done')}
+                        streamingLabel={t('log_detail.streaming')}
                         modifiedLabel={t('log_detail.modified', 'MODIFIED')}
                         tokensLabel={t('log_table.tokens', 'Tokens')}
                         showUsage={showUsage}
@@ -333,7 +333,9 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                                     </span>
                                 </TableCell>
                                 <TableCell>
-                                    <span className="block max-w-[110px] truncate text-xs font-semibold text-muted-foreground/85">
+                                    {/* 真正决定截断的是这个 max-w,不是表头的 w- ——
+                                        LogTable 是 auto 布局,w- 只是提示。要放宽得改这里 */}
+                                    <span className="block max-w-[150px] truncate text-xs font-semibold text-muted-foreground/85">
                                         {log.upstream}{log.upstream_target ? ` / ${log.upstream_target}` : ''}
                                     </span>
                                 </TableCell>
@@ -380,7 +382,7 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                                                     </div>
                                                 </TooltipTrigger>
                                                 <TooltipContent side="right">
-                                                    <p className="text-xs font-medium">{t('log_detail.streaming', '流式响应')}</p>
+                                                    <p className="text-xs font-medium">{t('log_detail.streaming')}</p>
                                                 </TooltipContent>
                                             </Tooltip>
                                         )}

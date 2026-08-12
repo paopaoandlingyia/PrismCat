@@ -14,11 +14,11 @@ export function StatsCards({ stats, loading }: StatsCardsProps) {
     // 只有错误数带语义色,其余保持中性 —— 一屏一个焦点
     const cards = [
         { title: t('stats.total_requests'), value: (stats?.total_requests ?? 0).toLocaleString() },
-        { title: t('common.success', '成功'), value: (stats?.success_count ?? 0).toLocaleString() },
-        { title: t('common.error', '错误'), value: (stats?.error_count ?? 0).toLocaleString(), tone: 'danger' as const },
-        { title: t('log_detail.streaming', '流式'), value: (stats?.streaming_count ?? 0).toLocaleString() },
+        { title: t('common.success'), value: (stats?.success_count ?? 0).toLocaleString() },
+        { title: t('common.error'), value: (stats?.error_count ?? 0).toLocaleString(), tone: 'danger' as const },
+        { title: t('log_detail.streaming'), value: (stats?.streaming_count ?? 0).toLocaleString() },
         { title: t('stats.avg_latency'), value: formatLatency(stats?.avg_latency_ms ?? 0) },
-        { title: t('log_table.upstream', '上游数量'), value: Object.keys(stats?.by_upstream ?? {}).length.toLocaleString() },
+        { title: t('log_table.upstream'), value: Object.keys(stats?.by_upstream ?? {}).length.toLocaleString() },
     ]
 
     return (

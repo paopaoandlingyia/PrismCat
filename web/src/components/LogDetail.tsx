@@ -565,7 +565,7 @@ export function LogDetail({
     const emptyStateClassName = "rounded-lg border border-dashed border-border bg-muted/50 px-4 py-6 text-center"
 
     const CopyButton = ({ text, field }: { text: string; field: string }) => {
-        const label = copiedField === field ? t('common.copied', '已复制') : t('common.copy', '复制')
+        const label = copiedField === field ? t('common.copied') : t('common.copy')
         return (
             <Tooltip>
                 <TooltipTrigger asChild>
@@ -650,7 +650,7 @@ export function LogDetail({
         onChange: (mode: JsonExpandMode) => void
     }) => {
         const willExpand = mode !== 'all'
-        const label = willExpand ? t('log_detail.expand_all', '展开全部') : t('log_detail.collapse_all', '折叠全部')
+        const label = willExpand ? t('log_detail.expand_all') : t('log_detail.collapse_all')
         return (
             <Tooltip>
                 <TooltipTrigger asChild>
@@ -922,7 +922,7 @@ export function LogDetail({
                                 className="h-8 gap-1.5 rounded-lg px-3 text-xs font-semibold"
                             >
                                 {annotation.saved ? <BookmarkCheck className="h-3.5 w-3.5" /> : <Bookmark className="h-3.5 w-3.5" />}
-                                {annotation.saved ? t('log_annotation.saved', '已保存') : t('log_annotation.save', '保存')}
+                                {annotation.saved ? t('log_annotation.saved') : t('log_annotation.save')}
                             </Button>
                             <Button
                                 type="button"
@@ -939,7 +939,7 @@ export function LogDetail({
                                 )}
                             >
                                 <CircleDot className="h-3.5 w-3.5" />
-                                {t('log_annotation.todo', '待处理')}
+                                {t('log_annotation.todo')}
                             </Button>
                             <Button
                                 type="button"
@@ -956,7 +956,7 @@ export function LogDetail({
                                 )}
                             >
                                 <CheckCircle2 className="h-3.5 w-3.5" />
-                                {t('log_annotation.done', '已处理')}
+                                {t('log_annotation.done')}
                             </Button>
                             {annotationSaving && (
                                 <span className="text-xs font-medium text-muted-foreground">{t('common.loading')}</span>
@@ -981,7 +981,7 @@ export function LogDetail({
                                 <textarea
                                     value={annotationNote}
                                     onChange={(event) => setAnnotationNote(event.target.value)}
-                                    placeholder={t('log_annotation.note_placeholder', '写下为什么保存这条日志，或后续要检查什么...')}
+                                    placeholder={t('log_annotation.note_placeholder')}
                                     className={cn('min-h-20 resize-y rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm leading-relaxed transition-colors placeholder:text-muted-foreground/70 focus-visible:bg-background', FOCUS_RING)}
                                 />
                                 <div className="space-y-2">
@@ -990,7 +990,7 @@ export function LogDetail({
                                         <input
                                             value={annotationLabels}
                                             onChange={(event) => setAnnotationLabels(event.target.value)}
-                                            placeholder={t('log_annotation.labels_placeholder', '标签，用逗号分隔')}
+                                            placeholder={t('log_annotation.labels_placeholder')}
                                             className={cn('h-10 w-full rounded-lg border border-border bg-muted/40 pl-9 pr-3 text-sm transition-colors placeholder:text-muted-foreground/70 focus-visible:bg-background', FOCUS_RING)}
                                         />
                                     </div>
@@ -1002,7 +1002,7 @@ export function LogDetail({
                                         className="h-8 w-full rounded-lg text-xs font-semibold"
                                     >
                                         <Check className="mr-1.5 h-3.5 w-3.5" />
-                                        {t('log_annotation.save_note', '保存备注')}
+                                        {t('log_annotation.save_note')}
                                     </Button>
                                 </div>
                             </div>
@@ -1380,7 +1380,7 @@ export function LogDetail({
                                                         <JsonViewer data={mergedResponse.merged} expandMode={responseExpandMode} searchTerm={effectiveResponseSearchTerm || undefined} searchPlan={responseJsonSearchPlan} />
                                                     ) : (
                                                         <div className={cn(emptyStateClassName, "text-xs italic text-muted-foreground")}>
-                                                            {t('log_detail.stream_merge_unavailable', '当前无法生成合并视图，请切换到 Raw 查看原始内容。')}
+                                                            {t('log_detail.stream_merge_unavailable')}
                                                         </div>
                                                     )
                                                 ) : (

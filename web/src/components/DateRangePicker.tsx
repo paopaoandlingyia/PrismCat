@@ -100,7 +100,7 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
             <DateTimePicker
                 value={startDate}
                 onChange={handleStartChange}
-                placeholder={t('filters.start_time', '开始时间')}
+                placeholder={t('filters.start_time')}
                 maxDate={endDate || new Date()}
                 placement="bottom-start"
             />
@@ -108,7 +108,7 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
             <DateTimePicker
                 value={endDate}
                 onChange={handleEndChange}
-                placeholder={t('filters.end_time', '结束时间')}
+                placeholder={t('filters.end_time')}
                 minDate={startDate || undefined}
                 maxDate={new Date()}
                 placement="bottom-end"

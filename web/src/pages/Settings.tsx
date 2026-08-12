@@ -3280,7 +3280,7 @@ export function Settings() {
                                                                 className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
                                                             >
                                                                 <span>{t('settings.request_override_raw_rule')}</span>
-                                                                <span>{selectedRuleAdvancedOpen ? t('common.hide', '隐藏') : t('common.show', '显示')}</span>
+                                                                <span>{selectedRuleAdvancedOpen ? t('common.hide') : t('common.show')}</span>
                                                             </button>
                                                             {selectedRuleAdvancedOpen && (
                                                                 <div className="space-y-2 border-t border-input p-3">
@@ -3315,7 +3315,7 @@ export function Settings() {
                                                 className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
                                             >
                                                 <span>{t('settings.request_override_advanced_json')}</span>
-                                                <span>{advancedRulesOpen ? t('common.hide', '隐藏') : t('common.show', '显示')}</span>
+                                                <span>{advancedRulesOpen ? t('common.hide') : t('common.show')}</span>
                                             </button>
                                             {advancedRulesOpen && (
                                                 <div className="border-t border-input p-3">
@@ -3517,7 +3517,7 @@ export function Settings() {
                                                     className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
                                                 >
                                                     <span>{t('settings.usage_extraction_advanced_json')}</span>
-                                                    <span>{usageAdvancedRulesOpen ? t('common.hide', '隐藏') : t('common.show', '显示')}</span>
+                                                    <span>{usageAdvancedRulesOpen ? t('common.hide') : t('common.show')}</span>
                                                 </button>
                                                 {usageAdvancedRulesOpen && (
                                                     <div className="border-t border-input p-3">
