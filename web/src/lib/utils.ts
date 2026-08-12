@@ -41,23 +41,16 @@ export function formatSize(bytes: number): string {
 
 // 状态码颜色
 export function getStatusColor(code: number): string {
-  if (code >= 200 && code < 300) return 'text-green-400'
-  if (code >= 300 && code < 400) return 'text-yellow-400'
-  if (code >= 400 && code < 500) return 'text-orange-400'
-  if (code >= 500) return 'text-red-400'
-  return 'text-gray-400'
+  if (code >= 200 && code < 300) return 'text-success'
+  if (code >= 300 && code < 400) return 'text-warning'
+  if (code >= 400 && code < 500) return 'text-warning'
+  if (code >= 500) return 'text-danger'
+  return 'text-muted-foreground'
 }
 
-// 方法颜色
-export function getMethodColor(method: string): string {
-  const colors: Record<string, string> = {
-    GET: 'bg-blue-500/15 text-blue-500',
-    POST: 'bg-emerald-500/15 text-emerald-500',
-    PUT: 'bg-amber-500/15 text-amber-500',
-    DELETE: 'bg-rose-500/15 text-rose-500',
-    PATCH: 'bg-violet-500/15 text-violet-500',
-  }
-  return colors[method.toUpperCase()] || 'bg-slate-500/15 text-slate-500'
+// 方法颜色 - HTTP 方法不携带成败语义,统一中性,只靠等宽字重区分
+export function getMethodColor(_method?: string): string {
+  return 'text-muted-foreground'
 }
 
 // JSON 语法高亮
@@ -71,20 +64,20 @@ export function syntaxHighlightJson(json: string): string {
   }
 
   return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g, (match) => {
-    let cls = 'text-orange-600 dark:text-orange-400' // number
+    let cls = 'text-warning' // number
     let isKey = false
 
     if (/^"/.test(match)) {
       if (/:$/.test(match)) {
-        cls = 'text-sky-600 dark:text-sky-400 font-semibold' // key
+        cls = 'text-info font-semibold' // key
         isKey = true
       } else {
-        cls = 'text-emerald-600 dark:text-emerald-400' // string
+        cls = 'text-success' // string
       }
     } else if (/true|false/.test(match)) {
-      cls = 'text-indigo-600 dark:text-indigo-400 font-semibold' // boolean
+      cls = 'text-primary font-semibold' // boolean
     } else if (/null/.test(match)) {
-      cls = 'text-rose-600 dark:text-rose-400 font-semibold' // null
+      cls = 'text-danger font-semibold' // null
     }
 
     // 辅助函数：转义 HTML 字符

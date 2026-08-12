@@ -22,7 +22,7 @@ export function TextDiffViewer({ beforeText, afterText }: TextDiffViewerProps) {
     return (
         <div className="overflow-hidden rounded-xl border border-border/70 bg-background shadow-sm">
             <div className="custom-scrollbar max-h-[72vh] overflow-auto">
-                <div className="min-w-[760px] font-mono text-[12px] leading-5">
+                <div className="min-w-[760px] font-mono text-xs leading-5">
                     {rows.map((row, index) => (
                         <DiffLine key={`${index}:${row.kind}:${row.oldLine ?? ''}:${row.newLine ?? ''}`} row={row} />
                     ))}
@@ -38,8 +38,8 @@ function DiffLine({ row }: { row: DiffRow }) {
             className={cn(
                 'grid grid-cols-[56px_56px_28px_minmax(0,1fr)] border-l-4',
                 row.kind === 'context' && 'border-transparent hover:bg-muted/35',
-                row.kind === 'added' && 'border-emerald-500 bg-emerald-500/[0.10] text-emerald-950 dark:text-emerald-50',
-                row.kind === 'removed' && 'border-red-500 bg-red-500/[0.10] text-red-950 dark:text-red-50'
+                row.kind === 'added' && 'border-success bg-success/[0.10] text-success',
+                row.kind === 'removed' && 'border-danger bg-danger/[0.10] text-danger'
             )}
         >
             <LineNumber value={row.oldLine} tone={row.kind} />
@@ -47,8 +47,8 @@ function DiffLine({ row }: { row: DiffRow }) {
             <div
                 className={cn(
                     'select-none border-r border-border/40 px-2 text-center',
-                    row.kind === 'added' && 'text-emerald-700 dark:text-emerald-300',
-                    row.kind === 'removed' && 'text-red-700 dark:text-red-300',
+                    row.kind === 'added' && 'text-success',
+                    row.kind === 'removed' && 'text-danger',
                     row.kind === 'context' && 'text-muted-foreground'
                 )}
             >
@@ -64,8 +64,8 @@ function LineNumber({ value, tone }: { value?: number; tone: DiffRow['kind'] }) 
         <div
             className={cn(
                 'select-none border-r border-border/40 px-2 py-0.5 text-right text-muted-foreground/70',
-                tone === 'added' && 'bg-emerald-500/[0.08] text-emerald-700/75 dark:text-emerald-300/75',
-                tone === 'removed' && 'bg-red-500/[0.08] text-red-700/75 dark:text-red-300/75'
+                tone === 'added' && 'bg-success/[0.08] text-success/75',
+                tone === 'removed' && 'bg-danger/[0.08] text-danger/75'
             )}
         >
             {value ?? ''}

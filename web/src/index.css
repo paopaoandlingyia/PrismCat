@@ -26,9 +26,15 @@
   --color-ring: hsl(var(--ring));
   --radius-radius: var(--radius);
 
-  /* 卡片柔和阴影 - 配合背景明度差制造"浮起"的层级感 */
-  --shadow-card: 0 1px 3px 0 hsl(222 47% 11% / 0.06), 0 4px 16px -3px hsl(222 47% 11% / 0.10);
-  --shadow-card-hover: 0 2px 6px 0 hsl(222 47% 11% / 0.08), 0 12px 28px -4px hsl(222 47% 11% / 0.16);
+  /* 语义色 - 状态表达统一走这四个,不要再直接用 green-500/amber-600 之类的调色板类 */
+  --color-success: hsl(var(--success));
+  --color-warning: hsl(var(--warning));
+  --color-danger: hsl(var(--destructive));
+  --color-info: hsl(var(--info));
+
+  /* 卡片阴影 - 仅用于需要脱离页面平面的浮层,平铺卡片用边框表达 */
+  --shadow-card: 0 1px 2px 0 hsl(222 47% 11% / 0.04);
+  --shadow-card-hover: 0 1px 3px 0 hsl(222 47% 11% / 0.07);
 }
 
 /* 全局样式变量 */
@@ -60,8 +66,11 @@
   --muted-foreground: 215 16% 47%;
   --accent: 210 40% 93%;
   --accent-foreground: 222 47% 11%;
-  --destructive: 0 84% 60%;
+  --destructive: 0 72% 45%;
   --destructive-foreground: 210 40% 98%;
+  --success: 152 62% 30%;
+  --warning: 32 88% 38%;
+  --info: 212 80% 42%;
   --border: 214 32% 91%;
   --input: 214 32% 91%;
   --ring: 263 70% 50%;
@@ -91,8 +100,11 @@
   --muted-foreground: 215 20% 65%;
   --accent: 217 33% 17%;
   --accent-foreground: 210 40% 98%;
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 210 40% 98%;
+  --destructive: 0 75% 65%;
+  --destructive-foreground: 222 47% 11%;
+  --success: 152 55% 55%;
+  --warning: 38 88% 60%;
+  --info: 212 85% 65%;
   --border: 217 33% 25%;
   --input: 217 33% 25%;
   --ring: 263 75% 68%;

@@ -103,31 +103,31 @@ export function TraceDetail() {
           icon={Layers}
           label={t('traces.requests')}
           value={String(summary.request_count)}
-          accent="text-cyan-500"
+          accent="text-info"
         />
         <SummaryCard
           icon={Clock}
           label={t('traces.duration')}
           value={formatLatency(summary.total_latency_ms)}
-          accent="text-cyan-500"
+          accent="text-info"
         />
         <SummaryCard
           icon={AlertCircle}
           label={t('traces.errors')}
           value={String(summary.error_count)}
-          accent={summary.error_count > 0 ? 'text-red-500' : 'text-muted-foreground'}
+          accent={summary.error_count > 0 ? 'text-danger' : 'text-muted-foreground'}
         />
         <SummaryCard
           icon={Activity}
           label={t('traces.upstreams')}
           value={String(summary.upstreams?.length ?? 0)}
-          accent="text-cyan-500"
+          accent="text-info"
         />
         <SummaryCard
           icon={Activity}
           label={t('traces.tokens')}
           value={typeof summary.usage_total_tokens === 'number' ? summary.usage_total_tokens.toLocaleString() : '-'}
-          accent="text-emerald-500"
+          accent="text-success"
         />
       </div>
 
@@ -135,7 +135,7 @@ export function TraceDetail() {
       {summary.upstreams?.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {summary.upstreams.map(u => (
-            <span key={u} className="inline-flex items-center h-[22px] px-2 rounded text-[10px] font-black uppercase tracking-tight bg-primary/10 text-primary">
+            <span key={u} className="inline-flex items-center h-[22px] px-2 rounded text-xs font-semibold tracking-tight bg-primary/10 text-primary">
               {u}
             </span>
           ))}
@@ -157,10 +157,10 @@ export function TraceDetail() {
                   className={cn(
                     'h-3 w-3 rounded-full border-2 mt-4 z-10 transition-colors',
                     req.error
-                      ? 'border-red-500 bg-red-500/20'
+                      ? 'border-danger bg-danger/20'
                       : req.status_code >= 400
-                        ? 'border-amber-500 bg-amber-500/20'
-                        : 'border-cyan-500 bg-cyan-500/20',
+                        ? 'border-warning bg-warning/20'
+                        : 'border-info bg-info/20',
                     'group-hover:scale-125',
                   )}
                 />
@@ -177,44 +177,44 @@ export function TraceDetail() {
                   'flex-1 rounded-xl p-3 mb-1 text-left transition-all',
                   'bg-card/20 hover:bg-card/50 border border-border/40 hover:border-border',
                   'active:scale-[0.995]',
-                  selectedLog?.id === req.id && 'ring-1 ring-cyan-500/40 bg-card/40',
+                  selectedLog?.id === req.id && 'ring-1 ring-info/40 bg-card/40',
                 )}
               >
                 <div className="flex items-center gap-2 flex-wrap">
                   {/* Sequence badge */}
-                  <span className="text-[10px] font-mono font-bold text-cyan-500 bg-cyan-500/10 px-1.5 py-0.5 rounded">
+                  <span className="text-xs font-mono font-medium text-info bg-info/10 px-1.5 py-0.5 rounded">
                     #{req.trace_seq ?? idx + 1}
                   </span>
 
                   {/* Method */}
                   <span className={cn(
-                    'px-1.5 py-0.5 rounded text-[10px] font-bold uppercase',
+                    'px-1.5 py-0.5 rounded text-xs font-medium',
                     getMethodColor(req.method),
                   )}>
                     {req.method}
                   </span>
 
                   {/* Status */}
-                  <span className={cn('font-mono text-xs font-bold', getStatusColor(req.status_code))}>
+                  <span className={cn('font-mono text-xs font-medium', getStatusColor(req.status_code))}>
                     {req.status_code || '---'}
                   </span>
 
                   {/* Upstream */}
-                  <span className="text-[10px] font-bold text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
+                  <span className="text-xs font-medium text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
                     {req.upstream}{req.upstream_target ? ` / ${req.upstream_target}` : ''}
                   </span>
 
                   {req.streaming && (
-                    <span className="text-[9px] font-bold text-primary bg-primary/10 px-1 py-0.5 rounded animate-pulse">
+                    <span className="text-xs font-medium text-primary bg-primary/10 px-1 py-0.5 rounded animate-pulse">
                       SSE
                     </span>
                   )}
 
                   {req.error && (
-                    <AlertCircle className="h-3 w-3 text-red-500" />
+                    <AlertCircle className="h-3 w-3 text-danger" />
                   )}
 
-                  <span className="ml-auto text-[10px] font-mono text-muted-foreground">
+                  <span className="ml-auto text-xs font-mono text-muted-foreground">
                     {formatLatency(req.latency_ms)}
                   </span>
                 </div>
@@ -233,15 +233,15 @@ export function TraceDetail() {
                       <div
                         className={cn(
                           'h-full rounded-full transition-all duration-500',
-                          req.error ? 'bg-red-500/50' :
-                          req.status_code >= 400 ? 'bg-amber-500/50' :
-                          'bg-cyan-500/50',
+                          req.error ? 'bg-danger/50' :
+                          req.status_code >= 400 ? 'bg-warning/50' :
+                          'bg-info/50',
                         )}
                         style={{ width: `${Math.max(3, (req.latency_ms / maxLatency) * (100 - offsetPct))}%` }}
                       />
                     </div>
                   </div>
-                  <span className="text-[9px] text-muted-foreground/60 shrink-0">
+                  <span className="text-xs text-muted-foreground/60 shrink-0">
                     {new Date(req.created_at).toLocaleTimeString()}
                   </span>
                 </div>
@@ -253,7 +253,7 @@ export function TraceDetail() {
 
       {/* Time range footer */}
       {requests.length > 0 && (
-        <div className="flex items-center justify-between text-[10px] text-muted-foreground/60 px-1">
+        <div className="flex items-center justify-between text-xs text-muted-foreground/60 px-1">
           <span>{formatDate(new Date(summary.first_time).toISOString(), i18n.language)}</span>
           <span className="font-mono">{formatLatency(summary.total_latency_ms)} {t('traces.total_span')}</span>
           <span>{formatDate(new Date(summary.last_time).toISOString(), i18n.language)}</span>
@@ -295,11 +295,11 @@ function SummaryCard({
 }) {
   return (
     <div className="rounded-xl border border-border/50 bg-card/20 p-3 space-y-1">
-      <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+      <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
         <Icon className={cn('h-3 w-3', accent)} />
         {label}
       </div>
-      <div className={cn('text-lg font-mono font-bold', accent)}>{value}</div>
+      <div className={cn('text-lg font-mono font-semibold', accent)}>{value}</div>
     </div>
   )
 }

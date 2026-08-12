@@ -1,9 +1,7 @@
 import { cn } from '@/lib/utils'
-import { Activity, Box, Zap, Clock, AlertCircle, CheckCircle } from 'lucide-react'
 import type { LogStats } from '@/lib/api'
 import { formatLatency } from '@/lib/utils'
 import { useTranslation } from 'react-i18next'
-import { Card, CardContent } from '@/components/ui/card'
 
 interface StatsCardsProps {
     stats: LogStats | null
@@ -12,96 +10,31 @@ interface StatsCardsProps {
 
 export function StatsCards({ stats, loading }: StatsCardsProps) {
     const { t } = useTranslation()
+
+    // 只有错误数带语义色,其余保持中性 —— 一屏一个焦点
     const cards = [
-        {
-            title: t('stats.total_requests'),
-            value: stats?.total_requests ?? 0,
-            icon: Activity,
-            // 主指标 - 品牌色作为唯一焦点
-            valueColor: 'text-primary',
-            iconColor: 'text-blue-500 dark:text-blue-400',
-            bgColor: 'bg-blue-500/10',
-        },
-        {
-            title: t('common.success', '成功'),
-            value: stats?.success_count ?? 0,
-            icon: CheckCircle,
-            // 语义色 - 成功
-            valueColor: 'text-green-600 dark:text-green-400',
-            iconColor: 'text-green-500 dark:text-green-400',
-            bgColor: 'bg-green-500/10',
-        },
-        {
-            title: t('common.error', '错误'),
-            value: stats?.error_count ?? 0,
-            icon: AlertCircle,
-            // 语义色 - 错误
-            valueColor: 'text-red-600 dark:text-red-400',
-            iconColor: 'text-red-500 dark:text-red-400',
-            bgColor: 'bg-red-500/10',
-        },
-        {
-            title: t('log_detail.streaming', '流式'),
-            value: stats?.streaming_count ?? 0,
-            icon: Zap,
-            valueColor: 'text-foreground',
-            iconColor: 'text-purple-500 dark:text-purple-400',
-            bgColor: 'bg-purple-500/10',
-        },
-        {
-            title: t('stats.avg_latency'),
-            value: formatLatency(stats?.avg_latency_ms ?? 0),
-            icon: Clock,
-            valueColor: 'text-foreground',
-            iconColor: 'text-yellow-600 dark:text-yellow-400',
-            bgColor: 'bg-yellow-500/10',
-            isText: true,
-        },
-        {
-            title: t('log_table.upstream', '上游数量'),
-            value: Object.keys(stats?.by_upstream ?? {}).length,
-            icon: Box,
-            valueColor: 'text-foreground',
-            iconColor: 'text-indigo-500 dark:text-indigo-400',
-            bgColor: 'bg-indigo-500/10',
-        },
+        { title: t('stats.total_requests'), value: (stats?.total_requests ?? 0).toLocaleString() },
+        { title: t('common.success', '成功'), value: (stats?.success_count ?? 0).toLocaleString() },
+        { title: t('common.error', '错误'), value: (stats?.error_count ?? 0).toLocaleString(), tone: 'danger' as const },
+        { title: t('log_detail.streaming', '流式'), value: (stats?.streaming_count ?? 0).toLocaleString() },
+        { title: t('stats.avg_latency'), value: formatLatency(stats?.avg_latency_ms ?? 0) },
+        { title: t('log_table.upstream', '上游数量'), value: Object.keys(stats?.by_upstream ?? {}).length.toLocaleString() },
     ]
 
     return (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border md:grid-cols-3 lg:grid-cols-6">
             {cards.map((card) => (
-                <Card
-                    key={card.title}
-                    className={cn(
-                        'relative overflow-hidden',
-                        'border border-border bg-card shadow-card hover:shadow-card-hover transition-shadow',
-                        loading && 'animate-pulse'
-                    )}
-                >
-                    <CardContent className="p-4 sm:p-5">
-                        {/* 背景装饰光晕 */}
-                        <div className={cn(
-                            'absolute -right-4 -top-4 h-24 w-24 rounded-full blur-[32px] opacity-20 dark:opacity-10',
-                            card.bgColor
-                        )} />
-
-                        <div className="relative z-10 flex items-start justify-between">
-                            <div className="space-y-1">
-                                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{card.title}</span>
-                                <div className={cn(
-                                    'text-2xl sm:text-3xl font-black tracking-tight tabular-nums',
-                                    card.valueColor
-                                )}>
-                                    {card.isText ? card.value : card.value.toLocaleString()}
-                                </div>
-                            </div>
-                            
-                            <div className={cn('p-2 rounded-xl bg-background/50 backdrop-blur-sm border border-transparent shadow-sm')}>
-                                <card.icon className={cn('h-4 w-4 sm:h-5 sm:w-5', card.iconColor)} />
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
+                <div key={card.title} className={cn('bg-card px-4 py-3', loading && 'animate-pulse')}>
+                    <div className="text-xs text-muted-foreground">{card.title}</div>
+                    <div
+                        className={cn(
+                            'mt-1 font-mono text-xl tabular-nums',
+                            card.tone === 'danger' && (stats?.error_count ?? 0) > 0 ? 'text-danger' : 'text-foreground',
+                        )}
+                    >
+                        {card.value}
+                    </div>
+                </div>
             ))}
         </div>
     )

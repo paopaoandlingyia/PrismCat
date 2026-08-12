@@ -111,21 +111,21 @@ export function LogDiff() {
                 <div className="flex flex-col gap-4 rounded-2xl border border-border/60 bg-card px-5 py-4 shadow-sm lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0 space-y-3">
                         <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant="outline" className={cn('rounded-[3px] px-2 py-0.5 text-[10px] font-bold uppercase', getMethodColor(log.method))}>
+                            <Badge variant="outline" className={cn('rounded-[3px] px-2 py-0.5 text-xs font-medium', getMethodColor(log.method))}>
                                 {log.method}
                             </Badge>
-                            <span className={cn('font-mono text-lg font-black tracking-tight', getStatusColor(log.status_code))}>
+                            <span className={cn('font-mono text-lg font-semibold tracking-tight', getStatusColor(log.status_code))}>
                                 {log.status_code || '---'}
                             </span>
                             {log.request_override_applied && (
-                                <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                                <Badge variant="outline" className="border-warning/30 bg-warning/10 text-xs font-medium text-warning">
                                     {t('log_detail.modified', 'MODIFIED')}
                                 </Badge>
                             )}
                         </div>
                         <div className="min-w-0 space-y-1">
                             <div className="break-all font-mono text-sm font-semibold text-foreground">{targetPath}</div>
-                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-medium text-muted-foreground">
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs font-medium text-muted-foreground">
                                 <span>{log.upstream}{log.upstream_target ? ` / ${log.upstream_target}` : ''}</span>
                                 <span>{formatDate(log.created_at, i18n.language)}</span>
                                 <span>{formatSize(log.request_body_size)}</span>
@@ -134,7 +134,7 @@ export function LogDiff() {
                         {log.request_override_rules?.length ? (
                             <div className="flex flex-wrap gap-2">
                                 {log.request_override_rules.map((rule) => (
-                                    <Badge key={rule} variant="outline" className="border-amber-500/30 bg-background/60 text-[11px] font-semibold">
+                                    <Badge key={rule} variant="outline" className="border-warning/30 bg-background/60 text-xs font-semibold">
                                         {rule}
                                     </Badge>
                                 ))}
@@ -160,7 +160,7 @@ export function LogDiff() {
 
                 {hasDiff ? (
                     <div className="rounded-2xl border border-border/60 bg-card p-4 shadow-sm">
-                        <div className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                        <div className="mb-4 flex items-center gap-2 text-xs font-medium text-muted-foreground">
                             <FileCode className="h-4 w-4 text-primary" />
                             {t('log_diff.request_diff', 'Request Diff')}
                         </div>
@@ -198,7 +198,7 @@ function EmptyState({
     return (
         <div className="flex min-h-[46vh] flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border/70 bg-card/70 px-6 py-16 text-center">
             <div className="rounded-xl bg-muted p-3 text-muted-foreground">{icon}</div>
-            <div className="text-sm font-bold text-foreground">{title}</div>
+            <div className="text-sm font-medium text-foreground">{title}</div>
             <div className="max-w-md text-xs leading-6 text-muted-foreground">{message}</div>
         </div>
     )

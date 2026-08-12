@@ -53,7 +53,7 @@ export function HighlightText({
     ranges.forEach((range, index) => {
         if (range.start > lastIndex) parts.push(text.slice(lastIndex, range.start));
         parts.push(
-            <mark key={index} className="bg-yellow-200 dark:bg-yellow-500/30 text-inherit rounded-[2px]" data-search-match="">
+            <mark key={index} className="bg-warning/30 text-inherit rounded-[2px]" data-search-match="">
                 {text.slice(range.start, range.end)}
             </mark>
         );
@@ -95,7 +95,7 @@ export function JsonViewer({ data, initialExpanded = true, expandMode = 'default
     });
 
     return (
-        <div className="font-mono text-[13px] leading-relaxed select-text">
+        <div className="font-mono text-sm leading-relaxed select-text">
             <CollapsibleNode data={rootData} label="" isRoot initialExpanded={rootInitialExpanded} depth={0} expandMode={expandMode} searchTerm={searchTerm} searchPlan={effectiveSearchPlan} nodePath="" />
         </div>
     );
@@ -129,10 +129,10 @@ export function SmartText({
         return <LargeTextPreview text={text} searchTerm={searchTerm} maxMatches={getSearchMatchLimit(searchPlan, valueSearchSlot(nodePath))} />;
     }
 
-    if (!segments) return <pre className="whitespace-pre-wrap break-all text-[11px] font-mono">{searchTerm ? <HighlightText text={text} searchTerm={searchTerm} maxMatches={getSearchMatchLimit(searchPlan, valueSearchSlot(nodePath))} /> : text}</pre>;
+    if (!segments) return <pre className="whitespace-pre-wrap break-all text-xs font-mono">{searchTerm ? <HighlightText text={text} searchTerm={searchTerm} maxMatches={getSearchMatchLimit(searchPlan, valueSearchSlot(nodePath))} /> : text}</pre>;
     let searchableFragmentIndex = 0;
     return (
-        <div className="whitespace-pre-wrap break-all leading-relaxed text-[11px] font-mono">
+        <div className="whitespace-pre-wrap break-all leading-relaxed text-xs font-mono">
             {segments.map((seg, i) => {
                 if (seg.type === 'b64') {
                     return <Base64Placeholder key={i} value={seg.content} detection={seg.detection} dataUriPrefix={seg.prefix} />;
@@ -163,7 +163,7 @@ function LargeTextPreview({ text, searchTerm, maxMatches }: { text: string; sear
 
     return (
         <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">
+            <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-muted-foreground/60">
                 <span>{t('json_viewer.large_text', 'Large Text')}</span>
                 <span>{formatSize(text.length)}</span>
                 <button
@@ -181,7 +181,7 @@ function LargeTextPreview({ text, searchTerm, maxMatches }: { text: string; sear
                     {expanded ? t('json_viewer.collapse') : t('json_viewer.expand')}
                 </button>
             </div>
-            <pre className="whitespace-pre-wrap break-all rounded-xl border border-border/60 bg-background p-3 text-[11px] font-mono shadow-xs">
+            <pre className="whitespace-pre-wrap break-all rounded-xl border border-border/60 bg-background p-3 text-xs font-mono shadow-xs">
                 {searchTerm && searchRanges.length && !expanded ? (
                     <LargeTextSearchSnippets text={text} ranges={searchRanges} />
                 ) : expanded || text.length <= preview.length ? (
@@ -203,7 +203,7 @@ function LargeTextSearchSnippets({ text, ranges }: { text: string; ranges: Array
                     <span key={`${range.start}:${range.end}`} className="block border-b border-border/40 py-1 last:border-b-0">
                         {start > 0 ? '…' : ''}
                         {text.slice(start, range.start)}
-                        <mark className="bg-yellow-200 dark:bg-yellow-500/30 text-inherit rounded-[2px]" data-search-match="">
+                        <mark className="bg-warning/30 text-inherit rounded-[2px]" data-search-match="">
                             {text.slice(range.start, range.end)}
                         </mark>
                         {text.slice(range.end, end)}
@@ -391,7 +391,7 @@ function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, ini
     if (isEmpty) {
         return (
             <div>
-                {showLabel && <span className="text-violet-600 dark:text-violet-400 font-semibold mr-1">"<HighlightText text={label} searchTerm={searchTerm} maxMatches={getSearchMatchLimit(searchPlan, keySearchSlot(nodePath))} />": </span>}
+                {showLabel && <span className="text-info font-semibold mr-1">"<HighlightText text={label} searchTerm={searchTerm} maxMatches={getSearchMatchLimit(searchPlan, keySearchSlot(nodePath))} />": </span>}
                 <span className="text-muted-foreground/60">{open}{close}</span>{suffix}
             </div>
         );
@@ -404,11 +404,11 @@ function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, ini
                 className="cursor-pointer hover:bg-muted/30 rounded-sm transition-colors flex items-center w-fit"
                 onClick={() => setExpanded(!expanded)}
             >
-                {showLabel && <span className="text-violet-600 dark:text-violet-400 font-semibold mr-1">"<HighlightText text={label} searchTerm={searchTerm} maxMatches={getSearchMatchLimit(searchPlan, keySearchSlot(nodePath))} />": </span>}
+                {showLabel && <span className="text-info font-semibold mr-1">"<HighlightText text={label} searchTerm={searchTerm} maxMatches={getSearchMatchLimit(searchPlan, keySearchSlot(nodePath))} />": </span>}
                 <span className="text-muted-foreground/60">{open}</span>
                 {!expanded && (
                     <>
-                        <span className="mx-1 px-1 py-0.5 rounded bg-muted/50 text-[9px] text-muted-foreground font-bold">
+                        <span className="mx-1 px-1 py-0.5 rounded bg-muted/50 text-xs text-muted-foreground font-medium">
                             {isArray ? t('json_viewer.items', { count: data.length }) : t('json_viewer.keys', { count: entries.length })}
                         </span>
                         <span className="text-muted-foreground/60">{close}</span>{suffix}
@@ -443,7 +443,7 @@ function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, ini
                         }
                         return (
                             <div key={key} className="flex items-start">
-                                {!isArray && <span className="text-violet-600 dark:text-violet-400 font-semibold mr-1 shrink-0">"<HighlightText text={key} searchTerm={searchTerm} maxMatches={getSearchMatchLimit(searchPlan, keySearchSlot(childPath))} />": </span>}
+                                {!isArray && <span className="text-primary font-semibold mr-1 shrink-0">"<HighlightText text={key} searchTerm={searchTerm} maxMatches={getSearchMatchLimit(searchPlan, keySearchSlot(childPath))} />": </span>}
                                 <span className="flex-1 min-w-0 break-all">
                                     <ValueNode value={value} searchTerm={searchTerm} searchPlan={searchPlan} nodePath={childPath} />{comma}
                                 </span>
@@ -467,9 +467,9 @@ function CollapsibleNode({ data, label, isRoot = false, isArrayItem = false, ini
 
 function ValueNode({ value, searchTerm, searchPlan, nodePath }: { value: unknown; searchTerm?: string; searchPlan?: JsonSearchPlan | null; nodePath: string }) {
     const valueMatchLimit = getSearchMatchLimit(searchPlan, valueSearchSlot(nodePath));
-    if (value === null) return <span className="text-rose-600 dark:text-rose-400 font-semibold"><HighlightText text="null" searchTerm={searchTerm} maxMatches={valueMatchLimit} /></span>;
-    if (typeof value === 'boolean') return <span className="text-indigo-600 dark:text-indigo-400 font-semibold"><HighlightText text={value.toString()} searchTerm={searchTerm} maxMatches={valueMatchLimit} /></span>;
-    if (typeof value === 'number') return <span className="text-orange-600 dark:text-orange-400"><HighlightText text={String(value)} searchTerm={searchTerm} maxMatches={valueMatchLimit} /></span>;
+    if (value === null) return <span className="text-danger font-semibold"><HighlightText text="null" searchTerm={searchTerm} maxMatches={valueMatchLimit} /></span>;
+    if (typeof value === 'boolean') return <span className="text-primary font-semibold"><HighlightText text={value.toString()} searchTerm={searchTerm} maxMatches={valueMatchLimit} /></span>;
+    if (typeof value === 'number') return <span className="text-warning"><HighlightText text={String(value)} searchTerm={searchTerm} maxMatches={valueMatchLimit} /></span>;
 
     if (typeof value === 'string') {
         // Case 1: data URI → show prefix visibly, replace only base64 part
@@ -478,7 +478,7 @@ function ValueNode({ value, searchTerm, searchPlan, nodePath }: { value: unknown
             const det = detectBase64(dataUri.base64Data);
             const detection = det.isBase64 ? det : detectionFromMime(dataUri.mimeType);
             return (
-                <span className="text-emerald-600 dark:text-emerald-400 break-all leading-relaxed">
+                <span className="text-success break-all leading-relaxed">
                     "<HighlightText text={dataUri.prefix} searchTerm={searchTerm} maxMatches={valueMatchLimit} />
                     <Base64Placeholder value={dataUri.base64Data} detection={detection} dataUriPrefix={dataUri.prefix} />
                     "
@@ -490,14 +490,14 @@ function ValueNode({ value, searchTerm, searchPlan, nodePath }: { value: unknown
         const detection = detectBase64(value);
         if (detection.isBase64) {
             return (
-                <span className="text-emerald-600 dark:text-emerald-400">
+                <span className="text-success">
                     "<Base64Placeholder value={value} detection={detection} />"
                 </span>
             );
         }
 
         // Case 3: normal string
-        return <span className="text-emerald-600 dark:text-emerald-400 break-all leading-relaxed">"<HighlightText text={value} searchTerm={searchTerm} maxMatches={valueMatchLimit} />"</span>;
+        return <span className="text-success break-all leading-relaxed">"<HighlightText text={value} searchTerm={searchTerm} maxMatches={valueMatchLimit} />"</span>;
     }
 
     return <span>{String(value)}</span>;
@@ -533,8 +533,8 @@ function Base64Placeholder({ value, detection, dataUriPrefix }: {
     if (showFull) {
         return (
             <span className="relative group/b64">
-                <span className="text-emerald-600 dark:text-emerald-400 break-all rounded-sm bg-emerald-500/10 p-0.5">{value}</span>
-                <Button variant="ghost" size="sm" onClick={() => setShowFull(false)} className="h-6 px-2 text-[10px] font-bold ml-1">
+                <span className="text-success break-all rounded-sm bg-success/10 p-0.5">{value}</span>
+                <Button variant="ghost" size="sm" onClick={() => setShowFull(false)} className="h-6 px-2 text-xs font-medium ml-1">
                     {t('json_viewer.collapse')}
                 </Button>
             </span>
@@ -542,25 +542,25 @@ function Base64Placeholder({ value, detection, dataUriPrefix }: {
     }
 
     return (
-        <span className="my-0.5 inline-flex items-center gap-1.5 rounded-md border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 transition-colors hover:border-indigo-500/40">
+        <span className="my-0.5 inline-flex items-center gap-1.5 rounded-md border border-primary/20 bg-primary/10 px-2 py-0.5 transition-colors hover:border-primary/40">
             {detection.isImage
-                ? <ImageIcon className="h-3 w-3 text-indigo-600 dark:text-indigo-400" />
-                : <FileCode className="h-3 w-3 text-indigo-600 dark:text-indigo-400" />}
-            <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400">
+                ? <ImageIcon className="h-3 w-3 text-primary" />
+                : <FileCode className="h-3 w-3 text-primary" />}
+            <span className="text-xs font-medium text-primary">
                 {detection.label} ({formatSize(value.length)})
             </span>
 
-            <span className="flex items-center gap-1.5 ml-1 border-l border-indigo-200 dark:border-indigo-500/25 pl-2">
-                <button onClick={copyToClipboard} className="text-[10px] font-bold text-muted-foreground hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+            <span className="flex items-center gap-1.5 ml-1 border-l border-primary/25 pl-2">
+                <button onClick={copyToClipboard} className="text-xs font-medium text-muted-foreground hover:text-primary dark:hover:text-primary transition-colors">
                     {t('json_viewer.copy')}
                 </button>
                 {imgSrc && (
-                    <button onClick={() => setPreviewOpen(true)} className="text-[10px] font-bold text-muted-foreground hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex items-center gap-0.5">
+                    <button onClick={() => setPreviewOpen(true)} className="text-xs font-medium text-muted-foreground hover:text-primary dark:hover:text-primary transition-colors flex items-center gap-0.5">
                         <Eye className="h-2.5 w-2.5" />
                         {t('json_viewer.preview')}
                     </button>
                 )}
-                <button onClick={() => setShowFull(true)} className="text-[10px] font-bold text-muted-foreground hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+                <button onClick={() => setShowFull(true)} className="text-xs font-medium text-muted-foreground hover:text-primary dark:hover:text-primary transition-colors">
                     {t('json_viewer.expand')}
                 </button>
             </span>
@@ -569,7 +569,7 @@ function Base64Placeholder({ value, detection, dataUriPrefix }: {
                 <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
                     <DialogContent className="max-h-[90vh] max-w-3xl overflow-hidden rounded-2xl border border-border/60 bg-card p-1 shadow-2xl">
                         <DialogHeader className="border-b border-border/60 bg-muted/30 p-4">
-                            <DialogTitle className="text-xs font-bold flex items-center gap-2">
+                            <DialogTitle className="text-xs font-medium flex items-center gap-2">
                                 <ImageIcon className="h-3.5 w-3.5" />
                                 {t('json_viewer.image_preview')} · {detection.label} ({formatSize(value.length)})
                             </DialogTitle>
@@ -578,11 +578,11 @@ function Base64Placeholder({ value, detection, dataUriPrefix }: {
                             <img src={imgSrc} alt="Preview" className="max-h-full max-w-full rounded-xl border border-border/60 bg-background shadow-2xl" />
                         </div>
                         <div className="flex justify-end gap-2 border-t border-border/60 bg-muted/30 p-4">
-                            <Button variant="outline" size="sm" onClick={copyToClipboard} className="text-[10px] font-bold h-8">
+                            <Button variant="outline" size="sm" onClick={copyToClipboard} className="text-xs font-medium h-8">
                                 <Copy className="h-3 w-3 mr-2" />
                                 {t('json_viewer.copy')}
                             </Button>
-                            <Button variant="secondary" size="sm" onClick={() => setPreviewOpen(false)} className="text-[10px] font-bold h-8 px-4">
+                            <Button variant="secondary" size="sm" onClick={() => setPreviewOpen(false)} className="text-xs font-medium h-8 px-4">
                                 {t('common.cancel')}
                             </Button>
                         </div>

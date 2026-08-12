@@ -430,7 +430,7 @@ function InfoTooltip({ content }: { content: string }) {
                     <CircleHelp className="h-3.5 w-3.5" />
                 </button>
             </TooltipTrigger>
-            <TooltipContent sideOffset={6} className="max-w-xs px-3 py-2 text-[12px] leading-6">
+            <TooltipContent sideOffset={6} className="max-w-xs px-3 py-2 text-xs leading-6">
                 {content}
             </TooltipContent>
         </Tooltip>
@@ -449,7 +449,7 @@ function FieldBlock({ label, hint, htmlFor, unit, children }: FieldBlockProps) {
                 </Label>
                 {hint && <InfoTooltip content={hint} />}
                 {unit && (
-                    <span className="rounded-full bg-muted/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                    <span className="rounded-full bg-muted/60 px-2 py-0.5 text-xs font-medium text-muted-foreground">
                         {unit}
                     </span>
                 )}
@@ -572,7 +572,7 @@ function AdvancedSettingsGroup({
             card && "rounded-xl border border-border/60 bg-background/70 p-4",
         )}>
             <div>
-                <div className="text-xs font-semibold uppercase tracking-wider text-foreground/65">{title}</div>
+                <div className="text-xs font-semibold text-foreground/65">{title}</div>
                 {description && <p className="mt-1.5 text-xs leading-5 text-muted-foreground">{description}</p>}
             </div>
             {children}
@@ -670,7 +670,7 @@ function MetricCard({
     return (
         <div className="rounded-xl border border-border/40 bg-background/45 px-4 py-4 shadow-sm">
             <div className="mb-4 flex items-center justify-between gap-3">
-                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <div className="text-xs font-semibold text-muted-foreground">
                     {label}
                 </div>
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -1677,7 +1677,7 @@ export function Settings() {
                     upstreamAdvancedOpen ? "max-w-2xl lg:max-w-5xl" : "max-w-2xl",
                 )}>
                     <DialogHeader className="border-b border-border/60 px-6 py-5">
-                        <DialogTitle className="text-base font-bold">
+                        <DialogTitle className="text-base font-semibold">
                             {editingUpstream ? t('upstream_manager.edit_title', { name: editingUpstream.name }) : t('common.edit')}
                         </DialogTitle>
                         <DialogDescription className="sr-only">
@@ -1882,7 +1882,7 @@ export function Settings() {
                                             />
                                             {editingUpstream.overrideEnabled && (
                                                 <div className="space-y-2">
-                                                    <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                                    <div className="text-xs font-semibold text-muted-foreground">
                                                         {t('upstream_manager.bound_rules')}
                                                     </div>
                                                     {parsedOverrideRules.length === 0 ? (
@@ -1911,7 +1911,7 @@ export function Settings() {
                                                                         />
                                                                         <span className="min-w-0 truncate font-mono text-xs">{ruleName}</span>
                                                                         {!ruleEnabled && (
-                                                                            <Badge variant="outline" className="ml-auto h-5 shrink-0 rounded-full border-border/40 bg-muted/50 px-1.5 text-[10px] text-muted-foreground">
+                                                                            <Badge variant="outline" className="ml-auto h-5 shrink-0 rounded-full border-border/40 bg-muted/50 px-1.5 text-xs text-muted-foreground">
                                                                                 {t('settings.rule_disabled')}
                                                                             </Badge>
                                                                         )}
@@ -1933,7 +1933,7 @@ export function Settings() {
                                             />
                                             {editingUpstream.usageEnabled && (
                                                 <div className="space-y-2">
-                                                    <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                                    <div className="text-xs font-semibold text-muted-foreground">
                                                         {t('upstream_manager.bound_usage_rules')}
                                                     </div>
                                                     {parsedUsageRules.length === 0 ? (
@@ -1962,7 +1962,7 @@ export function Settings() {
                                                                         />
                                                                         <span className="min-w-0 truncate font-mono text-xs">{ruleName}</span>
                                                                         {!ruleEnabled && (
-                                                                            <Badge variant="outline" className="ml-auto h-5 shrink-0 rounded-full border-border/40 bg-muted/50 px-1.5 text-[10px] text-muted-foreground">
+                                                                            <Badge variant="outline" className="ml-auto h-5 shrink-0 rounded-full border-border/40 bg-muted/50 px-1.5 text-xs text-muted-foreground">
                                                                                 {t('settings.rule_disabled')}
                                                                             </Badge>
                                                                         )}
@@ -2269,11 +2269,11 @@ export function Settings() {
                                         ) : (
                                             <div className="space-y-0">
                                                 <div className="hidden grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_180px_110px_96px] gap-5 border-b border-border/40 pb-3 px-2 lg:grid">
-                                                    <span className="text-xs font-semibold uppercase tracking-wider text-foreground/65">{t('upstream_manager.name')}</span>
-                                                    <span className="text-xs font-semibold uppercase tracking-wider text-foreground/65">{t('upstream_manager.target')}</span>
-                                                    <span className="text-xs font-semibold uppercase tracking-wider text-foreground/65">{t('upstream_manager.outbound_proxy')}</span>
-                                                    <span className="text-xs font-semibold uppercase tracking-wider text-foreground/65">{t('upstream_manager.timeout')}</span>
-                                                    <span className="text-xs font-semibold uppercase tracking-wider text-foreground/65">{t('upstream_manager.actions')}</span>
+                                                    <span className="text-xs font-semibold text-foreground/65">{t('upstream_manager.name')}</span>
+                                                    <span className="text-xs font-semibold text-foreground/65">{t('upstream_manager.target')}</span>
+                                                    <span className="text-xs font-semibold text-foreground/65">{t('upstream_manager.outbound_proxy')}</span>
+                                                    <span className="text-xs font-semibold text-foreground/65">{t('upstream_manager.timeout')}</span>
+                                                    <span className="text-xs font-semibold text-foreground/65">{t('upstream_manager.actions')}</span>
                                                 </div>
 
                                                 <div className="divide-y divide-border/20">
@@ -2287,11 +2287,11 @@ export function Settings() {
                                                                     <span className="text-base font-semibold text-foreground">
                                                                         {upstream.name}
                                                                     </span>
-                                                                    <Badge variant="outline" className="rounded-full border-border/40 bg-background/50 px-2 py-0.5 text-[11px] font-medium text-foreground/80">
+                                                                    <Badge variant="outline" className="rounded-full border-border/40 bg-background/50 px-2 py-0.5 text-xs font-medium text-foreground/80">
                                                                         .{domainSuffix}
                                                                     </Badge>
                                                                     {(activeTargetConfig(upstream)?.request_overrides?.enabled || overrideBindings[upstream.name]?.enabled) && (
-                                                                        <Badge variant="outline" className="rounded-full border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                                                                        <Badge variant="outline" className="rounded-full border-warning/30 bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
                                                                             {t('log_detail.request_override')}
                                                                             {getBindingRuleNames(activeTargetConfig(upstream)?.request_overrides || overrideBindings[upstream.name]).length
                                                                                 ? ` · ${getBindingRuleNames(activeTargetConfig(upstream)?.request_overrides || overrideBindings[upstream.name]).length}`
@@ -2299,7 +2299,7 @@ export function Settings() {
                                                                         </Badge>
                                                                     )}
                                                                     {upstream.logging_enabled === false && (
-                                                                        <Badge variant="outline" className="rounded-full border-slate-500/30 bg-slate-500/10 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">
+                                                                        <Badge variant="outline" className="rounded-full border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
                                                                             {t('upstream_manager.logging_disabled_badge')}
                                                                         </Badge>
                                                                     )}
@@ -2309,7 +2309,7 @@ export function Settings() {
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => handleCopy(getProxyUrl(upstream.name))}
-                                                                        className="flex items-start gap-2 text-left text-[13px] leading-relaxed text-primary/80 transition-colors hover:text-primary"
+                                                                        className="flex items-start gap-2 text-left text-sm leading-relaxed text-primary/80 transition-colors hover:text-primary"
                                                                     >
                                                                         <Copy className="mt-1 h-3.5 w-3.5 shrink-0" />
                                                                         <span className="break-all font-mono">{getProxyUrl(upstream.name)}</span>
@@ -2319,7 +2319,7 @@ export function Settings() {
                                                                         <button
                                                                             type="button"
                                                                             onClick={() => handleCopy(getPathProxyUrl(upstream.name))}
-                                                                            className="flex items-start gap-2 text-left text-[13px] leading-relaxed text-emerald-600/80 transition-colors hover:text-emerald-600 dark:text-emerald-400/80 dark:hover:text-emerald-400"
+                                                                            className="flex items-start gap-2 text-left text-sm leading-relaxed text-success/80 transition-colors hover:text-success/80 dark:hover:text-success"
                                                                         >
                                                                             <Copy className="mt-1 h-3.5 w-3.5 shrink-0" />
                                                                             <span className="break-all font-mono">{getPathProxyUrl(upstream.name)}</span>
@@ -2329,7 +2329,7 @@ export function Settings() {
                                                             </div>
 
                                                             <div className="min-w-0">
-                                                                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-foreground/60 lg:hidden">
+                                                                <p className="mb-2 text-xs font-semibold text-foreground/60 lg:hidden">
                                                                     {t('upstream_manager.target')}
                                                                 </p>
                                                                 {upstream.targets && upstream.active_target && Object.keys(upstream.targets).length > 0 && (
@@ -2348,7 +2348,7 @@ export function Settings() {
                                                                         </SelectContent>
                                                                     </Select>
                                                                 )}
-                                                                <div className="text-[13px] leading-relaxed">
+                                                                <div className="text-sm leading-relaxed">
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => handleCopy(upstream.target)}
@@ -2361,10 +2361,10 @@ export function Settings() {
                                                             </div>
 
                                                             <div className="min-w-0">
-                                                                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-foreground/50 lg:hidden">
+                                                                <p className="mb-2 text-xs font-semibold text-foreground/50 lg:hidden">
                                                                     {t('upstream_manager.outbound_proxy')}
                                                                 </p>
-                                                                <div className="text-[13px] font-medium text-foreground/80">
+                                                                <div className="text-sm font-medium text-foreground/80">
                                                                     {outboundProxyMode(upstream.outbound_proxy) === 'custom' ? (
                                                                         <button
                                                                             type="button"
@@ -2381,10 +2381,10 @@ export function Settings() {
                                                             </div>
 
                                                             <div>
-                                                                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-foreground/50 lg:hidden">
+                                                                <p className="mb-2 text-xs font-semibold text-foreground/50 lg:hidden">
                                                                     {t('upstream_manager.timeout')}
                                                                 </p>
-                                                                <div className="text-[13px] font-medium text-foreground/80">
+                                                                <div className="text-sm font-medium text-foreground/80">
                                                                     {upstream.timeout}s
                                                                 </div>
                                                             </div>
@@ -2618,7 +2618,7 @@ export function Settings() {
 
                                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                                     <div className="rounded-xl border border-border/40 bg-background/45 px-5 py-4">
-                                        <div className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                        <div className="mb-3 text-xs font-semibold text-muted-foreground">
                                             {t('settings.system_runtime')}
                                         </div>
                                         <dl className="grid grid-cols-[120px_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
@@ -2632,7 +2632,7 @@ export function Settings() {
                                     </div>
                                     <div className="rounded-xl border border-border/40 bg-background/45 px-5 py-4">
                                         <div className="mb-3 flex items-center justify-between gap-3">
-                                            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                            <div className="text-xs font-semibold text-muted-foreground">
                                                 {t('settings.system_snapshot')}
                                             </div>
                                             <Button
@@ -2661,7 +2661,7 @@ export function Settings() {
                                 <div className="rounded-xl border border-border/40 bg-background/45 px-5 py-4">
                                     <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                                         <div>
-                                            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                            <div className="text-xs font-semibold text-muted-foreground">
                                                 {t('settings.storage_usage_title')}
                                             </div>
                                             <div className="mt-2 text-sm text-muted-foreground">
@@ -2691,7 +2691,7 @@ export function Settings() {
 
                                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                                         <div className="rounded-lg border border-border/30 bg-background/40 px-4 py-3">
-                                            <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                            <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
                                                 <Archive className="h-3.5 w-3.5" />
                                                 {t('settings.storage_usage_total')}
                                             </div>
@@ -2705,7 +2705,7 @@ export function Settings() {
                                             </div>
                                         </div>
                                         <div className="rounded-lg border border-border/30 bg-background/40 px-4 py-3">
-                                            <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                            <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
                                                 <Database className="h-3.5 w-3.5" />
                                                 {t('settings.storage_usage_database')}
                                             </div>
@@ -2719,7 +2719,7 @@ export function Settings() {
                                             </div>
                                         </div>
                                         <div className="rounded-lg border border-border/30 bg-background/40 px-4 py-3">
-                                            <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                            <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
                                                 <Archive className="h-3.5 w-3.5" />
                                                 {t('settings.storage_usage_blobs')}
                                             </div>
@@ -2738,7 +2738,7 @@ export function Settings() {
                                 <div className="rounded-xl border border-border/40 bg-background/45 px-5 py-4">
                                     <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                                         <div>
-                                            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                            <div className="text-xs font-semibold text-muted-foreground">
                                                 {t('settings.update_title')}
                                             </div>
                                             <div className="mt-2 text-sm text-muted-foreground">
@@ -2774,8 +2774,8 @@ export function Settings() {
                                                     className={cn(
                                                         "rounded-full px-3 py-1 text-xs font-semibold",
                                                         updateInfo.update_available
-                                                            ? "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400"
-                                                            : "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                                            ? "border-warning/30 bg-warning/10 text-warning"
+                                                            : "border-success/30 bg-success/10 text-success"
                                                     )}
                                                 >
                                                     {updateInfo.update_available ? t('settings.update_available') : t('settings.update_latest')}
@@ -2847,7 +2847,7 @@ export function Settings() {
 
                                     {activeRuleTab === 'request_overrides' && (
                                         <>
-                                    <div className="flex items-start gap-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-800 dark:text-yellow-300">
+                                    <div className="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning">
                                         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                                         <div className="space-y-1">
                                             <p className="font-semibold">{t('settings.request_overrides_warning_title')}</p>
@@ -2925,7 +2925,7 @@ export function Settings() {
                                         <div className="grid gap-4 xl:grid-cols-[minmax(280px,0.32fr)_minmax(0,1fr)]">
                                             <div className="rounded-xl border border-border/40 bg-background/50">
                                                 <div className="flex items-center justify-between gap-2 border-b border-border/40 px-3 py-2">
-                                                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                                    <span className="text-xs font-semibold text-muted-foreground">
                                                         {t('settings.request_override_rule_list')}
                                                     </span>
                                                     <Button
@@ -2940,7 +2940,7 @@ export function Settings() {
                                                     </Button>
                                                 </div>
                                                 {overrideRulesParse.error ? (
-                                                    <div className="px-3 py-8 text-center text-xs text-red-500">
+                                                    <div className="px-3 py-8 text-center text-xs text-danger">
                                                         {overrideRulesParse.error}
                                                     </div>
                                                 ) : overrideRuleObjects.length === 0 ? (
@@ -2954,9 +2954,9 @@ export function Settings() {
                                                             const selected = selectedOverrideRuleIndex === index
                                                             const status = getRuleRuntimeStatus(rule, overrideBindings, requestOverridesEnabled)
                                                             const statusBadgeClass = cn(
-                                                                "h-5 rounded-full px-2 text-[10px] font-semibold",
-                                                                status.kind === 'active' && "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-                                                                status.kind === 'blocked' && "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+                                                                "h-5 rounded-full px-2 text-xs font-semibold",
+                                                                status.kind === 'active' && "border-success/40 bg-success/10 text-success",
+                                                                status.kind === 'blocked' && "border-warning/40 bg-warning/10 text-warning",
                                                                 status.kind === 'unbound' && "border-border/40 bg-muted/50 text-muted-foreground",
                                                             )
                                                             const statusText =
@@ -2995,7 +2995,7 @@ export function Settings() {
                                                                                 {statusText}
                                                                             </Badge>
                                                                             {detail && (
-                                                                                <span className="min-w-0 truncate text-[10px] text-muted-foreground">
+                                                                                <span className="min-w-0 truncate text-xs text-muted-foreground">
                                                                                     {detail}
                                                                                 </span>
                                                                             )}
@@ -3016,7 +3016,7 @@ export function Settings() {
                                                                 ? getOverrideRuleName(overrideRuleObjects[selectedOverrideRuleIndex], `rule-${selectedOverrideRuleIndex + 1}`)
                                                                 : t('settings.request_override_no_rule_selected')}
                                                         </div>
-                                                        <div className="text-[11px] text-muted-foreground">
+                                                        <div className="text-xs text-muted-foreground">
                                                             {t('settings.request_override_single_rule_hint')}
                                                         </div>
                                                     </div>
@@ -3037,7 +3037,7 @@ export function Settings() {
                                                                 variant="ghost"
                                                                 size="icon"
                                                                 onClick={() => handleDeleteOverrideRule(selectedOverrideRuleIndex)}
-                                                                className="h-8 w-8 text-muted-foreground hover:text-red-500"
+                                                                className="h-8 w-8 text-muted-foreground hover:text-danger"
                                                                 aria-label={t('common.delete')}
                                                             >
                                                                 <Trash2 className="h-3.5 w-3.5" />
@@ -3059,7 +3059,7 @@ export function Settings() {
                                                                     className="h-10 rounded-xl border-border/40 bg-background font-mono text-sm"
                                                                 />
                                                                 {selectedOverrideRuleNameError && (
-                                                                    <div className="text-xs text-red-600 dark:text-red-400">
+                                                                    <div className="text-xs text-danger">
                                                                         {selectedOverrideRuleNameError}
                                                                     </div>
                                                                 )}
@@ -3080,10 +3080,10 @@ export function Settings() {
                                                         <div className="grid gap-4 lg:grid-cols-2">
                                                             <div className="space-y-3 rounded-xl border border-border/50 bg-muted/20 p-4">
                                                                 <div>
-                                                                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                                                    <Label className="text-xs font-semibold text-muted-foreground">
                                                                         {t('settings.request_override_match')}
                                                                     </Label>
-                                                                    <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+                                                                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
                                                                         {t('settings.request_override_match_hint')}
                                                                     </p>
                                                                 </div>
@@ -3095,7 +3095,7 @@ export function Settings() {
                                                                     className="min-h-[220px] w-full resize-y rounded-lg border-border/30 bg-background font-mono text-xs leading-relaxed shadow-sm"
                                                                 />
                                                                 {selectedOverrideMatchError && (
-                                                                    <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-400">
+                                                                    <div className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
                                                                         {selectedOverrideMatchError}
                                                                     </div>
                                                                 )}
@@ -3103,10 +3103,10 @@ export function Settings() {
 
                                                             <div className="space-y-3 rounded-xl border border-border/50 bg-muted/20 p-4">
                                                                 <div>
-                                                                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                                                    <Label className="text-xs font-semibold text-muted-foreground">
                                                                         {t('settings.request_override_body_patch')}
                                                                     </Label>
-                                                                    <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+                                                                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
                                                                         {t('settings.request_override_body_patch_hint')}
                                                                     </p>
                                                                 </div>
@@ -3118,7 +3118,7 @@ export function Settings() {
                                                                     className="min-h-[220px] w-full resize-y rounded-lg border-border/30 bg-background font-mono text-xs leading-relaxed shadow-sm"
                                                                 />
                                                                 {selectedOverridePatchError && (
-                                                                    <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-400">
+                                                                    <div className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
                                                                         {selectedOverridePatchError}
                                                                     </div>
                                                                 )}
@@ -3128,10 +3128,10 @@ export function Settings() {
                                                         <div className="space-y-3 rounded-xl border border-border/50 bg-muted/20 p-4">
                                                             <div className="flex items-start justify-between gap-3">
                                                                 <div>
-                                                                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                                                    <Label className="text-xs font-semibold text-muted-foreground">
                                                                         {t('settings.request_override_headers')}
                                                                     </Label>
-                                                                    <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+                                                                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
                                                                         {t('settings.request_override_headers_hint')}
                                                                     </p>
                                                                 </div>
@@ -3182,7 +3182,7 @@ export function Settings() {
                                                                                 variant="ghost"
                                                                                 size="icon"
                                                                                 onClick={() => handleRemoveHeaderOp(hIdx)}
-                                                                                className="h-8 w-8 shrink-0 text-muted-foreground hover:text-red-500"
+                                                                                className="h-8 w-8 shrink-0 text-muted-foreground hover:text-danger"
                                                                             >
                                                                                 <Trash2 className="h-3.5 w-3.5" />
                                                                             </Button>
@@ -3202,7 +3202,7 @@ export function Settings() {
                                                                 <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
                                                             </summary>
                                                             <div className="space-y-2 border-t border-border/40 p-3">
-                                                                <p className="text-[11px] leading-5 text-muted-foreground">
+                                                                <p className="text-xs leading-5 text-muted-foreground">
                                                                     {t('settings.request_override_final_preview_hint')}
                                                                 </p>
                                                                 <Textarea
@@ -3240,7 +3240,7 @@ export function Settings() {
                                                                         className="min-h-[320px] w-full resize-y rounded-lg border-border/30 bg-background font-mono text-xs leading-relaxed shadow-sm"
                                                                     />
                                                                     {selectedOverrideRuleError && (
-                                                                <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-400">
+                                                                <div className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
                                                                     {selectedOverrideRuleError}
                                                                 </div>
                                                             )}
@@ -3318,7 +3318,7 @@ export function Settings() {
                                             <div className="grid gap-4 xl:grid-cols-[minmax(280px,0.32fr)_minmax(0,1fr)]">
                                                 <div className="rounded-xl border border-border/40 bg-background/50">
                                                     <div className="flex items-center justify-between gap-2 border-b border-border/40 px-3 py-2">
-                                                        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                                        <span className="text-xs font-semibold text-muted-foreground">
                                                             {t('settings.usage_extraction_rule_list')}
                                                         </span>
                                                         <Button
@@ -3333,7 +3333,7 @@ export function Settings() {
                                                         </Button>
                                                     </div>
                                                     {usageRulesParse.error ? (
-                                                        <div className="px-3 py-8 text-center text-xs text-red-500">
+                                                        <div className="px-3 py-8 text-center text-xs text-danger">
                                                             {usageRulesParse.error}
                                                         </div>
                                                     ) : usageRuleObjects.length === 0 ? (
@@ -3365,16 +3365,16 @@ export function Settings() {
                                                                                 <Badge
                                                                                     variant="outline"
                                                                                     className={cn(
-                                                                                        "h-5 rounded-full px-1.5 text-[10px]",
+                                                                                        "h-5 rounded-full px-1.5 text-xs",
                                                                                         getOverrideRuleEnabled(rule)
-                                                                                            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                                                                            ? "border-success/30 bg-success/10 text-success"
                                                                                             : "border-border/40 bg-muted/50 text-muted-foreground"
                                                                                     )}
                                                                                 >
                                                                                     {getOverrideRuleEnabled(rule) ? t('settings.rule_enabled') : t('settings.rule_disabled')}
                                                                                 </Badge>
                                                                                 {boundCount > 0 && (
-                                                                                    <Badge variant="outline" className="h-5 rounded-full border-border/40 bg-muted/50 px-1.5 text-[10px] text-muted-foreground">
+                                                                                    <Badge variant="outline" className="h-5 rounded-full border-border/40 bg-muted/50 px-1.5 text-xs text-muted-foreground">
                                                                                         {t('settings.rule_bound_count', { count: boundCount })}
                                                                                     </Badge>
                                                                                 )}
@@ -3395,7 +3395,7 @@ export function Settings() {
                                                                     ? getOverrideRuleName(usageRuleObjects[selectedUsageRuleIndex], `usage-rule-${selectedUsageRuleIndex + 1}`)
                                                                     : t('settings.usage_extraction_no_rule_selected')}
                                                             </div>
-                                                            <div className="text-[11px] text-muted-foreground">
+                                                            <div className="text-xs text-muted-foreground">
                                                                 {t('settings.usage_extraction_single_rule_hint')}
                                                             </div>
                                                         </div>
@@ -3427,7 +3427,7 @@ export function Settings() {
                                                                     variant="ghost"
                                                                     size="icon"
                                                                     onClick={() => handleDeleteUsageRule(selectedUsageRuleIndex)}
-                                                                    className="h-8 w-8 text-muted-foreground hover:text-red-500"
+                                                                    className="h-8 w-8 text-muted-foreground hover:text-danger"
                                                                     aria-label={t('common.delete')}
                                                                 >
                                                                     <Trash2 className="h-3.5 w-3.5" />
@@ -3445,7 +3445,7 @@ export function Settings() {
                                                                 className="min-h-[320px] w-full resize-y rounded-lg border-border/30 bg-muted/20 font-mono text-xs leading-relaxed shadow-sm transition-colors focus-visible:bg-background"
                                                             />
                                                             {selectedUsageRuleError && (
-                                                                <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-400">
+                                                                <div className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
                                                                     {selectedUsageRuleError}
                                                                 </div>
                                                             )}

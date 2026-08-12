@@ -40,7 +40,7 @@ function DateRangePickerFallback() {
     return (
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
             <div className="h-10 rounded-lg border border-border/50 bg-background/50 sm:min-w-[170px]" />
-            <span className="hidden text-muted-foreground/30 text-sm font-bold mx-1 sm:inline">/</span>
+            <span className="hidden text-muted-foreground/30 text-sm font-medium mx-1 sm:inline">/</span>
             <div className="h-10 rounded-lg border border-border/50 bg-background/50 sm:min-w-[170px]" />
         </div>
     )
@@ -152,7 +152,7 @@ export function LogFilters({
                         )}
                     />
                     {isPathChanged && (
-                        <Badge className="absolute right-2 top-2 h-6 px-1.5 text-[9px] font-black uppercase bg-primary/20 text-primary border-none">
+                        <Badge className="absolute right-2 top-2 h-6 px-1.5 text-xs font-semibold bg-primary/20 text-primary border-none">
                             Edited
                         </Badge>
                     )}
@@ -360,11 +360,11 @@ export function LogFilters({
             {/* 分页 */}
             <div className="flex flex-col gap-3 border-t border-border/40 pt-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/60">
+                    <span className="text-xs font-medium text-muted-foreground/60">
                         {t('filters.total_count', { count: total })}
                     </span>
                     {total > 0 && (
-                        <Badge variant="outline" className="text-[9px] border-border bg-background text-muted-foreground/75">
+                        <Badge variant="outline" className="text-xs border-border bg-background text-muted-foreground/75">
                             {t('filters.per_page', { count: pageSize })}
                         </Badge>
                     )}
@@ -391,7 +391,7 @@ export function LogFilters({
                         <ChevronLeft className="h-4 w-4" />
                     </Button>
 
-                    <div className="flex items-center h-8 rounded-md border border-border shadow-sm bg-background px-2 font-mono text-xs font-bold text-foreground/80">
+                    <div className="flex items-center h-8 rounded-md border border-border shadow-sm bg-background px-2 font-mono text-xs font-medium text-foreground/80">
                         <Input
                             value={pageDraft}
                             inputMode="numeric"
@@ -407,7 +407,7 @@ export function LogFilters({
                                     e.currentTarget.blur()
                                 }
                             }}
-                            className="h-6 w-10 border-0 bg-transparent p-0 text-center font-mono text-xs font-bold text-primary shadow-none focus-visible:ring-0"
+                            className="h-6 w-10 border-0 bg-transparent p-0 text-center font-mono text-xs font-medium text-primary shadow-none focus-visible:ring-0"
                         />
                         <span className="mx-2 text-muted-foreground/30">/</span>
                         <span>{totalPages}</span>

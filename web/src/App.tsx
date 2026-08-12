@@ -74,14 +74,8 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
 
   return (
     <div className="relative isolate flex min-h-screen flex-col bg-background">
-      {/* Background Decorative Blur - Global */}
-      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute left-[4%] top-[10%] h-72 w-72 rounded-full bg-primary/[0.10] blur-[110px] dark:bg-primary/[0.15]" />
-        <div className="absolute right-[6%] top-[25%] h-80 w-80 rounded-full bg-sky-400/[0.08] blur-[125px] dark:bg-sky-400/[0.12]" />
-        <div className="absolute left-1/2 bottom-[20%] h-72 w-[42rem] -translate-x-1/2 rounded-full bg-emerald-300/[0.08] blur-[130px] dark:bg-emerald-300/[0.10]" />
-      </div>
       {/* 头部 */}
-      <header className="sticky top-0 z-40 backdrop-blur-md bg-background/80">
+      <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur-md">
         <div className="mx-auto w-full max-w-[1600px] px-4 py-3 sm:px-6 sm:py-4">
           <div className="flex items-start justify-between gap-3 sm:items-center">
             <div className="flex min-w-0 items-center gap-3 sm:gap-6">
@@ -95,13 +89,13 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
                 <div className="relative">
                   <PrismCatLogo className="h-9 w-9" />
                 </div>
-                <h1 className="truncate text-lg font-bold prism-gradient-text tracking-tight sm:text-xl">
+                <h1 className="truncate text-base font-semibold tracking-tight text-foreground">
                   {t('app.title')}
                 </h1>
               </a>
 
               {/* 导航 */}
-              <nav className="hidden md:flex items-center gap-2 ml-10">
+              <nav className="hidden md:flex items-center gap-1 ml-4">
                 {navItems.map((item) => {
                   const isActive = item.to === '/'
                     ? location.pathname === '/'
@@ -112,13 +106,13 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
                       key={item.to}
                       to={item.to}
                       className={cn(
-                        'relative flex items-center justify-center gap-2.5 px-6 py-2.5 rounded-lg text-sm font-bold transition-all duration-200 group min-w-[110px] uppercase tracking-tighter',
+                        'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors',
                         isActive
-                          ? 'text-primary bg-primary/10'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+                          ? 'bg-accent font-medium text-foreground'
+                          : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'
                       )}
                     >
-                      <Icon className={cn("h-4 w-4 transition-colors", isActive ? "text-primary" : "text-muted-foreground group-hover:text-primary")} />
+                      <Icon className="h-4 w-4" />
                       <span>{t(item.labelKey)}</span>
                     </NavLink>
                   )
@@ -131,14 +125,14 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
               <ThemeToggle />
               <button
                 onClick={() => i18n.changeLanguage(i18n.language === 'zh' ? 'en' : 'zh')}
-                className="flex h-10 items-center justify-center gap-2 rounded-lg border border-border/50 bg-accent/50 px-3 text-[11px] font-black uppercase tracking-widest text-muted-foreground transition-all hover:border-border hover:bg-accent hover:text-foreground active:scale-95 sm:min-w-[110px] sm:px-4"
+                className="flex h-9 items-center justify-center gap-2 rounded-md border border-border px-3 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               >
                 <Globe className="h-3.5 w-3.5" />
                 <span>{i18n.language === 'zh' ? 'English' : '中文'}</span>
               </button>
               <button
                 onClick={onSignOut}
-                className="flex h-10 w-10 items-center justify-center rounded-lg border border-border/50 bg-accent/50 text-muted-foreground transition-all hover:border-border hover:bg-accent hover:text-foreground active:scale-95"
+                className="flex h-9 w-9 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 aria-label={t('auth.sign_out')}
                 title={t('auth.sign_out')}
               >
@@ -159,10 +153,10 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
                   key={item.to}
                   to={item.to}
                   className={cn(
-                    'flex-1 flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-medium transition-all sm:px-4 sm:py-3 sm:text-sm',
+                    'flex-1 flex items-center justify-center gap-2 rounded-md px-3 py-2 text-xs transition-colors sm:px-4 sm:text-sm',
                     isActive
-                      ? 'bg-primary/10 text-primary shadow-sm'
-                      : 'text-muted-foreground hover:text-white hover:bg-white/5'
+                      ? 'bg-accent font-medium text-foreground'
+                      : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'
                   )}
                 >
                   <Icon className="h-5 w-5" />
@@ -192,7 +186,7 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
 
       {/* 页脚版本号 */}
       <footer className="relative z-0 flex w-full items-center justify-center bg-background px-4 py-4 sm:px-6">
-        <p className="text-muted-foreground/20 text-[10px] font-bold tracking-[0.2em] uppercase select-none">
+        <p className="select-none text-xs text-muted-foreground/70">
           PrismCat {version}
         </p>
       </footer>
