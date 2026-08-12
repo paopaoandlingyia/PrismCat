@@ -117,7 +117,10 @@
 
 @layer base {
   body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Roboto, sans-serif;
+    /* Inter 负责拉丁,Noto Sans SC 负责中文。两者 x-height 接近,
+       混排时不会出现中文比英文粗一档、大一号的割裂感。
+       Noto Sans SC 只打包了 UI 文案用到的字形,见 scripts/build-font.mjs */
+    font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
     min-height: 100vh;
   }
 
@@ -177,7 +180,7 @@ input[type="number"] {
 /* 代码块样式 */
 pre,
 code {
-  font-family: 'Fira Code', 'JetBrains Mono', Consolas, Monaco, 'PingFang SC', 'Microsoft YaHei', monospace;
+  font-family: 'Fira Code', 'JetBrains Mono', Consolas, Monaco, 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace;
 }
 
 /* 动画 */
