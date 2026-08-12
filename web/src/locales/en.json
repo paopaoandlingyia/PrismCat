@@ -58,6 +58,7 @@
         "security_note": "Session persists in this browser."
     },
     "filters": {
+        "advanced": "Filters",
         "search_path": "Search path...",
         "all_upstreams": "All Upstreams",
         "all_methods": "All Methods",

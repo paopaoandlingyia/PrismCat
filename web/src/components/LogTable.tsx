@@ -70,7 +70,7 @@ function DesktopLogSkeleton({ t }: { t: (key: string) => string }) {
                     <TableRow>
                         <TableHead className="w-[80px]">{t('log_table.method')}</TableHead>
                         <TableHead className="w-[70px]">{t('log_table.status')}</TableHead>
-                        <TableHead className="w-[100px]">{t('log_table.upstream')}</TableHead>
+                        <TableHead className="w-[150px]">{t('log_table.upstream')}</TableHead>
                         <TableHead>{t('log_table.path')}</TableHead>
                         <TableHead className="w-[80px] text-right">{t('log_table.latency')}</TableHead>
                         <TableHead className="w-[160px] text-right">{t('log_table.time')}</TableHead>
@@ -289,7 +289,9 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                         <TableRow className="hover:bg-transparent">
                             <TableHead className="w-[80px] font-medium text-xs">{t('log_table.method')}</TableHead>
                             <TableHead className="w-[70px] font-medium text-xs text-center">{t('log_table.status')}</TableHead>
-                            <TableHead className="w-[100px] font-medium text-xs">{t('log_table.upstream')}</TableHead>
+                            {/* 150 而不是 100:多目标预设的上游显示成 "anthropic / backup",
+                                100px 会截成 "anthropic / bac…",正好把想展示的功能藏掉 */}
+                            <TableHead className="w-[150px] font-medium text-xs">{t('log_table.upstream')}</TableHead>
                             <TableHead className="font-medium text-xs">{t('log_table.path')}</TableHead>
                             {showUsage && (
                                 <TableHead className="w-[90px] font-medium text-xs text-right">{t('log_table.tokens', 'Tokens')}</TableHead>

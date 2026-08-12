@@ -183,7 +183,7 @@ export function LogFilters({
                     )}
                 >
                     <SlidersHorizontal className="h-3.5 w-3.5" />
-                    <span>{t('filters.advanced', '筛选')}</span>
+                    <span>{t('filters.advanced')}</span>
                     {activeAdvancedCount > 0 && (
                         <span className="rounded-sm bg-primary/10 px-1 font-mono text-primary">{activeAdvancedCount}</span>
                     )}

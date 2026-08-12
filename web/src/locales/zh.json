@@ -58,6 +58,7 @@
         "security_note": "登录状态将持久化在当前浏览器中。"
     },
     "filters": {
+        "advanced": "筛选",
         "search_path": "搜索路径...",
         "all_upstreams": "所有上游",
         "all_methods": "所有方法",
