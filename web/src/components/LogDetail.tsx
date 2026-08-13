@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { cn, formatDate, formatLatency, formatSize, getStatusColor, METHOD_CLASS, FOCUS_RING } from '@/lib/utils'
 import { copyText } from '@/lib/clipboard'
-import { Copy, Check, Zap, AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsDownUp, ChevronsUpDown, FileCode, ListTree, Globe, Layers, RotateCcw, Maximize2, Minimize2, ExternalLink, Terminal, Bookmark, BookmarkCheck, CheckCircle2, CircleDot, Tags, Search, X } from 'lucide-react'
+import { Copy, Check, Zap, AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsDownUp, ChevronsUpDown, FileCode, ListTree, Layers, RotateCcw, Maximize2, Minimize2, ExternalLink, Terminal, Bookmark, BookmarkCheck, CheckCircle2, CircleDot, Tags, Search, X } from 'lucide-react'
 import { fetchBlob, fetchLogBody, updateLogAnnotation } from '@/lib/api'
 import type { LiveLogEvent, RequestLog } from '@/lib/api'
 import { startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react'
@@ -45,7 +45,6 @@ const logDetailExpandedStorageKey = 'prismcat.logDetail.expanded'
 const autoLoadFullBodyLimit = 10 * 1024 * 1024
 
 const defaultExpandedSections = {
-    url: true,
     requestHeaders: false,
     requestBody: false,
     responseHeaders: false,
@@ -70,7 +69,6 @@ function getInitialExpandedSections(): typeof defaultExpandedSections {
         if (!raw) return defaultExpandedSections
         const parsed = JSON.parse(raw) as Partial<typeof defaultExpandedSections>
         return {
-            url: typeof parsed?.url === 'boolean' ? parsed.url : defaultExpandedSections.url,
             requestHeaders: typeof parsed?.requestHeaders === 'boolean' ? parsed.requestHeaders : defaultExpandedSections.requestHeaders,
             requestBody: typeof parsed?.requestBody === 'boolean' ? parsed.requestBody : defaultExpandedSections.requestBody,
             responseHeaders: typeof parsed?.responseHeaders === 'boolean' ? parsed.responseHeaders : defaultExpandedSections.responseHeaders,
@@ -120,14 +118,19 @@ function RawBodyViewer({ text, searchTerm, maxMatches }: { text: string; searchT
     );
 }
 
+/** 概览卡的标签列 */
+function OverviewLabel({ children }: { children: ReactNode }) {
+    return <dt className="whitespace-nowrap font-medium text-muted-foreground">{children}</dt>
+}
+
 function UsageMetric({ label, value }: { label: string; value?: number }) {
     return (
-        <div className="rounded-lg border border-border bg-background px-3 py-2">
-            <div className="text-xs font-medium text-muted-foreground">{label}</div>
-            <div className="mt-1 font-mono text-sm font-medium text-foreground">
+        <span className="whitespace-nowrap">
+            <span className="text-muted-foreground">{label}</span>{' '}
+            <span className="font-mono font-medium text-foreground">
                 {typeof value === 'number' ? value.toLocaleString() : '-'}
-            </div>
-        </div>
+            </span>
+        </span>
     )
 }
 
@@ -1021,34 +1024,6 @@ export function LogDetail({
                         ) : null}
                     </div>
 
-                    {/* URL 地址 */}
-                    <div className="rounded-md border border-border bg-card px-3 py-2">
-                        <div className="flex items-center gap-2">
-                            <button
-                                type="button"
-                                onClick={() => toggleSection('url')}
-                                className="group flex min-w-0 flex-1 items-center gap-2 rounded-lg px-1 py-1 text-left transition-colors hover:bg-muted"
-                            >
-                                <div className="rounded-md bg-muted p-1.5 text-muted-foreground group-hover:text-primary">
-                                    <Globe className="h-3.5 w-3.5" />
-                                </div>
-                                <span className="shrink-0 text-xs font-medium text-foreground">{t('log_detail.url')}</span>
-                                <span className="min-w-0 flex-1" />
-                                {expandedSections.url ? (
-                                    <ChevronUp className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                                ) : (
-                                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                                )}
-                            </button>
-                            <CopyButton text={displayLog.target_url} field="url" />
-                        </div>
-                        {expandedSections.url && (
-                            <code className="mt-2 block rounded-lg bg-muted/50 px-3 py-2 text-xs font-mono leading-relaxed break-all text-foreground">
-                                {displayLog.target_url}
-                            </code>
-                        )}
-                    </div>
-
                     {/* 错误详情 */}
                     {displayLog.error && (
                         <div className="overflow-hidden rounded-lg border border-danger/20 bg-danger/5 p-4">
@@ -1060,75 +1035,86 @@ export function LogDetail({
                         </div>
                     )}
 
-                    {/* 语义色只上图标,面板保持中性 —— 整块染色会把页面变成色卡 */}
-                    {(displayLog.request_override_applied || displayLog.request_override_error) && (
-                        <div className="overflow-hidden rounded-lg border border-border bg-card p-4">
-                            <div className="mb-3 flex items-center gap-2 text-xs font-medium text-foreground">
-                                <AlertTriangle className="h-4 w-4 text-warning" />
-                                {t('log_detail.request_override', 'Request Override')}
-                            </div>
-                            {displayLog.request_override_rules?.length ? (
-                                <div className="mb-3 flex flex-wrap gap-2">
-                                    {displayLog.request_override_rules.map((rule) => (
-                                        <Badge key={rule} variant="outline" className="border-warning/30 bg-background text-xs font-semibold text-foreground">
-                                            {rule}
-                                        </Badge>
-                                    ))}
-                                </div>
-                            ) : null}
-                            {displayLog.request_override_error && (
-                                <pre className="text-xs text-warning font-mono whitespace-pre-wrap leading-relaxed">{displayLog.request_override_error}</pre>
-                            )}
-                            {displayLog.request_header_override_applied && displayLog.request_header_override_changes?.length ? (
-                                <div className="mt-3 space-y-1.5">
-                                    <div className="text-xs font-medium text-warning">
-                                        {t('log_detail.header_changes', 'Header Changes')}
-                                    </div>
-                                    <div className="space-y-1 font-mono text-xs">
-                                        {displayLog.request_header_override_changes.map((change, idx) => (
-                                            <div key={idx} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 leading-relaxed">
-                                                <Badge variant="outline" className={cn(
-                                                    "h-5 shrink-0 rounded px-1.5 text-xs font-medium",
-                                                    change.op === 'set'
-                                                        ? "border-info/30 bg-info/10 text-info"
-                                                        : "border-danger/30 bg-danger/10 text-danger"
-                                                )}>
-                                                    {change.op}
-                                                </Badge>
-                                                <span className="font-semibold text-foreground">{change.name}</span>
-                                                {change.old_value && (
-                                                    <span className="text-muted-foreground line-through">{change.old_value}</span>
-                                                )}
-                                                {change.op === 'set' && (
-                                                    <span className="text-foreground">{change.value}</span>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            ) : null}
-                        </div>
-                    )}
+                    {/* 概览:URL / Token / 参数覆盖 合成一张紧凑卡。
+                        原来是三张全宽卡,一行 URL 或三个五位数各占满 1152px,
+                        把真正要看的请求体挤到首屏之外 */}
+                    <div className="rounded-md border border-border bg-card px-3 py-2.5">
+                        <dl className="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-4 gap-y-2 text-xs">
+                            <OverviewLabel>{t('log_detail.url')}</OverviewLabel>
+                            <dd className="flex min-w-0 items-baseline gap-1">
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        {/* 不加 flex-1:让复制按钮紧跟 URL 末尾,
+                                            否则按钮被推到 1152px 卡片的最右边 */}
+                                        <code className="min-w-0 truncate font-mono text-foreground">
+                                            {displayLog.target_url}
+                                        </code>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="bottom" className="max-w-[520px] break-all font-mono">
+                                        {displayLog.target_url}
+                                    </TooltipContent>
+                                </Tooltip>
+                                <CopyButton text={displayLog.target_url} field="url" />
+                            </dd>
 
-                    {/* Token 用量是中性信息,不是"成功",原来整块绿底属于误用语义色 */}
-                    {hasUsage && (
-                        <div className="overflow-hidden rounded-lg border border-border bg-card p-4">
-                            <div className="mb-3 flex items-center gap-2 text-xs font-medium text-foreground">
-                                <CircleDot className="h-4 w-4 text-muted-foreground" />
-                                {t('log_detail.usage', 'Usage')}
-                            </div>
-                            <div className="grid gap-2 sm:grid-cols-3">
-                                <UsageMetric label={t('log_detail.usage_input', 'Input')} value={displayLog.usage_input_tokens} />
-                                <UsageMetric label={t('log_detail.usage_output', 'Output')} value={displayLog.usage_output_tokens} />
-                                <UsageMetric label={t('log_detail.usage_total', 'Total')} value={displayLog.usage_total_tokens} />
-                            </div>
-                            {displayLog.usage_source && (
-                                <div className="mt-3 font-mono text-xs text-muted-foreground">
-                                    {displayLog.usage_source}
-                                </div>
+                            {hasUsage && (
+                                <>
+                                    <OverviewLabel>{t('log_detail.usage')}</OverviewLabel>
+                                    <dd className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+                                        <UsageMetric label={t('log_detail.usage_input')} value={displayLog.usage_input_tokens} />
+                                        <UsageMetric label={t('log_detail.usage_output')} value={displayLog.usage_output_tokens} />
+                                        <UsageMetric label={t('log_detail.usage_total')} value={displayLog.usage_total_tokens} />
+                                        {displayLog.usage_source && (
+                                            <span className="font-mono text-muted-foreground/70">{displayLog.usage_source}</span>
+                                        )}
+                                    </dd>
+                                </>
                             )}
-                        </div>
-                    )}
+
+                            {(displayLog.request_override_applied || displayLog.request_override_error) && (
+                                <>
+                                    <OverviewLabel>{t('log_detail.request_override')}</OverviewLabel>
+                                    <dd className="min-w-0 space-y-1.5">
+                                        {displayLog.request_override_rules?.length ? (
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {displayLog.request_override_rules.map((rule) => (
+                                                    <Badge key={rule} variant="outline" className="border-warning/30 bg-background text-xs font-semibold text-foreground">
+                                                        {rule}
+                                                    </Badge>
+                                                ))}
+                                            </div>
+                                        ) : null}
+                                        {displayLog.request_override_error && (
+                                            <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-warning">{displayLog.request_override_error}</pre>
+                                        )}
+                                        {displayLog.request_header_override_applied && displayLog.request_header_override_changes?.length ? (
+                                            <div className="space-y-1 font-mono">
+                                                {displayLog.request_header_override_changes.map((change, idx) => (
+                                                    <div key={idx} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 leading-relaxed">
+                                                        <Badge variant="outline" className={cn(
+                                                            "h-5 shrink-0 rounded px-1.5 text-xs font-medium",
+                                                            change.op === 'set'
+                                                                ? "border-info/30 bg-info/10 text-info"
+                                                                : "border-danger/30 bg-danger/10 text-danger"
+                                                        )}>
+                                                            {change.op}
+                                                        </Badge>
+                                                        <span className="font-semibold text-foreground">{change.name}</span>
+                                                        {change.old_value && (
+                                                            <span className="text-muted-foreground line-through">{change.old_value}</span>
+                                                        )}
+                                                        {change.op === 'set' && (
+                                                            <span className="text-foreground">{change.value}</span>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : null}
+                                    </dd>
+                                </>
+                            )}
+                        </dl>
+                    </div>
 
                     {/* 请求体 & 请求头 */}
                     <div className={cn(sectionCardClassName, "space-y-4")}>
