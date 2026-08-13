@@ -717,8 +717,10 @@ export function LogDetail({
         <Sheet open={!!log} onOpenChange={(open) => !open && onClose()}>
             <SheetContent className={sheetWidthClassName}>
                 {/* 头部固定区域 */}
-                <SheetHeader className="border-b border-border bg-card px-5 py-3.5">
-                    <div className="flex flex-wrap items-center gap-2.5">
+                <SheetHeader className="gap-2 border-b border-border bg-card px-5 py-3">
+                    {/* 第一行只放身份信息。pr-10 是给绝对定位的关闭按钮(right-4)留位,
+                        原来靠操作组上的 mr-10 让位,窄窗口下会把按钮挤到换行 */}
+                    <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 pr-10">
                         <div
                                 className={cn(
                                     "w-14 py-0.5 rounded-md text-xs text-center font-medium border",
@@ -784,14 +786,18 @@ export function LogDetail({
                                 </TooltipContent>
                             </Tooltip>
                         </div>
+                    </div>
+
+                    {/* 第二行:操作栏。和身份信息分开,窄窗口下两者不再互相挤 */}
+                    <div className="flex flex-wrap items-center justify-end gap-2">
                         {loading && (
-                            <div className="ml-auto flex items-center gap-2 text-xs font-medium text-primary">
+                            <div className="flex items-center gap-2 text-xs font-medium text-primary">
                                 <div className="h-1 w-1 rounded-full bg-current" />
                                 {t('common.loading')}
                             </div>
                         )}
                         {!loading && (
-                            <div className="ml-auto mr-10 flex flex-wrap items-center justify-end gap-2">
+                            <>
                                 {onNavigateLog && (
                                     <div className="flex items-center gap-1 rounded-lg border border-border bg-background p-0.5">
                                         <Tooltip>
@@ -906,7 +912,7 @@ export function LogDetail({
                                     <RotateCcw className="h-3 w-3" />
                                     {t('playground.replay')}
                                 </Button>
-                            </div>
+                            </>
                         )}
                     </div>
                 </SheetHeader>
