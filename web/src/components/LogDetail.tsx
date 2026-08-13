@@ -564,7 +564,11 @@ export function LogDetail({
         panelWidthMode === 'wide' && "border-l border-border sm:rounded-l-2xl sm:max-w-6xl",
         panelWidthMode === 'full' && "border-0 sm:rounded-none sm:max-w-none"
     )
-    const sectionCardClassName = "rounded-lg border border-border bg-card p-5"
+    // 请求/响应 只作为分组标题浮在背景上,每个可折叠块自己是一张卡。
+    // 原来外面还套一层 section 卡(border + bg-card + p-5),导致
+    // bg-muted/30 → bg-card → bg-muted/50 三层色差极小的盒子套盒子
+    const groupLabelClassName = "px-1 text-xs font-medium text-muted-foreground"
+    const blockCardClassName = "rounded-lg border border-border bg-card px-3"
     const contentCardClassName = "rounded-lg bg-muted/50 p-3.5"
     const codeCardClassName = "rounded-lg bg-muted/50"
     const emptyStateClassName = "rounded-lg border border-dashed border-border bg-muted/50 px-4 py-6 text-center"
@@ -918,7 +922,7 @@ export function LogDetail({
                 </SheetHeader>
 
                 {/* 主内容区域 */}
-                <div className="custom-scrollbar flex-1 space-y-4 overflow-y-auto bg-muted/30 px-5 py-4">
+                <div className="custom-scrollbar flex-1 space-y-4 overflow-y-auto bg-background px-5 py-4">
                     <div className="rounded-md border border-border bg-card px-3 py-2.5">
                         <div className="flex flex-wrap items-center gap-2">
                             <Button
@@ -1123,11 +1127,11 @@ export function LogDetail({
                     </div>
 
                     {/* 请求体 & 请求头 */}
-                    <div className={cn(sectionCardClassName, "space-y-4")}>
-                        <div className="text-xs font-medium text-muted-foreground">
+                    <div className="space-y-2">
+                        <div className={groupLabelClassName}>
                             {t('log_detail.request')}
                         </div>
-                        <div className="space-y-2">
+                        <div className={cn(blockCardClassName, "space-y-2")}>
                             <SectionHeader
                                 title={t('log_detail.request') + ' ' + t('log_detail.body')}
                                 section="requestBody"
@@ -1144,7 +1148,7 @@ export function LogDetail({
                                 }
                             />
                             {expandedSections.requestBody && (
-                                <div className="space-y-3">
+                                <div className="space-y-3 pb-3">
                                     {displayLog.request_body_ref && (
                                         <BlobPanel
                                             blobRef={displayLog.request_body_ref}
@@ -1244,7 +1248,7 @@ export function LogDetail({
                             )}
                         </div>
 
-                        <div className="space-y-2">
+                        <div className={cn(blockCardClassName, "space-y-2")}>
                             <SectionHeader
                                 title={t('log_detail.request') + ' ' + t('log_detail.headers')}
                                 section="requestHeaders"
@@ -1252,7 +1256,7 @@ export function LogDetail({
                                 extra={<span className="text-xs font-medium text-muted-foreground">{Object.keys(displayLog.request_headers ?? {}).length} KEYS</span>}
                             />
                             {expandedSections.requestHeaders && displayLog.request_headers && (
-                                <div className={cn(contentCardClassName, "space-y-2 font-mono text-xs leading-relaxed")}>
+                                <div className={cn(contentCardClassName, "mb-3 space-y-2 font-mono text-xs leading-relaxed")}>
                                     {Object.entries(displayLog.request_headers).map(([key, vv]) => (
                                         <div key={key} className="flex flex-col sm:flex-row sm:gap-2 group/line">
                                             <span className="text-primary shrink-0 font-semibold">{key}:</span>
@@ -1269,11 +1273,11 @@ export function LogDetail({
                     </div>
 
                     {/* 响应体 & 响应头 */}
-                    <div className={cn(sectionCardClassName, "space-y-4")}>
-                        <div className="text-xs font-medium text-muted-foreground">
+                    <div className="space-y-2">
+                        <div className={groupLabelClassName}>
                             {t('log_detail.response')}
                         </div>
-                        <div className="space-y-2">
+                        <div className={cn(blockCardClassName, "space-y-2")}>
                             <SectionHeader
                                 title={t('log_detail.response') + ' ' + t('log_detail.body')}
                                 section="responseBody"
@@ -1290,7 +1294,7 @@ export function LogDetail({
                                 }
                             />
                             {expandedSections.responseBody && (
-                                <div className="space-y-3">
+                                <div className="space-y-3 pb-3">
                                     {displayLog.streaming && responseViewMode === 'merged' && mergedResponse && (
                                         <div className="flex items-center gap-1.5 px-1 text-xs font-mono text-muted-foreground">
                                             <Layers className="h-3 w-3 shrink-0" />
@@ -1391,7 +1395,7 @@ export function LogDetail({
                             )}
                         </div>
 
-                        <div className="space-y-2">
+                        <div className={cn(blockCardClassName, "space-y-2")}>
                             <SectionHeader
                                 title={t('log_detail.response') + ' ' + t('log_detail.headers')}
                                 section="responseHeaders"
@@ -1399,7 +1403,7 @@ export function LogDetail({
                                 extra={<span className="text-xs font-medium text-muted-foreground">{Object.keys(displayLog.response_headers ?? {}).length} KEYS</span>}
                             />
                             {expandedSections.responseHeaders && displayLog.response_headers && (
-                                <div className={cn(contentCardClassName, "space-y-2 font-mono text-xs leading-relaxed")}>
+                                <div className={cn(contentCardClassName, "mb-3 space-y-2 font-mono text-xs leading-relaxed")}>
                                     {Object.entries(displayLog.response_headers).map(([key, vv]) => (
                                         <div key={key} className="flex flex-col sm:flex-row sm:gap-2 group/line">
                                             <span className="text-success shrink-0 font-semibold">{key}:</span>
