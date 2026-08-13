@@ -567,11 +567,15 @@ export function LogDetail({
     // bg-muted/30 → bg-card → bg-muted/50 三层色差极小的盒子套盒子
     const groupLabelClassName = "px-1 text-xs font-medium text-muted-foreground"
     const blockCardClassName = "rounded-lg border border-border bg-card px-3"
+    // 复制按钮跟在长度不一的值后面,多行图标 x 位置对不齐会形成毛边。
+    // 桌面端平时隐藏(位置仍占住,不产生跳动),悬停该行或键盘聚焦时才出现;
+    // 触屏没有 hover,小屏就一直显示
+    const hoverCopyClassName = "opacity-100 transition-opacity sm:opacity-0 sm:group-hover/copy:opacity-100 sm:focus-visible:opacity-100"
     const contentCardClassName = "rounded-lg bg-muted/50 p-3.5"
     const codeCardClassName = "rounded-lg bg-muted/50"
     const emptyStateClassName = "rounded-lg border border-dashed border-border bg-muted/50 px-4 py-6 text-center"
 
-    const CopyButton = ({ text, field }: { text: string; field: string }) => {
+    const CopyButton = ({ text, field, className }: { text: string; field: string; className?: string }) => {
         const label = copiedField === field ? t('common.copied') : t('common.copy')
         return (
             <Tooltip>
@@ -583,7 +587,7 @@ export function LogDetail({
                             e.stopPropagation()
                             copyToClipboard(text, field)
                         }}
-                        className="h-7 w-7 rounded-md hover:bg-primary/10 hover:text-primary transition-all"
+                        className={cn("h-7 w-7 rounded-md hover:bg-primary/10 hover:text-primary transition-all", className)}
                         aria-label={label}
                     >
                         {copiedField === field ? (
@@ -1026,7 +1030,7 @@ export function LogDetail({
                     <div className="rounded-md border border-border bg-card px-3 py-2.5">
                         <dl className="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-4 gap-y-2 text-xs">
                             <OverviewLabel>{t('log_detail.url')}</OverviewLabel>
-                            <dd className="flex min-w-0 items-baseline gap-1">
+                            <dd className="group/copy flex min-w-0 items-baseline gap-1">
                                 <Tooltip>
                                     <TooltipTrigger asChild>
                                         {/* 不加 flex-1:让复制按钮紧跟 URL 末尾,
@@ -1039,17 +1043,17 @@ export function LogDetail({
                                         {displayLog.target_url}
                                     </TooltipContent>
                                 </Tooltip>
-                                <CopyButton text={displayLog.target_url} field="url" />
+                                <CopyButton text={displayLog.target_url} field="url" className={hoverCopyClassName} />
                             </dd>
 
                             {/* UUID 固定 36 字符,放在头部身份行会比 8 字符截断宽 179px,
                                 窄窗口必然换行;而它的价值只在"能被复制",不在"能被读" */}
                             <OverviewLabel>{t('log_detail.log_id')}</OverviewLabel>
-                            <dd className="flex min-w-0 items-baseline gap-1">
+                            <dd className="group/copy flex min-w-0 items-baseline gap-1">
                                 <code className="min-w-0 truncate font-mono text-foreground">
                                     {displayLog.id}
                                 </code>
-                                <CopyButton text={displayLog.id} field="id" />
+                                <CopyButton text={displayLog.id} field="id" className={hoverCopyClassName} />
                             </dd>
 
                             {hasUsage && (
