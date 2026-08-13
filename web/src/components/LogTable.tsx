@@ -33,6 +33,14 @@ function getStatusBadgeColor(code: number): string {
     return 'bg-muted text-muted-foreground'
 }
 
+/** 拖拽选中行内文字(比如复制路径)后,mouseup 仍会在行上触发 click。
+ *  只有当选区确实落在这一行里才拦,避免页面别处的残留选区挡掉正常点击。 */
+function isTextSelectionClick(e: React.MouseEvent<HTMLElement>): boolean {
+    const selection = window.getSelection()
+    if (!selection || selection.isCollapsed || !selection.toString().trim()) return false
+    return e.currentTarget.contains(selection.anchorNode)
+}
+
 function formatTokenCount(value?: number): string {
     if (typeof value !== 'number') return '-'
     if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value >= 10_000_000 ? 0 : 1)}M`
@@ -127,7 +135,7 @@ function MobileLogCard({
             className={cn(
                 'w-full rounded-lg p-4 text-left transition-all active:scale-[0.99]',
                 selected
-                    ? 'bg-primary/10'
+                    ? 'bg-primary/10 shadow-[inset_2px_0_0_0_hsl(var(--primary))]'
                     : 'bg-card hover:bg-card/40'
             )}
         >
@@ -305,11 +313,15 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                         {logs.map((log) => (
                             <TableRow
                                 key={log.id}
-                                onClick={() => onSelect(log)}
+                                onClick={(e) => { if (!isTextSelectionClick(e)) onSelect(log) }}
                                 aria-label={t('common.details')}
                                 className={cn(
                                     'group cursor-pointer border-b transition-colors',
-                                    selectedId === log.id ? 'bg-accent hover:bg-accent' : 'hover:bg-muted/60'
+                                    // 详情抽屉盖住右侧,选中态只能靠左半边被看见:
+                                    // 除了底色,还要一条左侧竖条,否则 bg-accent(96% 灰)和未选中几乎没差别
+                                    selectedId === log.id
+                                        ? 'bg-primary/[0.07] hover:bg-primary/[0.09] dark:bg-primary/[0.14] dark:hover:bg-primary/[0.16] [&>td:first-child]:shadow-[inset_2px_0_0_0_hsl(var(--primary))]'
+                                        : 'hover:bg-muted/60'
                                 )}
                             >
                                 <TableCell>
@@ -462,8 +474,10 @@ export function LogTable({ logs, loading, onSelect, selectedId }: LogTableProps)
                                 <TableCell className="text-right">
                                     <ChevronRight
                                         className={cn(
-                                            'ml-auto h-4 w-4 text-muted-foreground transition-opacity',
-                                            selectedId === log.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                                            'ml-auto h-4 w-4 transition-opacity',
+                                            selectedId === log.id
+                                                ? 'opacity-100 text-primary'
+                                                : 'opacity-0 text-muted-foreground group-hover:opacity-100'
                                         )}
                                         aria-hidden="true"
                                     />
