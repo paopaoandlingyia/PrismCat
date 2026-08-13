@@ -555,7 +555,9 @@ export function LogDetail({
     if (!displayLog) return null
 
     const sheetWidthClassName = cn(
-        "w-full p-0 flex flex-col bg-background",
+        // overflow-hidden 和圆角必须同时存在:header(bg-card)和滚动区(bg-muted/30)都是直角,
+        // 不裁剪就会盖在 16px 圆角上,看起来像两层边角对不齐
+        "w-full p-0 flex flex-col overflow-hidden bg-background",
         panelWidthMode === 'wide' && "border-l border-border sm:rounded-l-2xl sm:max-w-6xl",
         panelWidthMode === 'full' && "border-0 sm:rounded-none sm:max-w-none"
     )
