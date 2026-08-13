@@ -244,7 +244,6 @@ export function LogDetail({
     const [annotationNote, setAnnotationNote] = useState('')
     const [annotationLabels, setAnnotationLabels] = useState('')
     const [annotationPanelOpen, setAnnotationPanelOpen] = useState(false)
-    const [idTooltipOpen, setIdTooltipOpen] = useState(false)
     const [requestSearchOpen, setRequestSearchOpen] = useState(false)
     const [requestSearchTerm, setRequestSearchTerm] = useState('')
     const [responseSearchOpen, setResponseSearchOpen] = useState(false)
@@ -267,7 +266,6 @@ export function LogDetail({
         setRequestExpandMode('default')
         setResponseExpandMode('default')
         setAnnotationPanelOpen(false)
-        setIdTooltipOpen(false)
         setRequestSearchOpen(false)
         setRequestSearchTerm('')
         setResponseSearchOpen(false)
@@ -766,29 +764,6 @@ export function LogDetail({
                             <span className="font-mono">{formatLatency(displayLog.latency_ms)}</span>
                             <span className="text-border">/</span>
                             <span>{formatDate(displayLog.created_at, i18n.language)}</span>
-                            <span className="text-border">/</span>
-                            <Tooltip open={idTooltipOpen}>
-                                <TooltipTrigger asChild>
-                                    <button
-                                        type="button"
-                                        onClick={() => copyToClipboard(displayLog.id, 'id')}
-                                        onMouseEnter={() => setIdTooltipOpen(true)}
-                                        onMouseLeave={() => setIdTooltipOpen(false)}
-                                        onBlur={() => setIdTooltipOpen(false)}
-                                        className="rounded px-1 py-0.5 font-mono transition-colors hover:bg-muted hover:text-foreground"
-                                        aria-label={t('log_detail.copy_id', 'Copy log ID')}
-                                    >
-                                        {copiedField === 'id' ? (
-                                            <span className="text-success">{t('common.copied', 'Copied')}</span>
-                                        ) : (
-                                            `${displayLog.id.substring(0, 8)}...`
-                                        )}
-                                    </button>
-                                </TooltipTrigger>
-                                <TooltipContent side="bottom" sideOffset={6} className="max-w-[420px] break-all font-mono">
-                                    {copiedField === 'id' ? t('common.copied', 'Copied') : displayLog.id}
-                                </TooltipContent>
-                            </Tooltip>
                         </div>
                     </div>
 
@@ -1065,6 +1040,16 @@ export function LogDetail({
                                     </TooltipContent>
                                 </Tooltip>
                                 <CopyButton text={displayLog.target_url} field="url" />
+                            </dd>
+
+                            {/* UUID 固定 36 字符,放在头部身份行会比 8 字符截断宽 179px,
+                                窄窗口必然换行;而它的价值只在"能被复制",不在"能被读" */}
+                            <OverviewLabel>{t('log_detail.log_id')}</OverviewLabel>
+                            <dd className="flex min-w-0 items-baseline gap-1">
+                                <code className="min-w-0 truncate font-mono text-foreground">
+                                    {displayLog.id}
+                                </code>
+                                <CopyButton text={displayLog.id} field="id" />
                             </dd>
 
                             {hasUsage && (
