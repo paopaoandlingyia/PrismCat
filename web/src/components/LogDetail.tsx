@@ -577,28 +577,25 @@ export function LogDetail({
 
     const CopyButton = ({ text, field, className }: { text: string; field: string; className?: string }) => {
         const label = copiedField === field ? t('common.copied') : t('common.copy')
+        // 不挂 tooltip:复制图标本身就是共识,气泡只是把"复制"两个字弹在
+        // 你正要点的位置上挡手。aria-label 留着给读屏和键盘用户
         return (
-            <Tooltip>
-                <TooltipTrigger asChild>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={(e) => {
-                            e.stopPropagation()
-                            copyToClipboard(text, field)
-                        }}
-                        className={cn("h-7 w-7 rounded-md hover:bg-primary/10 hover:text-primary transition-all", className)}
-                        aria-label={label}
-                    >
-                        {copiedField === field ? (
-                            <Check className="h-3.5 w-3.5 text-success" />
-                        ) : (
-                            <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-                        )}
-                    </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top" sideOffset={4}>{label}</TooltipContent>
-            </Tooltip>
+            <Button
+                variant="ghost"
+                size="icon"
+                onClick={(e) => {
+                    e.stopPropagation()
+                    copyToClipboard(text, field)
+                }}
+                className={cn("h-7 w-7 rounded-md hover:bg-primary/10 hover:text-primary transition-all", className)}
+                aria-label={label}
+            >
+                {copiedField === field ? (
+                    <Check className="h-3.5 w-3.5 text-success" />
+                ) : (
+                    <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                )}
+            </Button>
         )
     }
 
@@ -1031,18 +1028,12 @@ export function LogDetail({
                         <dl className="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-4 gap-y-2 text-xs">
                             <OverviewLabel>{t('log_detail.url')}</OverviewLabel>
                             <dd className="group/copy flex min-w-0 items-baseline gap-1">
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        {/* 不加 flex-1:让复制按钮紧跟 URL 末尾,
-                                            否则按钮被推到 1152px 卡片的最右边 */}
-                                        <code className="min-w-0 truncate font-mono text-foreground">
-                                            {displayLog.target_url}
-                                        </code>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="bottom" className="max-w-[520px] break-all font-mono">
-                                        {displayLog.target_url}
-                                    </TooltipContent>
-                                </Tooltip>
+                                {/* break-all 而不是 truncate:target_url 含合并后的 query,
+                                    可以很长。让它换行就不需要气泡再揭示一遍被截掉的部分。
+                                    不加 flex-1,复制按钮才能紧跟 URL 末尾 */}
+                                <code className="min-w-0 break-all font-mono text-foreground">
+                                    {displayLog.target_url}
+                                </code>
                                 <CopyButton text={displayLog.target_url} field="url" className={hoverCopyClassName} />
                             </dd>
 
@@ -1050,7 +1041,7 @@ export function LogDetail({
                                 窄窗口必然换行;而它的价值只在"能被复制",不在"能被读" */}
                             <OverviewLabel>{t('log_detail.log_id')}</OverviewLabel>
                             <dd className="group/copy flex min-w-0 items-baseline gap-1">
-                                <code className="min-w-0 truncate font-mono text-foreground">
+                                <code className="min-w-0 break-all font-mono text-foreground">
                                     {displayLog.id}
                                 </code>
                                 <CopyButton text={displayLog.id} field="id" className={hoverCopyClassName} />
