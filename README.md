@@ -40,7 +40,7 @@ Grab the binary for your system from [Releases](https://github.com/paopaoandling
 | **Linux / macOS** | Run `./prismcat` |
 | **Docker** | See [Docker Deployment](#docker-deployment) |
 
-Open **`http://localhost:8080`** in your browser.
+Open **`http://localhost:8711`** in your browser.
 
 ### 2. Add an Upstream
 
@@ -50,7 +50,7 @@ In the Settings page, add an upstream. For example:
 |------|--------|
 | `openai` | `https://api.openai.com` |
 
-PrismCat gives you a proxy address: **`http://openai.localhost:8080`**
+PrismCat gives you a proxy address: **`http://openai.localhost:8711`**
 
 ### 3. Change One Line, Start Capturing
 
@@ -58,7 +58,7 @@ PrismCat gives you a proxy address: **`http://openai.localhost:8080`**
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="http://openai.localhost:8080/v1",  # ← change only this
+    base_url="http://openai.localhost:8711/v1",  # ← change only this
     api_key="sk-..."
 )
 
@@ -80,7 +80,7 @@ PrismCat uses **subdomain routing** for truly transparent proxying. When you add
 ```
 Your App                     PrismCat                      OpenAI
    │                           │                             │
-   │  openai.localhost:8080    │   api.openai.com            │
+   │  openai.localhost:8711    │   api.openai.com            │
    │ ─────────────────────────>│ ────────────────────────────>│
    │                           │       logs request ✓         │
    │<─────────────────────────│<────────────────────────────│
@@ -166,7 +166,7 @@ services:
     image: ghcr.io/paopaoandlingyia/prismcat:latest
     container_name: prismcat
     ports:
-      - "8080:8080"
+      - "8711:8711"
     environment:
       # Dashboard hosts. Use localhost locally; use your domain or IP on a server.
       - PRISMCAT_UI_HOSTS=localhost,127.0.0.1
@@ -191,7 +191,7 @@ docker compose up -d
 
 ```bash
 docker run -d --name prismcat \
-  -p 8080:8080 \
+  -p 8711:8711 \
   -e PRISMCAT_UI_HOSTS=localhost,127.0.0.1 \
   -e PRISMCAT_PROXY_DOMAINS=localhost \
   -e PRISMCAT_UI_PASSWORD=your_strong_password \
@@ -210,7 +210,7 @@ If your environment can't resolve `*.localhost`, or you're deploying to a bare I
 ```python
 # Path routing mode — no subdomain resolution needed
 client = OpenAI(
-    base_url="http://localhost:8080/_proxy/openai/v1",  # On a server: http://YOUR_IP:8080/_proxy/openai/v1
+    base_url="http://localhost:8711/_proxy/openai/v1",  # On a server: http://YOUR_IP:8711/_proxy/openai/v1
     api_key="sk-..."
 )
 ```
@@ -243,7 +243,7 @@ server {
     server_name prismcat.example.com *.prismcat.example.com;
 
     location / {
-        proxy_pass http://127.0.0.1:8080;
+        proxy_pass http://127.0.0.1:8711;
         proxy_set_header Host $host;  # Required: pass original Host for subdomain routing
 
         # Required for SSE / streaming
@@ -269,7 +269,7 @@ The config file lives at `data/config.yaml` and is created on first launch. Most
 
 ```yaml
 server:
-  port: 8080
+  port: 8711
   ui_password: ""           # Console password; leave empty to set it on first UI access
   proxy_domains:            # Base domains for subdomain routing
     - localhost

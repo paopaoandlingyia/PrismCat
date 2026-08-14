@@ -61,6 +61,38 @@ func TestExtractSubdomain(t *testing.T) {
 	}
 }
 
+func TestLoadUsesNewDefaultPort(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte("{}\n"), 0644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if cfg.Server.Port != 8711 {
+		t.Fatalf("default server port = %d, want 8711", cfg.Server.Port)
+	}
+}
+
+func TestLoadPreservesExplicitLegacyPort(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte("server:\n  port: 8080\n"), 0644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if cfg.Server.Port != 8080 {
+		t.Fatalf("explicit server port = %d, want 8080", cfg.Server.Port)
+	}
+}
+
 func TestIsUIHostIncludesProxyDomainBase(t *testing.T) {
 	cfg := &Config{
 		Server: ServerConfig{

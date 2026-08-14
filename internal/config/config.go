@@ -247,7 +247,7 @@ func Load(path string) (*Config, error) {
 
 	c := Config{
 		Server: ServerConfig{
-			Port:                   8080,
+			Port:                   8711,
 			UIHosts:                []string{"localhost", "127.0.0.1"},
 			ProxyDomains:           []string{"localhost"},
 			PathRoutingPrefix:      "/_proxy",
@@ -1285,7 +1285,7 @@ func (c *Config) ActivateUpstreamTarget(upstreamName, targetName string) error {
 }
 
 // ExtractSubdomain 从 Host 中提取子域名
-// 例如: openai.localhost:8080 -> openai
+// 例如: openai.localhost:8711 -> openai
 func ExtractSubdomain(host string, proxyDomains []string) string {
 	// 移除端口号
 	for i := len(host) - 1; i >= 0; i-- {

@@ -6,7 +6,7 @@ server:
   # 若仅限本机访问，可设为 127.0.0.1
   addr: ""
   # 监听端口
-  port: 8080
+  port: 8711
 
   # 主机名（用于判断是否为 UI 请求）
   ui_hosts:
@@ -48,7 +48,7 @@ server:
 # 格式: 子域名 -> 单个上游地址，或一组可切换的目标预设
 upstreams:
   openai:
-    # 匹配 openai.localhost:8080
+    # 匹配 openai.localhost:8711
     target: "https://api.openai.com"
     # 可选：整个上游请求和响应过程的总超时（秒），包含等待响应头、首个响应体字节和后续响应体。
     timeout: 120
@@ -66,7 +66,7 @@ upstreams:
     logging_disabled: false
 
   gemini:
-    # 匹配 gemini.localhost:8080
+    # 匹配 gemini.localhost:8711
     target: "https://generativelanguage.googleapis.com"
     timeout: 120
     response_header_timeout: 0
@@ -76,7 +76,7 @@ upstreams:
     # outbound_proxy: "http://127.0.0.1:7890"
 
   # 可选：为同一个稳定入口保存多个完整目标预设。
-  # 客户端始终使用 codex.localhost:8080；只需在 UI 切换当前目标。
+  # 客户端始终使用 codex.localhost:8711；只需在 UI 切换当前目标。
   # URL、超时、出站代理、参数覆盖绑定和 Usage 绑定会作为一个整体切换。
   # 切换只影响新请求，已经开始的请求会继续使用启动时的目标快照。
   codex:

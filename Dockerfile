@@ -30,12 +30,12 @@ COPY --from=backend-builder /app/prismcat .
 RUN mkdir -p data
 VOLUME ["/app/data"]
 
-EXPOSE 8080
+EXPOSE 8711
 
 # 增加健康检查
 # 每 30 秒检查一次，如果连续 3 次失败，容器会被标记为 unhealthy
 # 启动 5 秒后开始检查
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/healthz || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8711/healthz || exit 1
 
 CMD ["./prismcat", "-config", "data/config.yaml"]

@@ -40,7 +40,7 @@ PrismCat 是一个**自托管的 LLM API 透明代理与调试控制台**。
 | **Linux / macOS** | 终端执行 `./prismcat` |
 | **Docker** | 参见 [Docker 部署](#docker-部署) |
 
-打开浏览器访问 **`http://localhost:8080`** 进入控制面板。
+打开浏览器访问 **`http://localhost:8711`** 进入控制面板。
 
 ### 2. 添加上游
 
@@ -50,7 +50,7 @@ PrismCat 是一个**自托管的 LLM API 透明代理与调试控制台**。
 |------|---------|
 | `openai` | `https://api.openai.com` |
 
-PrismCat 会自动生成一个代理地址：**`http://openai.localhost:8080`**
+PrismCat 会自动生成一个代理地址：**`http://openai.localhost:8711`**
 
 ### 3. 改一行代码，开始抓包
 
@@ -58,7 +58,7 @@ PrismCat 会自动生成一个代理地址：**`http://openai.localhost:8080`**
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="http://openai.localhost:8080/v1",  # ← 只改这里
+    base_url="http://openai.localhost:8711/v1",  # ← 只改这里
     api_key="sk-..."
 )
 
@@ -80,7 +80,7 @@ PrismCat 使用**子域名路由**实现透明代理。当你在 Settings 里添
 ```
 你的应用                     PrismCat                      OpenAI
    │                           │                             │
-   │  openai.localhost:8080    │   api.openai.com            │
+   │  openai.localhost:8711    │   api.openai.com            │
    │ ─────────────────────────>│ ────────────────────────────>│
    │                           │          记录请求 ✓          │
    │<─────────────────────────│<────────────────────────────│
@@ -166,7 +166,7 @@ services:
     image: ghcr.io/paopaoandlingyia/prismcat:latest
     container_name: prismcat
     ports:
-      - "8080:8080"
+      - "8711:8711"
     environment:
       # 控制台访问 Host。本地用 localhost；服务器部署时填你的域名或 IP。
       - PRISMCAT_UI_HOSTS=localhost,127.0.0.1
@@ -191,7 +191,7 @@ docker compose up -d
 
 ```bash
 docker run -d --name prismcat \
-  -p 8080:8080 \
+  -p 8711:8711 \
   -e PRISMCAT_UI_HOSTS=localhost,127.0.0.1 \
   -e PRISMCAT_PROXY_DOMAINS=localhost \
   -e PRISMCAT_UI_PASSWORD=your_strong_password \
@@ -210,7 +210,7 @@ docker run -d --name prismcat \
 ```python
 # 路径路由模式 —— 无需子域名解析
 client = OpenAI(
-    base_url="http://localhost:8080/_proxy/openai/v1",  # 服务器上可替换为 http://你的IP:8080/_proxy/openai/v1
+    base_url="http://localhost:8711/_proxy/openai/v1",  # 服务器上可替换为 http://你的IP:8711/_proxy/openai/v1
     api_key="sk-..."
 )
 ```
@@ -243,7 +243,7 @@ server {
     server_name prismcat.example.com *.prismcat.example.com;
 
     location / {
-        proxy_pass http://127.0.0.1:8080;
+        proxy_pass http://127.0.0.1:8711;
         proxy_set_header Host $host;  # 必须：透传 Host 用于子域名路由
 
         # SSE / 流式响应必须配置
@@ -269,7 +269,7 @@ server {
 
 ```yaml
 server:
-  port: 8080
+  port: 8711
   ui_password: ""           # 控制台密码；留空时首次访问 UI 设置
   proxy_domains:            # 子域名路由的基础域名
     - localhost
