@@ -278,40 +278,93 @@ function hasAdvancedValues(source?: {
 }
 
 type RuleRuntimeStatus =
-    | { kind: 'active'; enabledUpstreams: string[]; disabledUpstreams: string[] }
-    | { kind: 'blocked'; reason: 'global' | 'rule' | 'bindings'; enabledUpstreams: string[]; disabledUpstreams: string[] }
+    | { kind: 'active'; enabledUpstreams: string[]; disabledUpstreams: string[]; inactiveTargets: string[] }
+    | { kind: 'blocked'; reason: 'global' | 'rule' | 'bindings'; enabledUpstreams: string[]; disabledUpstreams: string[]; inactiveTargets: string[] }
+    | { kind: 'inactive'; inactiveTargets: string[] }
     | { kind: 'unbound' }
+
+type BindingKind = 'request_overrides' | 'usage_extraction'
+
+function collectRuleBindingLocations(
+    upstreams: Upstream[],
+    legacyBindings: Record<string, OverrideBinding>,
+    kind: BindingKind,
+): { active: string[]; disabled: string[]; inactive: string[] } {
+    const active: string[] = []
+    const disabled: string[] = []
+    const inactive: string[] = []
+    for (const upstream of upstreams) {
+        const targets = upstream.targets || {}
+        if (Object.keys(targets).length === 0) {
+            const binding = legacyBindings[upstream.name]
+            if (!binding) continue
+            const label = upstream.name
+            if (binding.enabled) active.push(label)
+            else disabled.push(label)
+            continue
+        }
+
+        for (const [targetName, target] of Object.entries(targets)) {
+            const binding = target[kind]
+            if (!binding) continue
+            const label = `${upstream.name}/${targetName}`
+            if (targetName === upstream.active_target) {
+                if (binding.enabled) active.push(label)
+                else disabled.push(label)
+            } else {
+                inactive.push(label)
+            }
+        }
+    }
+    return { active, disabled, inactive }
+}
 
 function getRuleRuntimeStatus(
     rule: OverrideRuleObject,
+    upstreams: Upstream[],
     bindings: Record<string, OverrideBinding>,
     globalEnabled: boolean,
 ): RuleRuntimeStatus {
     const ruleName = getOverrideRuleName(rule, '')
     if (!ruleName) return { kind: 'unbound' }
 
-    const enabledUpstreams: string[] = []
-    const disabledUpstreams: string[] = []
-    for (const [name, binding] of Object.entries(bindings)) {
-        if (getBindingRuleNames(binding).includes(ruleName)) {
-            if (binding.enabled) enabledUpstreams.push(name)
-            else disabledUpstreams.push(name)
-        }
-    }
+    const locations = collectRuleBindingLocations(upstreams, bindings, 'request_overrides')
+    const enabledUpstreams = locations.active.filter(name => {
+        const [upstreamName, targetName] = name.split('/')
+        const binding = targetName
+            ? upstreams.find(upstream => upstream.name === upstreamName)?.targets?.[targetName]?.request_overrides
+            : bindings[upstreamName]
+        return Boolean(binding && getBindingRuleNames(binding).includes(ruleName))
+    })
+    const disabledUpstreams = locations.disabled.filter(name => {
+        const [upstreamName, targetName] = name.split('/')
+        const binding = targetName
+            ? upstreams.find(upstream => upstream.name === upstreamName)?.targets?.[targetName]?.request_overrides
+            : bindings[upstreamName]
+        return Boolean(binding && getBindingRuleNames(binding).includes(ruleName))
+    })
+    const inactiveTargets = locations.inactive.filter(name => {
+        const [upstreamName, targetName] = name.split('/')
+        const binding = upstreams.find(upstream => upstream.name === upstreamName)?.targets?.[targetName]?.request_overrides
+        return Boolean(binding && getBindingRuleNames(binding).includes(ruleName))
+    })
 
-    if (enabledUpstreams.length + disabledUpstreams.length === 0) {
+    if (enabledUpstreams.length + disabledUpstreams.length + inactiveTargets.length === 0) {
         return { kind: 'unbound' }
     }
+    if (enabledUpstreams.length + disabledUpstreams.length === 0) {
+        return { kind: 'inactive', inactiveTargets }
+    }
     if (!globalEnabled) {
-        return { kind: 'blocked', reason: 'global', enabledUpstreams, disabledUpstreams }
+        return { kind: 'blocked', reason: 'global', enabledUpstreams, disabledUpstreams, inactiveTargets }
     }
     if (!getOverrideRuleEnabled(rule)) {
-        return { kind: 'blocked', reason: 'rule', enabledUpstreams, disabledUpstreams }
+        return { kind: 'blocked', reason: 'rule', enabledUpstreams, disabledUpstreams, inactiveTargets }
     }
     if (enabledUpstreams.length === 0) {
-        return { kind: 'blocked', reason: 'bindings', enabledUpstreams, disabledUpstreams }
+        return { kind: 'blocked', reason: 'bindings', enabledUpstreams, disabledUpstreams, inactiveTargets }
     }
-    return { kind: 'active', enabledUpstreams, disabledUpstreams }
+    return { kind: 'active', enabledUpstreams, disabledUpstreams, inactiveTargets }
 }
 
 function formatUpstreamList(
@@ -327,6 +380,15 @@ function formatUpstreamList(
     if (enabled.length > 0) parts.push(`→ ${summarize(enabled)}`)
     if (disabled.length > 0) parts.push(t('settings.rule_status_disabled_upstreams', { list: summarize(disabled) }))
     return parts.join('  ·  ')
+}
+
+function formatInactiveTargets(
+    targets: string[],
+    t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+    if (targets.length === 0) return ''
+    const summarize = targets.length <= 2 ? targets.join(', ') : `${targets.slice(0, 2).join(', ')} +${targets.length - 2}`
+    return t('settings.rule_status_inactive_targets', { list: summarize })
 }
 
 function outboundProxyMode(value?: string): OutboundProxyMode {
@@ -789,6 +851,7 @@ export function Settings() {
     const [selectedUsageRuleText, setSelectedUsageRuleText] = useState('')
     const [usageAdvancedRulesOpen, setUsageAdvancedRulesOpen] = useState(false)
     const [usageBindings, setUsageBindings] = useState<Record<string, OverrideBinding>>({})
+    const [dirtyTargetBindingUpstreams, setDirtyTargetBindingUpstreams] = useState<Set<string>>(new Set())
 
     const domainSuffix = config?.server?.proxy_domains?.[0] || 'localhost'
     const previewUpstreamName = upstreams[0]?.name || 'openai'
@@ -990,6 +1053,7 @@ export function Settings() {
                 fetchConfig(),
             ])
             setUpstreams(upstreamsData || [])
+            setDirtyTargetBindingUpstreams(new Set())
             setConfig(configData)
             setShowAddForm(prev => prev || !upstreamsData?.length)
             const nextOrder = Math.max(0, ...(upstreamsData || []).map(item => item.order || 0)) + 10
@@ -1216,6 +1280,37 @@ export function Settings() {
         setSelectedRuleAdvancedOpen(false)
     }
 
+    const syncTargetBindingRuleNames = (
+        kind: BindingKind,
+        transform: (names: string[]) => string[],
+    ) => {
+        setUpstreams(current => {
+            const changed = new Set<string>()
+            const next = current.map(upstream => {
+                if (!upstream.targets || Object.keys(upstream.targets).length === 0) return upstream
+                let upstreamChanged = false
+                const targets = Object.fromEntries(Object.entries(upstream.targets).map(([targetName, target]) => {
+                    const binding = target[kind]
+                    if (!binding) return [targetName, target]
+                    const nextNames = transform(getBindingRuleNames(binding))
+                    if (nextNames.join('\u0000') === getBindingRuleNames(binding).join('\u0000')) return [targetName, target]
+                    upstreamChanged = true
+                    return [targetName, {
+                        ...target,
+                        [kind]: { ...binding, rule_names: nextNames },
+                    }]
+                })) as Record<string, UpstreamTarget>
+                if (!upstreamChanged) return upstream
+                changed.add(upstream.name)
+                return { ...upstream, targets }
+            })
+            if (changed.size > 0) {
+                setDirtyTargetBindingUpstreams(previous => new Set([...previous, ...changed]))
+            }
+            return next
+        })
+    }
+
     const replaceSelectedOverrideRule = (nextRule: OverrideRuleObject, syncBindingName = false) => {
         const currentRule = overrideRuleObjects[selectedOverrideRuleIndex]
         if (!currentRule) return
@@ -1236,6 +1331,7 @@ export function Settings() {
                     },
                 ]),
             ))
+            syncTargetBindingRuleNames('request_overrides', names => names.map(name => name === previousName ? nextName : name))
         }
     }
 
@@ -1339,6 +1435,7 @@ export function Settings() {
             ]),
         )
         setOverrideBindings(nextBindings)
+        syncTargetBindingRuleNames('request_overrides', names => names.filter(name => name !== ruleName))
         setOverrideRulesArray(nextRules, Math.min(index, nextRules.length - 1))
     }
 
@@ -1397,8 +1494,22 @@ export function Settings() {
             const parsed = JSON.parse(value)
             if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return
             const nextRules = [...usageRuleObjects]
+            const previousName = getOverrideRuleName(nextRules[selectedUsageRuleIndex], '')
+            const nextName = getOverrideRuleName(parsed, '')
             nextRules[selectedUsageRuleIndex] = parsed as OverrideRuleObject
             setUsageRulesText(JSON.stringify(nextRules, null, 2))
+            if (previousName && nextName && previousName !== nextName) {
+                setUsageBindings(current => Object.fromEntries(
+                    Object.entries(current).map(([upstream, binding]) => [
+                        upstream,
+                        {
+                            ...binding,
+                            rule_names: getBindingRuleNames(binding).map(name => name === previousName ? nextName : name),
+                        },
+                    ]),
+                ))
+                syncTargetBindingRuleNames('usage_extraction', names => names.map(name => name === previousName ? nextName : name))
+            }
         } catch {
             // Keep the local editor text so users can finish typing valid JSON.
         }
@@ -1456,6 +1567,7 @@ export function Settings() {
             ]),
         )
         setUsageBindings(nextBindings)
+        syncTargetBindingRuleNames('usage_extraction', names => names.filter(name => name !== ruleName))
         setUsageRulesArray(nextRules, Math.min(index, nextRules.length - 1))
     }
 
@@ -1649,6 +1761,25 @@ export function Settings() {
         }
     }
 
+    const saveDirtyTargetBindings = async () => {
+        for (const upstream of upstreams) {
+            if (!dirtyTargetBindingUpstreams.has(upstream.name) || !upstream.targets || Object.keys(upstream.targets).length === 0) continue
+            await addUpstream(
+                upstream.name,
+                '',
+                0,
+                0,
+                0,
+                0,
+                upstream.order || 0,
+                '',
+                upstream.logging_enabled !== false,
+                upstream.active_target || '',
+                upstream.targets,
+            )
+        }
+    }
+
     const handleSaveAll = async () => {
         setSaving(true)
         try {
@@ -1676,6 +1807,7 @@ export function Settings() {
                 request_overrides: buildOverridesPayload(overrideBindings, overrideRules),
                 usage_extraction: buildUsageExtractionPayload(usageBindings, usageRules),
             })
+            await saveDirtyTargetBindings()
             toast.success(t('settings.config_saved'))
             loadData()
         } catch (err: unknown) {
@@ -3004,11 +3136,12 @@ export function Settings() {
                                                         {overrideRuleObjects.map((rule, index) => {
                                                             const ruleName = getOverrideRuleName(rule, `rule-${index + 1}`)
                                                             const selected = selectedOverrideRuleIndex === index
-                                                            const status = getRuleRuntimeStatus(rule, overrideBindings, requestOverridesEnabled)
+                                                            const status = getRuleRuntimeStatus(rule, upstreams, overrideBindings, requestOverridesEnabled)
                                                             const statusBadgeClass = cn(
                                                                 "h-5 rounded-md px-2 text-xs font-semibold",
                                                                 status.kind === 'active' && "border-success/40 bg-success/10 text-success",
                                                                 status.kind === 'blocked' && "border-warning/40 bg-warning/10 text-warning",
+                                                                status.kind === 'inactive' && "border-warning/40 bg-warning/10 text-warning",
                                                                 status.kind === 'unbound' && "border-input bg-muted/50 text-muted-foreground",
                                                             )
                                                             const statusText =
@@ -3016,16 +3149,26 @@ export function Settings() {
                                                                     ? t('settings.rule_status_active')
                                                                     : status.kind === 'unbound'
                                                                         ? t('settings.rule_status_unbound')
+                                                                        : status.kind === 'inactive'
+                                                                            ? t('settings.rule_status_inactive')
                                                                         : status.reason === 'global'
                                                                             ? t('settings.rule_status_blocked_global')
                                                                             : status.reason === 'rule'
                                                                                 ? t('settings.rule_status_blocked_rule')
                                                                                 : t('settings.rule_status_blocked_bindings')
                                                             const detail =
-                                                                status.kind === 'active'
-                                                                    ? formatUpstreamList(status.enabledUpstreams, status.disabledUpstreams, t)
+                                                                    status.kind === 'active'
+                                                                    ? [
+                                                                        formatUpstreamList(status.enabledUpstreams, status.disabledUpstreams, t),
+                                                                        formatInactiveTargets(status.inactiveTargets, t),
+                                                                    ].filter(Boolean).join('  ·  ')
                                                                     : status.kind === 'blocked'
-                                                                        ? formatUpstreamList(status.enabledUpstreams, status.disabledUpstreams, t)
+                                                                        ? [
+                                                                            formatUpstreamList(status.enabledUpstreams, status.disabledUpstreams, t),
+                                                                            formatInactiveTargets(status.inactiveTargets, t),
+                                                                        ].filter(Boolean).join('  ·  ')
+                                                                        : status.kind === 'inactive'
+                                                                            ? formatInactiveTargets(status.inactiveTargets, t)
                                                                         : ''
                                                             return (
                                                                 <button
@@ -3397,6 +3540,9 @@ export function Settings() {
                                                             {usageRuleObjects.map((rule, index) => {
                                                                 const ruleName = getOverrideRuleName(rule, `usage-rule-${index + 1}`)
                                                                 const boundCount = Object.values(usageBindings).filter(binding => getBindingRuleNames(binding).includes(ruleName)).length
+                                                                    + upstreams.reduce((count, upstream) => count + Object.values(upstream.targets || {}).filter(target => (
+                                                                        target.usage_extraction && getBindingRuleNames(target.usage_extraction).includes(ruleName)
+                                                                    )).length, 0)
                                                                 const selected = selectedUsageRuleIndex === index
                                                                 return (
                                                                     <button

@@ -383,6 +383,8 @@
         "request_override_final_preview_hint": "Generated from the fields above and read-only. Sensitive header values are masked.",
         "rule_status_active": "Active",
         "rule_status_unbound": "Not bound",
+        "rule_status_inactive": "Bound on other targets",
+        "rule_status_inactive_targets": "Other targets: {{list}}",
         "rule_status_blocked_global": "Global off",
         "rule_status_blocked_rule": "Rule disabled",
         "rule_status_blocked_bindings": "Binding off",

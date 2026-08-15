@@ -383,6 +383,8 @@
         "request_override_final_preview_hint": "此处由上方配置自动生成且不可编辑；敏感请求头值已掩码。",
         "rule_status_active": "生效中",
         "rule_status_unbound": "未绑定上游",
+        "rule_status_inactive": "其他目标已绑定",
+        "rule_status_inactive_targets": "其他目标：{{list}}",
         "rule_status_blocked_global": "全局已关闭",
         "rule_status_blocked_rule": "规则已停用",
         "rule_status_blocked_bindings": "上游绑定已停用",
