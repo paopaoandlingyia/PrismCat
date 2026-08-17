@@ -285,6 +285,11 @@ logging:
   body_preview_bytes: 524288      # Inline readable preview; lower for high-frequency long-running use
   early_request_body_snapshot: false
 
+logging_rules:
+  # Filled once from the embedded ai_models.json catalog, then fully user-managed.
+  model_path_templates_initialized: false
+  model_path_templates: []
+
 storage:
   retention_days: 30              # Log retention in days; 0 = keep forever
 
@@ -296,6 +301,13 @@ upstreams:
     response_body_first_byte_timeout: 30 # Advanced: wait for the first response body byte after headers; applies to all responses
     response_body_idle_timeout: 15 # Advanced: maximum silence after the body starts; resets whenever data arrives
     outbound_proxy: "env"          # env, direct, or a proxy URL such as http://127.0.0.1:7890
+    logging_path_filter:            # all, allowlist, or denylist; Ant and RE2 regex rules can be mixed
+      mode: allowlist
+      rules:
+        - matcher: ant
+          pattern: "/v1/responses"
+        - matcher: regex
+          pattern: "^/v1/chat/completions$"
   gemini:
     target: "https://generativelanguage.googleapis.com"
     timeout: 120

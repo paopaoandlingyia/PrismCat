@@ -285,6 +285,11 @@ logging:
   body_preview_bytes: 524288      # 内联可读预览；长期高频运行可适当调小
   early_request_body_snapshot: false
 
+logging_rules:
+  # 首次启动时从内置 ai_models.json 生成；之后完全由用户维护。
+  model_path_templates_initialized: false
+  model_path_templates: []
+
 storage:
   retention_days: 30              # 日志保留天数，0 = 永久
 
@@ -296,6 +301,13 @@ upstreams:
     response_body_first_byte_timeout: 30 # 高级：收到响应头后等待首个响应体字节，适用于所有响应
     response_body_idle_timeout: 15 # 高级：响应体开始后连续无新数据的最长时间，每次收到数据重新计时
     outbound_proxy: "env"          # env、direct，或 http://127.0.0.1:7890 这样的代理 URL
+    logging_path_filter:            # all、allowlist 或 denylist；Ant 与 RE2 正则可混用
+      mode: allowlist
+      rules:
+        - matcher: ant
+          pattern: "/v1/responses"
+        - matcher: regex
+          pattern: "^/v1/chat/completions$"
   gemini:
     target: "https://generativelanguage.googleapis.com"
     timeout: 120

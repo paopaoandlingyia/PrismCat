@@ -55,6 +55,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/stats", h.handleStats)
 	mux.HandleFunc("/api/upstreams", h.handleUpstreams)
 	mux.HandleFunc("/api/upstreams/active-target", h.handleUpstreamActiveTarget)
+	mux.HandleFunc("/api/logging-rules/model-path-templates", h.handleModelPathTemplates)
+	mux.HandleFunc("/api/logging-rules/ignored-paths", h.handleIgnoredPaths)
 	mux.HandleFunc("/api/config", h.handleConfig)
 	mux.HandleFunc("/api/health", h.handleHealth)
 	mux.HandleFunc("/api/system/metrics", h.handleSystemMetrics)
@@ -694,6 +696,7 @@ func (h *Handler) handleUpstreams(w http.ResponseWriter, r *http.Request) {
 				"order":                            upCfg.Order,
 				"outbound_proxy":                   resolved.OutboundProxy,
 				"logging_enabled":                  !upCfg.LoggingDisabled,
+				"logging_path_filter":              upCfg.LoggingPathFilter,
 				"active_target":                    upCfg.ActiveTarget,
 				"targets":                          upCfg.Targets,
 			})
@@ -722,6 +725,7 @@ func (h *Handler) handleUpstreams(w http.ResponseWriter, r *http.Request) {
 			Order                        int                                    `json:"order"`
 			OutboundProxy                string                                 `json:"outbound_proxy"`
 			LoggingEnabled               *bool                                  `json:"logging_enabled"`
+			LoggingPathFilter            *config.LoggingPathFilterConfig        `json:"logging_path_filter"`
 			ActiveTarget                 string                                 `json:"active_target"`
 			Targets                      map[string]config.UpstreamTargetConfig `json:"targets"`
 		}
@@ -736,11 +740,16 @@ func (h *Handler) handleUpstreams(w http.ResponseWriter, r *http.Request) {
 		}
 
 		loggingDisabled := false
+		var loggingPathFilter *config.LoggingPathFilterConfig
 		if current, ok := h.cfg.GetUpstream(req.Name); ok {
 			loggingDisabled = current.LoggingDisabled
+			loggingPathFilter = current.LoggingPathFilter
 		}
 		if req.LoggingEnabled != nil {
 			loggingDisabled = !*req.LoggingEnabled
+		}
+		if req.LoggingPathFilter != nil {
+			loggingPathFilter = req.LoggingPathFilter
 		}
 
 		err := h.cfg.AddUpstream(req.Name, config.UpstreamConfig{
@@ -752,11 +761,12 @@ func (h *Handler) handleUpstreams(w http.ResponseWriter, r *http.Request) {
 			Order:                        req.Order,
 			OutboundProxy:                req.OutboundProxy,
 			LoggingDisabled:              loggingDisabled,
+			LoggingPathFilter:            loggingPathFilter,
 			ActiveTarget:                 req.ActiveTarget,
 			Targets:                      req.Targets,
 		})
 		if err != nil {
-			h.jsonError(w, err.Error(), http.StatusInternalServerError)
+			h.jsonError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		if err := h.cfg.Save(); err != nil {

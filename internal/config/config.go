@@ -21,6 +21,7 @@ type Config struct {
 	Server    ServerConfig              `yaml:"server"`
 	Upstreams map[string]UpstreamConfig `yaml:"upstreams"`
 	Logging   LoggingConfig             `yaml:"logging"`
+	LogRules  LoggingRulesConfig        `yaml:"logging_rules"`
 	Storage   StorageConfig             `yaml:"storage"`
 	Overrides RequestOverridesConfig    `yaml:"request_overrides"`
 	Usage     UsageExtractionConfig     `yaml:"usage_extraction"`
@@ -77,6 +78,7 @@ type UpstreamConfig struct {
 	Order                        int                             `yaml:"order,omitempty"`
 	OutboundProxy                string                          `yaml:"outbound_proxy,omitempty"`
 	LoggingDisabled              bool                            `yaml:"logging_disabled,omitempty"`
+	LoggingPathFilter            *LoggingPathFilterConfig        `yaml:"logging_path_filter,omitempty"`
 	ActiveTarget                 string                          `yaml:"active_target,omitempty"`
 	Targets                      map[string]UpstreamTargetConfig `yaml:"targets,omitempty"`
 }
@@ -109,6 +111,7 @@ type ResolvedUpstream struct {
 	Order                        int
 	OutboundProxy                string
 	LoggingDisabled              bool
+	LoggingPathFilter            *LoggingPathFilterConfig
 }
 
 type RequestOverridesConfig struct {
@@ -346,6 +349,11 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 	c.Upstreams = normalizedUpstreams
+	logRules, err := NormalizeLoggingRules(c.LogRules)
+	if err != nil {
+		return nil, err
+	}
+	c.LogRules = logRules
 	c.Overrides = NormalizeRequestOverrides(c.Overrides)
 	c.Usage = NormalizeUsageExtraction(c.Usage)
 
@@ -440,6 +448,11 @@ func normalizeUpstreams(in map[string]UpstreamConfig) (map[string]UpstreamConfig
 		if _, exists := out[n]; exists {
 			return nil, fmt.Errorf("重复的 upstream 名称（大小写不敏感）: %q", n)
 		}
+		filter, err := NormalizeLoggingPathFilter(v.LoggingPathFilter)
+		if err != nil {
+			return nil, fmt.Errorf("upstream %q: %w", n, err)
+		}
+		v.LoggingPathFilter = filter
 		if len(v.Targets) > 0 {
 			if strings.TrimSpace(v.Target) != "" {
 				return nil, fmt.Errorf("upstream %q cannot define both target and targets", n)
@@ -1154,6 +1167,7 @@ func (c *Config) ListUpstreams() map[string]UpstreamConfig {
 
 func cloneUpstreamConfig(in UpstreamConfig) UpstreamConfig {
 	out := in
+	out.LoggingPathFilter = cloneLoggingPathFilter(in.LoggingPathFilter)
 	if len(in.Targets) > 0 {
 		out.Targets = make(map[string]UpstreamTargetConfig, len(in.Targets))
 		for name, target := range in.Targets {
@@ -1188,9 +1202,10 @@ func (c *Config) ResolveUpstreamSnapshot(name string) (ResolvedUpstream, Request
 	}
 
 	resolved := ResolvedUpstream{
-		Name:            name,
-		Order:           upstream.Order,
-		LoggingDisabled: upstream.LoggingDisabled,
+		Name:              name,
+		Order:             upstream.Order,
+		LoggingDisabled:   upstream.LoggingDisabled,
+		LoggingPathFilter: cloneLoggingPathFilter(upstream.LoggingPathFilter),
 	}
 	overrides := cloneRequestOverridesConfig(c.Overrides)
 

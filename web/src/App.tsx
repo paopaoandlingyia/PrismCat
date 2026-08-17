@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { BrowserRouter, Navigate, Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { Globe, LayoutDashboard, LogOut, Network, Settings as SettingsIcon, Zap } from 'lucide-react'
 import { PrismCatLogo } from '@/components/PrismCatLogo'
 import { useTranslation } from 'react-i18next'
@@ -69,7 +69,7 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
 
   // 设置有子分区,标题栏显示分区名而不是笼统的"设置"
   const settingsTab = location.pathname.startsWith('/settings/')
-    ? location.pathname.slice('/settings/'.length)
+    ? location.pathname.slice('/settings/'.length).split('/')[0]
     : null
   const pageTitle = isSettingsTab(settingsTab)
     ? settingsTabLabelKeys[settingsTab]
@@ -206,7 +206,7 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
               return (
                 <NavLink
                   key={item.to}
-                  to={item.to}
+                  to={item.to === '/settings' ? settingsTabPath('routing') : item.to}
                   className={cn(
                     'flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-xs transition-colors',
                     isNavActive(item.to)
@@ -220,6 +220,24 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
               )
             })}
           </nav>
+          {location.pathname.startsWith('/settings') && (
+            <nav className="flex items-center gap-1 overflow-x-auto border-t border-border px-2 py-2">
+              {settingsTabs.map(tab => (
+                <NavLink
+                  key={tab}
+                  to={settingsTabPath(tab)}
+                  className={({ isActive }) => cn(
+                    'shrink-0 rounded-md px-3 py-1.5 text-xs transition-colors',
+                    isActive
+                      ? 'bg-accent font-medium text-foreground'
+                      : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'
+                  )}
+                >
+                  {t(settingsTabLabelKeys[tab])}
+                </NavLink>
+              ))}
+            </nav>
+          )}
         </header>
 
         {/* 页面标题栏 - 给内容区一个"顶" */}
@@ -237,8 +255,13 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
                 <Route path="/traces" element={<Traces />} />
                 <Route path="/traces/:traceId" element={<TraceDetailPage />} />
                 <Route path="/playground" element={<PlaygroundPage />} />
+                <Route path="/logging-rules" element={<Navigate to="/settings/logging/models" replace />} />
+                <Route path="/logging-rules/models" element={<Navigate to="/settings/logging/models" replace />} />
+                <Route path="/logging-rules/ignored" element={<Navigate to="/settings/logging/ignored" replace />} />
+                <Route path="/logging-rules/*" element={<Navigate to="/settings/logging/models" replace />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/settings/:tab" element={<SettingsPage />} />
+                <Route path="/settings/:tab/:subtab" element={<SettingsPage />} />
               </Routes>
             </Suspense>
           </div>

@@ -178,14 +178,22 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("unknown upstream: %s", upstreamName), http.StatusBadGateway)
 		return
 	}
+	loggingEnabled := !upstream.LoggingDisabled
+	if loggingEnabled && !upstream.LoggingPathFilter.Allows(requestURL.Path) {
+		loggingEnabled = false
+		if ignored, ok := p.repo.(storage.IgnoredPathRepository); ok {
+			if err := ignored.RecordIgnoredPath(upstreamName, requestURL.Path, startTime); err != nil && !errors.Is(err, storage.ErrAsyncClosed) {
+				log.Printf("record ignored path failed: %v", err)
+			}
+		}
+	}
+
 	responseHeaderTimeout := time.Duration(upstream.ResponseHeaderTimeout) * time.Second
 	client, err := p.clients.ClientWithResponseHeaderTimeout(upstream.OutboundProxy, responseHeaderTimeout)
 	if err != nil {
 		http.Error(w, "invalid upstream outbound proxy config", http.StatusInternalServerError)
 		return
 	}
-	loggingEnabled := !upstream.LoggingDisabled
-
 	targetURL, err := url.Parse(upstream.Target)
 	if err != nil {
 		http.Error(w, "invalid upstream config", http.StatusInternalServerError)

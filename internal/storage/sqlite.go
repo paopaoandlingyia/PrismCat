@@ -114,6 +114,19 @@ func (r *SQLiteRepository) migrate() error {
 
 	CREATE INDEX IF NOT EXISTS idx_log_annotations_saved ON log_annotations(saved);
 	CREATE INDEX IF NOT EXISTS idx_log_annotations_status ON log_annotations(status);
+
+	CREATE TABLE IF NOT EXISTS ignored_path_stats (
+		upstream TEXT NOT NULL,
+		path TEXT NOT NULL,
+		request_count INTEGER NOT NULL DEFAULT 0,
+		last_seen_unix_ms INTEGER NOT NULL,
+		PRIMARY KEY (upstream, path)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_ignored_path_stats_last_seen
+		ON ignored_path_stats(last_seen_unix_ms DESC);
+	CREATE INDEX IF NOT EXISTS idx_ignored_path_stats_upstream_last_seen
+		ON ignored_path_stats(upstream, last_seen_unix_ms DESC);
 	`
 	if _, err := r.db.Exec(schema); err != nil {
 		return fmt.Errorf("database migrate failed: %w", err)

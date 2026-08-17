@@ -64,6 +64,14 @@ upstreams:
     outbound_proxy: "env"
     # 可选：关闭此上游的日志记录，仅作为透明反代。默认 false（记录日志）。
     logging_disabled: false
+    # 可选：仅记录命中规则的请求。mode 可选 all / allowlist / denylist；规则可混用 ant 和 regex。
+    logging_path_filter:
+      mode: allowlist
+      rules:
+        - matcher: ant
+          pattern: "/v1/responses"
+        - matcher: ant
+          pattern: "/v1/chat/completions"
 
   gemini:
     # 匹配 gemini.localhost:8711
@@ -129,6 +137,12 @@ logging:
     - "Authorization"
     - "x-api-key"
     - "api-key"
+
+# 模型日志路径模板。首次启动时会从程序内置的 ai_models.json 生成并写回此处。
+# 初始化后可在“日志规则”页面自由新建、重命名、编辑或删除，不会因程序升级而被覆盖。
+logging_rules:
+  model_path_templates_initialized: false
+  model_path_templates: []
 
 # 存储配置
 storage:

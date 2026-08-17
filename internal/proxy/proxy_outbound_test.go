@@ -6,8 +6,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/paopaoandlingyia/PrismCat/internal/config"
 	"github.com/paopaoandlingyia/PrismCat/internal/storage"
@@ -16,6 +18,31 @@ import (
 type preparingProxyTestRepo struct {
 	*proxyTestRepo
 	cfg *config.Config
+}
+
+type ignoredPathProxyTestRepo struct {
+	*proxyTestRepo
+	mu      sync.Mutex
+	ignored []storage.IgnoredPathObservation
+}
+
+func (r *ignoredPathProxyTestRepo) RecordIgnoredPath(upstream, requestPath string, seenAt time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.ignored = append(r.ignored, storage.IgnoredPathObservation{Upstream: upstream, Path: requestPath, Count: 1, LastSeen: seenAt})
+	return nil
+}
+
+func (r *ignoredPathProxyTestRepo) ListIgnoredPaths(storage.IgnoredPathFilter) (storage.IgnoredPathListResult, error) {
+	return storage.IgnoredPathListResult{}, nil
+}
+
+func (r *ignoredPathProxyTestRepo) DeleteIgnoredPaths(string, string) (int64, error) {
+	return 0, nil
+}
+
+func (r *ignoredPathProxyTestRepo) DeleteIgnoredPathsBefore(time.Time) (int64, error) {
+	return 0, nil
 }
 
 func (r *preparingProxyTestRepo) SaveLog(log *storage.RequestLog) error {
@@ -169,7 +196,7 @@ func TestProxyCanDisableLoggingPerUpstream(t *testing.T) {
 		},
 	}
 
-	repo := newProxyTestRepo()
+	repo := &ignoredPathProxyTestRepo{proxyTestRepo: newProxyTestRepo()}
 	p := New(cfg, repo, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "http://openai.localhost:8080/v1/responses", nil)
 	req.Host = "openai.localhost:8080"
@@ -185,6 +212,86 @@ func TestProxyCanDisableLoggingPerUpstream(t *testing.T) {
 	}
 	if got := repo.count(); got != 0 {
 		t.Fatalf("saved logs = %d, want 0", got)
+	}
+	if len(repo.ignored) != 0 {
+		t.Fatalf("ignored observations = %#v, want none when logging is disabled", repo.ignored)
+	}
+}
+
+func TestProxyFiltersLoggingByPathAndAuditsExcludedRequests(t *testing.T) {
+	filteredBody := make(chan string, 1)
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/assets/app.js" {
+			body, _ := io.ReadAll(r.Body)
+			filteredBody <- string(body)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"path":"` + r.URL.Path + `"}`))
+	}))
+	defer target.Close()
+
+	cfg := &config.Config{
+		Server: config.ServerConfig{ProxyDomains: []string{"localhost"}},
+		Upstreams: map[string]config.UpstreamConfig{
+			"openai": {
+				Target: target.URL,
+				LoggingPathFilter: &config.LoggingPathFilterConfig{
+					Mode:  config.LoggingModeAllowlist,
+					Rules: []config.LoggingPathRule{{Matcher: config.PathMatcherAnt, Pattern: "/v1/**"}},
+				},
+			},
+		},
+		Logging: config.LoggingConfig{MaxRequestBody: 1024, MaxResponseBody: 1024, BodyPreviewBytes: 1024, StoreBase64: true},
+		Overrides: config.RequestOverridesConfig{
+			Enabled:      true,
+			MaxBodyBytes: 1024,
+			Upstreams: map[string]config.RequestOverrideUpstreamBinding{
+				"openai": {Enabled: true, RuleNames: []string{"mark filtered request"}},
+			},
+			Rules: []config.RequestOverrideRule{{
+				Name:    "mark filtered request",
+				Enabled: true,
+				Match:   config.RequestOverrideMatch{PathPrefixes: []string{"/assets/"}},
+				Patch: []config.RequestOverridePatch{{
+					Op:    "set",
+					Path:  "filtered",
+					Value: true,
+				}},
+			}},
+		},
+	}
+	repo := &ignoredPathProxyTestRepo{proxyTestRepo: newProxyTestRepo()}
+	p := New(cfg, repo, nil, nil)
+
+	for _, requestPath := range []string{"/assets/app.js", "/v1/responses?debug=1"} {
+		method := http.MethodGet
+		var body io.Reader
+		if strings.HasPrefix(requestPath, "/assets/") {
+			method = http.MethodPost
+			body = strings.NewReader(`{}`)
+		}
+		req := httptest.NewRequest(method, "http://openai.localhost:8080"+requestPath, body)
+		req.Host = "openai.localhost:8080"
+		if body != nil {
+			req.Header.Set("Content-Type", "application/json")
+		}
+		rr := httptest.NewRecorder()
+		p.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("request %s status = %d", requestPath, rr.Code)
+		}
+	}
+
+	if repo.count() == 0 {
+		t.Fatal("allowlisted request was not logged")
+	}
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	if len(repo.ignored) != 1 || repo.ignored[0].Path != "/assets/app.js" {
+		t.Fatalf("ignored observations = %#v", repo.ignored)
+	}
+	if body := <-filteredBody; body != `{"filtered":true}` {
+		t.Fatalf("filtered request body = %q, want request overrides to remain active", body)
 	}
 }
 

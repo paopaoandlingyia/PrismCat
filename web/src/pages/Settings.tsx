@@ -4,10 +4,11 @@ import {
     useCallback,
     useMemo,
     useId,
+    useRef,
     type FormEvent,
     type ReactNode,
 } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { isSettingsTab, type SettingsTab } from '@/lib/routes'
 import {
     Plus,
@@ -35,6 +36,8 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { UpstreamLoggingPathFilter } from '@/components/UpstreamLoggingPathFilter'
+import { LoggingRules, type LoggingRulesTab } from '@/pages/LoggingRules'
 import { Switch } from '@/components/ui/switch'
 import {
     Select,
@@ -43,6 +46,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
     Dialog,
     DialogContent,
@@ -63,8 +67,8 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table'
-import { DEFAULT_UPSTREAM_TIMEOUT_SECONDS, fetchUpstreams, addUpstream, removeUpstream, activateUpstreamTarget, fetchConfig, updateConfig, fetchSystemMetrics, fetchUpdateInfo, fetchStorageUsage } from '@/lib/api'
-import type { Upstream, UpstreamTarget, AppConfig, SystemMetrics, UpdateInfo, StorageUsage } from '@/lib/api'
+import { DEFAULT_UPSTREAM_TIMEOUT_SECONDS, fetchUpstreams, addUpstream, removeUpstream, activateUpstreamTarget, fetchConfig, updateConfig, fetchSystemMetrics, fetchUpdateInfo, fetchStorageUsage, fetchModelPathTemplates } from '@/lib/api'
+import type { Upstream, UpstreamTarget, AppConfig, SystemMetrics, UpdateInfo, StorageUsage, LoggingPathFilter, ModelPathTemplate } from '@/lib/api'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -171,6 +175,7 @@ type EditingUpstream = {
     order: number
     outboundProxy: string
     loggingEnabled: boolean
+    loggingPathFilter: LoggingPathFilter
     overrideEnabled: boolean
     ruleNames: string[]
     usageEnabled: boolean
@@ -787,6 +792,7 @@ function SettingSection({
 
 export function Settings() {
     const { t } = useTranslation()
+    const navigate = useNavigate()
     const [upstreams, setUpstreams] = useState<Upstream[]>([])
     const [config, setConfig] = useState<AppConfig | null>(null)
     const [loading, setLoading] = useState(true)
@@ -794,8 +800,13 @@ export function Settings() {
     const [showAddForm, setShowAddForm] = useState(false)
     // 分区由 URL 决定,导航入口只有侧边栏一处。/settings 不带分区时落到 routing,
     // 不做重定向,免得在保存栏有未提交改动时因为地址跳转丢状态。
-    const { tab: tabParam } = useParams()
+    const { tab: tabParam, subtab: subtabParam } = useParams()
+    const [searchParams] = useSearchParams()
+    const deepLinkHandled = useRef(false)
     const activeTab: SettingsTab = isSettingsTab(tabParam) ? tabParam : 'routing'
+    const loggingSection: 'general' | LoggingRulesTab = subtabParam === 'models' || subtabParam === 'ignored'
+        ? subtabParam
+        : 'general'
     const [activeRuleTab, setActiveRuleTab] = useState<RuleTab>('request_overrides')
     const [metrics, setMetrics] = useState<SystemMetrics | null>(null)
     const [metricsLoading, setMetricsLoading] = useState(false)
@@ -816,6 +827,8 @@ export function Settings() {
     const [newOrder, setNewOrder] = useState(100)
     const [newOutboundProxy, setNewOutboundProxy] = useState('env')
     const [newLoggingEnabled, setNewLoggingEnabled] = useState(true)
+    const [newLoggingPathFilter, setNewLoggingPathFilter] = useState<LoggingPathFilter>({ mode: 'all', rules: [] })
+    const [modelPathTemplates, setModelPathTemplates] = useState<ModelPathTemplate[]>([])
     const [editingUpstream, setEditingUpstream] = useState<EditingUpstream | null>(null)
     const [upstreamAdvancedOpen, setUpstreamAdvancedOpen] = useState(false)
     const [newTargetPresetName, setNewTargetPresetName] = useState('')
@@ -1048,13 +1061,15 @@ export function Settings() {
     const loadData = useCallback(async () => {
         setLoading(true)
         try {
-            const [upstreamsData, configData] = await Promise.all([
+            const [upstreamsData, configData, modelPathData] = await Promise.all([
                 fetchUpstreams(),
                 fetchConfig(),
+                fetchModelPathTemplates(),
             ])
             setUpstreams(upstreamsData || [])
             setDirtyTargetBindingUpstreams(new Set())
             setConfig(configData)
+            setModelPathTemplates(modelPathData.templates || [])
             setShowAddForm(prev => prev || !upstreamsData?.length)
             const nextOrder = Math.max(0, ...(upstreamsData || []).map(item => item.order || 0)) + 10
             setNewOrder(nextOrder)
@@ -1166,6 +1181,9 @@ export function Settings() {
                 newOrder,
                 normalizedOutboundProxy(newOutboundProxy),
                 newLoggingEnabled,
+                '',
+                undefined,
+                newLoggingPathFilter,
             )
             setNewName('')
             setNewTarget('')
@@ -1176,6 +1194,7 @@ export function Settings() {
             setNewOrder(prev => prev + 10)
             setNewOutboundProxy('env')
             setNewLoggingEnabled(true)
+            setNewLoggingPathFilter({ mode: 'all', rules: [] })
             setShowAddForm(false)
             loadData()
             toast.success(t('settings.upstream_added'))
@@ -1577,7 +1596,7 @@ export function Settings() {
         setUsageRulesArray(nextRules, index)
     }
 
-    const handleEditUpstream = (upstream: Upstream) => {
+    const handleEditUpstream = useCallback((upstream: Upstream) => {
         const binding = overrideBindings[upstream.name]
         const usageBinding = usageBindings[upstream.name]
         const targets = upstream.targets || {}
@@ -1608,6 +1627,7 @@ export function Settings() {
             order: upstream.order || 0,
             outboundProxy: upstream.outbound_proxy || 'env',
             loggingEnabled: upstream.logging_enabled !== false,
+            loggingPathFilter: upstream.logging_path_filter || { mode: 'all', rules: [] },
             overrideEnabled: usesTargetPresets ? false : (binding?.enabled ?? false),
             ruleNames: usesTargetPresets ? [] : getBindingRuleNames(binding),
             usageEnabled: usesTargetPresets ? false : (usageBinding?.enabled ?? false),
@@ -1619,7 +1639,17 @@ export function Settings() {
         }
         setNewTargetPresetName('')
         setEditingUpstream(usesTargetPresets ? loadTargetBuffer(editing, selectedTarget) : editing)
-    }
+    }, [overrideBindings, usageBindings])
+
+    useEffect(() => {
+        if (deepLinkHandled.current || loading || activeTab !== 'routing') return
+        const requested = searchParams.get('edit')
+        if (!requested) return
+        const upstream = upstreams.find(item => item.name === requested)
+        if (!upstream) return
+        deepLinkHandled.current = true
+        handleEditUpstream(upstream)
+    }, [activeTab, handleEditUpstream, loading, searchParams, upstreams])
 
     const handleEnableTargetPresets = () => {
         setEditingUpstream(current => {
@@ -1746,6 +1776,7 @@ export function Settings() {
                 committed.loggingEnabled,
                 committed.usesTargetPresets ? committed.activeTarget : '',
                 committed.usesTargetPresets ? committed.targets : undefined,
+                committed.loggingPathFilter,
             )
             await updateConfig({
                 request_overrides: buildOverridesPayload(nextBindings, overrideRules),
@@ -1877,6 +1908,22 @@ export function Settings() {
                                         checked={editingUpstream.loggingEnabled}
                                         onCheckedChange={(checked) => setEditingUpstream(current => current ? { ...current, loggingEnabled: checked } : current)}
                                     />
+                                    <div className="space-y-2 border-l-2 border-border pl-4">
+                                        <div>
+                                            <div className="text-sm font-medium text-foreground">
+                                                {t('upstream_manager.logging_path_mode')}
+                                            </div>
+                                            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                                                {t('upstream_manager.logging_path_mode_hint')}
+                                            </p>
+                                        </div>
+                                        <UpstreamLoggingPathFilter
+                                            value={editingUpstream.loggingPathFilter}
+                                            onChange={loggingPathFilter => setEditingUpstream(current => current ? { ...current, loggingPathFilter } : current)}
+                                            templates={modelPathTemplates}
+                                            disabled={!editingUpstream.loggingEnabled}
+                                        />
+                                    </div>
                                 </section>
 
                                 {/* 预设级字段:切换器在面板上沿,面板边框包住的正是它支配的范围。
@@ -2410,6 +2457,22 @@ export function Settings() {
                                                                     checked={newLoggingEnabled}
                                                                     onCheckedChange={setNewLoggingEnabled}
                                                                 />
+                                                                <div className="space-y-2 border-l-2 border-border pl-4">
+                                                                    <div>
+                                                                        <div className="text-sm font-medium text-foreground">
+                                                                            {t('upstream_manager.logging_path_mode')}
+                                                                        </div>
+                                                                        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                                                                            {t('upstream_manager.logging_path_mode_hint')}
+                                                                        </p>
+                                                                    </div>
+                                                                    <UpstreamLoggingPathFilter
+                                                                        value={newLoggingPathFilter}
+                                                                        onChange={setNewLoggingPathFilter}
+                                                                        templates={modelPathTemplates}
+                                                                        disabled={!newLoggingEnabled}
+                                                                    />
+                                                                </div>
                                                             </AdvancedSettingsGroup>
                                                         </AdvancedSettings>
                                                     </div>
@@ -2461,6 +2524,8 @@ export function Settings() {
                                                         }
                                                         if (upstream.logging_enabled === false) {
                                                             flagLabels.push(t('upstream_manager.logging_disabled_badge'))
+                                                        } else if (upstream.logging_path_filter && upstream.logging_path_filter.mode !== 'all') {
+                                                            flagLabels.push(t(`upstream_manager.logging_mode_${upstream.logging_path_filter.mode}`) + ` ×${upstream.logging_path_filter.rules?.length || 0}`)
                                                         }
 
                                                         return (
@@ -2613,6 +2678,19 @@ export function Settings() {
                         {activeTab === 'logging' && (
                             <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 motion-reduce:animate-none motion-reduce:duration-0">
                                 <div className="mx-auto max-w-7xl space-y-6">
+                                    <Tabs
+                                        value={loggingSection}
+                                        onValueChange={value => navigate(`/settings/logging/${value}`)}
+                                    >
+                                        <TabsList>
+                                            <TabsTrigger value="general">{t('logging_rules.tabs.general')}</TabsTrigger>
+                                            <TabsTrigger value="models">{t('logging_rules.tabs.models')}</TabsTrigger>
+                                            <TabsTrigger value="ignored">{t('logging_rules.tabs.ignored')}</TabsTrigger>
+                                        </TabsList>
+                                    </Tabs>
+
+                                    {loggingSection === 'general' ? (
+                                    <>
                                     <SettingSection
                                         title={t('settings.section_content_size')}
                                         description={t('settings.section_content_size_desc')}
@@ -2752,6 +2830,10 @@ export function Settings() {
                                             placeholder="Authorization&#10;x-api-key&#10;api-key"
                                         />
                                     </SettingSection>
+                                    </>
+                                    ) : (
+                                        <LoggingRules tab={loggingSection} embedded />
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -3687,7 +3769,7 @@ export function Settings() {
                             </div>
                         )}
                     </div>
-                    {(activeTab === 'routing' || activeTab === 'logging' || activeTab === 'overrides') && (
+                    {(activeTab === 'routing' || (activeTab === 'logging' && loggingSection === 'general') || activeTab === 'overrides') && (
                         <div className="sticky bottom-0 z-30 -mx-4 border-t border-input bg-background px-4 py-3 sm:-mx-10 sm:px-10">
                             <div className="mx-auto flex max-w-7xl items-center justify-end gap-4">
                                 <Button
