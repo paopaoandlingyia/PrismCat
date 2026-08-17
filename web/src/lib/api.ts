@@ -101,8 +101,63 @@ export interface Upstream {
     order: number
     outbound_proxy: string
     logging_enabled: boolean
+    logging_path_filter?: LoggingPathFilter
     active_target?: string
     targets?: Record<string, UpstreamTarget>
+}
+
+export type PathMatcher = 'ant' | 'regex'
+export type LoggingPathMode = 'all' | 'allowlist' | 'denylist'
+
+export interface LoggingPathRule {
+    matcher: PathMatcher
+    pattern: string
+}
+
+export interface LoggingPathFilter {
+    mode: LoggingPathMode
+    rules: LoggingPathRule[]
+}
+
+export interface ModelPathTemplate {
+    tag: string
+    rules: LoggingPathRule[]
+}
+
+export interface SystemModelPathTemplate extends ModelPathTemplate {
+    display_name: string
+    description: string
+    provider: string
+    category: string
+    initialize: boolean
+    includes?: string[]
+}
+
+export interface ModelPathTemplatesResponse {
+    templates: ModelPathTemplate[]
+    system_defaults: SystemModelPathTemplate[]
+}
+
+export interface IgnoredPathRecord {
+    upstream: string
+    path: string
+    request_count: number
+    last_seen: string
+}
+
+export interface IgnoredPathListResponse {
+    paths: IgnoredPathRecord[]
+    total: number
+    total_requests: number
+}
+
+export interface IgnoredPathFilter {
+    upstream?: string
+    path?: string
+    sort?: 'last_seen' | 'count'
+    order?: 'asc' | 'desc'
+    offset?: number
+    limit?: number
 }
 
 export interface RuleBinding {
@@ -315,18 +370,60 @@ export async function addUpstream(
     logging_enabled: boolean = true,
     active_target: string = '',
     targets?: Record<string, UpstreamTarget>,
+    logging_path_filter?: LoggingPathFilter,
 ): Promise<void> {
     const response = await fetch(`${API_BASE}/upstreams`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name, target, timeout, response_header_timeout, response_body_first_byte_timeout, response_body_idle_timeout, order, outbound_proxy, logging_enabled, active_target, targets }),
+        body: JSON.stringify({ name, target, timeout, response_header_timeout, response_body_first_byte_timeout, response_body_idle_timeout, order, outbound_proxy, logging_enabled, active_target, targets, logging_path_filter }),
     })
     if (!response.ok) {
         const error = await response.json().catch(() => ({ error: '请求失败' }))
         throw new Error(error.error || '添加上游失败')
     }
+}
+
+export async function fetchModelPathTemplates(): Promise<ModelPathTemplatesResponse> {
+    const response = await fetch(`${API_BASE}/logging-rules/model-path-templates`)
+    if (!response.ok) throw new Error('获取模型日志路径模板失败')
+    return response.json()
+}
+
+export async function saveModelPathTemplates(templates: ModelPathTemplate[]): Promise<void> {
+    const response = await fetch(`${API_BASE}/logging-rules/model-path-templates`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ templates }),
+    })
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: '请求失败' }))
+        throw new Error(error.error || '保存模型日志路径模板失败')
+    }
+}
+
+export async function fetchIgnoredPaths(filter: IgnoredPathFilter = {}): Promise<IgnoredPathListResponse> {
+    const params = new URLSearchParams()
+    Object.entries(filter).forEach(([key, value]) => {
+        if (value !== undefined && value !== '') params.set(key, String(value))
+    })
+    const response = await fetch(`${API_BASE}/logging-rules/ignored-paths?${params}`)
+    if (!response.ok) throw new Error('获取被忽略路径失败')
+    return response.json()
+}
+
+export async function deleteIgnoredPaths(upstream = '', path = ''): Promise<number> {
+    const params = new URLSearchParams()
+    if (upstream) params.set('upstream', upstream)
+    if (path) params.set('path', path)
+    const response = await fetch(`${API_BASE}/logging-rules/ignored-paths?${params}`, { method: 'DELETE' })
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: '请求失败' }))
+        throw new Error(error.error || '删除被忽略路径失败')
+    }
+    const result = await response.json() as { deleted: number }
+    return result.deleted
 }
 
 export async function activateUpstreamTarget(upstream: string, target: string): Promise<void> {

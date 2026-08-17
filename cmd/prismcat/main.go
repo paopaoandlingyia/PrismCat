@@ -139,6 +139,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("加载配置失败: %v", err)
 	}
+	if err := cfg.EnsureModelPathTemplatesInitialized(); err != nil {
+		log.Fatalf("初始化模型日志路径模板失败: %v", err)
+	}
 	log.Printf("PrismCat %s 启动中...", config.Version)
 	log.Printf("配置已加载: DetachBodyOverBytes=%d, BodyPreviewBytes=%d",
 		cfg.Logging.DetachBodyOverBytes, cfg.Logging.BodyPreviewBytes)
@@ -188,6 +191,13 @@ func main() {
 					log.Printf("deleted %d logs older than %d days", n, storageCfg.RetentionDays)
 				}
 				totalDeleted += n
+				ignoredDeleted, ignoredErr := asyncRepo.DeleteIgnoredPathsBefore(before)
+				if ignoredErr != nil {
+					log.Printf("ignored path retention cleanup failed: %v", ignoredErr)
+				} else if ignoredDeleted > 0 {
+					log.Printf("deleted %d ignored paths older than %d days", ignoredDeleted, storageCfg.RetentionDays)
+				}
+				totalDeleted += ignoredDeleted
 				lastRetention = time.Now()
 			}
 

@@ -1,0 +1,233 @@
+{
+  "schema_version": 1,
+  "templates": [
+    {
+      "tag": "openai-core",
+      "display_name": "OpenAI Core",
+      "description": "Responses, chat/completions, embeddings, moderations, and model discovery.",
+      "provider": "openai",
+      "category": "core",
+      "initialize": true,
+      "paths": [
+        "/v1/responses/**",
+        "/v1/chat/completions",
+        "/v1/completions",
+        "/v1/embeddings",
+        "/v1/moderations",
+        "/v1/models/**"
+      ]
+    },
+    {
+      "tag": "openai-images",
+      "display_name": "OpenAI Images",
+      "description": "Image generation, editing, async tasks, and image batches.",
+      "provider": "openai",
+      "category": "capability",
+      "initialize": false,
+      "paths": [
+        "/v1/images/**"
+      ]
+    },
+    {
+      "tag": "openai-audio",
+      "display_name": "OpenAI Audio",
+      "description": "Speech, transcription, translation, and related audio endpoints.",
+      "provider": "openai",
+      "category": "capability",
+      "initialize": false,
+      "paths": [
+        "/v1/audio/**"
+      ]
+    },
+    {
+      "tag": "openai-realtime",
+      "display_name": "OpenAI Realtime",
+      "description": "Realtime sessions and calls.",
+      "provider": "openai",
+      "category": "capability",
+      "initialize": false,
+      "paths": [
+        "/v1/realtime/**"
+      ]
+    },
+    {
+      "tag": "openai-videos",
+      "display_name": "OpenAI Videos",
+      "description": "Video generation, editing, status, and content retrieval.",
+      "provider": "openai",
+      "category": "capability",
+      "initialize": false,
+      "paths": [
+        "/v1/videos/**"
+      ]
+    },
+    {
+      "tag": "openai-data",
+      "display_name": "OpenAI Data",
+      "description": "Files, uploads, batches, and vector stores.",
+      "provider": "openai",
+      "category": "capability",
+      "initialize": false,
+      "paths": [
+        "/v1/files/**",
+        "/v1/uploads/**",
+        "/v1/batches/**",
+        "/v1/vector_stores/**"
+      ]
+    },
+    {
+      "tag": "openai-tools",
+      "display_name": "OpenAI Tools",
+      "description": "Conversations and containers used by tool-enabled workflows.",
+      "provider": "openai",
+      "category": "capability",
+      "initialize": false,
+      "paths": [
+        "/v1/conversations/**",
+        "/v1/containers/**"
+      ]
+    },
+    {
+      "tag": "openai-codex",
+      "display_name": "OpenAI Codex Client",
+      "description": "Minimal OpenAI-compatible routes commonly used by Codex clients.",
+      "provider": "openai",
+      "category": "client",
+      "initialize": false,
+      "paths": [
+        "/v1/responses/**",
+        "/v1/models/**"
+      ]
+    },
+    {
+      "tag": "openai-full",
+      "display_name": "OpenAI Full",
+      "description": "All general OpenAI API capability packs in this catalog.",
+      "provider": "openai",
+      "category": "bundle",
+      "initialize": false,
+      "includes": [
+        "openai-core",
+        "openai-images",
+        "openai-audio",
+        "openai-realtime",
+        "openai-videos",
+        "openai-data",
+        "openai-tools"
+      ],
+      "paths": []
+    },
+    {
+      "tag": "claude-core",
+      "display_name": "Claude Core",
+      "description": "Anthropic-compatible messages and token counting.",
+      "provider": "anthropic",
+      "category": "core",
+      "initialize": true,
+      "paths": [
+        "/v1/messages",
+        "/v1/messages/count_tokens"
+      ]
+    },
+    {
+      "tag": "gemini-core",
+      "display_name": "Gemini Core",
+      "description": "Gemini model discovery and model actions such as generateContent.",
+      "provider": "google",
+      "category": "core",
+      "initialize": true,
+      "paths": [
+        "/v1beta/models",
+        "/v1beta/models/*"
+      ]
+    },
+    {
+      "tag": "grok-core",
+      "display_name": "Grok Core",
+      "description": "OpenAI-compatible chat and model discovery routes used by Grok relays.",
+      "provider": "xai",
+      "category": "core",
+      "initialize": false,
+      "paths": [
+        "/v1/chat/completions",
+        "/v1/models/**"
+      ]
+    },
+    {
+      "tag": "grok-videos",
+      "display_name": "Grok Videos",
+      "description": "Sub2API Grok video generation, editing, extension, and retrieval routes.",
+      "provider": "xai",
+      "category": "capability",
+      "initialize": false,
+      "paths": [
+        "/v1/videos/**"
+      ]
+    },
+    {
+      "tag": "grok-audio",
+      "display_name": "Grok Audio",
+      "description": "Sub2API Grok TTS, STT, realtime, and custom voice routes.",
+      "provider": "xai",
+      "category": "capability",
+      "initialize": false,
+      "paths": [
+        "/v1/tts",
+        "/v1/stt",
+        "/v1/realtime/**",
+        "/v1/custom-voices/**"
+      ]
+    },
+    {
+      "tag": "grok-search",
+      "display_name": "Grok Search",
+      "description": "Sub2API Grok web and X search routes.",
+      "provider": "xai",
+      "category": "capability",
+      "initialize": false,
+      "paths": [
+        "/v1/web_search",
+        "/v1/x_search"
+      ]
+    },
+    {
+      "tag": "sub2api-codex",
+      "display_name": "Sub2API Codex",
+      "description": "Sub2API-specific Codex direct, search, and live-call routes.",
+      "provider": "sub2api",
+      "category": "relay",
+      "initialize": false,
+      "paths": [
+        "/backend-api/codex/**",
+        "/v1/alpha/search",
+        "/v1/live/**"
+      ]
+    },
+    {
+      "tag": "sub2api-compat-aliases",
+      "display_name": "Sub2API Compatibility Aliases",
+      "description": "Documented no-version aliases for OpenAI- and Anthropic-compatible routes.",
+      "provider": "sub2api",
+      "category": "relay",
+      "initialize": false,
+      "paths": [
+        "/responses/**",
+        "/chat/completions",
+        "/messages",
+        "/messages/count_tokens"
+      ]
+    },
+    {
+      "tag": "sub2api-account",
+      "display_name": "Sub2API Account",
+      "description": "Sub2API usage and billing routes; optional because they are not model inference.",
+      "provider": "sub2api",
+      "category": "account",
+      "initialize": false,
+      "paths": [
+        "/v1/usage",
+        "/v1/sub2api/billing"
+      ]
+    }
+  ]
+}

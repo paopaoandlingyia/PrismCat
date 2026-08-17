@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -38,6 +39,19 @@ type AsyncRepository struct {
 
 	wg      sync.WaitGroup
 	dropped atomic.Uint64
+
+	ignoredMu                sync.Mutex
+	pendingIgnored           map[ignoredPathKey]IgnoredPathObservation
+	pendingIgnoredByUpstream map[string]int
+	ignoredStop              chan struct{}
+	ignoredWG                sync.WaitGroup
+	ignoredFlushErrMu        sync.Mutex
+	ignoredFlushErr          error
+}
+
+type ignoredPathKey struct {
+	upstream string
+	path     string
 }
 
 // NewAsyncRepository creates an async wrapper with a bounded queue.
@@ -46,10 +60,13 @@ func NewAsyncRepository(inner Repository, cfg *config.Config, buffer int, blobs 
 		buffer = 1024
 	}
 	a := &AsyncRepository{
-		inner: inner,
-		cfg:   cfg,
-		blobs: firstBlobStore(blobs),
-		ch:    make(chan *RequestLog, buffer),
+		inner:                    inner,
+		cfg:                      cfg,
+		blobs:                    firstBlobStore(blobs),
+		ch:                       make(chan *RequestLog, buffer),
+		pendingIgnored:           make(map[ignoredPathKey]IgnoredPathObservation),
+		pendingIgnoredByUpstream: make(map[string]int),
+		ignoredStop:              make(chan struct{}),
 	}
 	a.inflightCond = sync.NewCond(&a.inflightMu)
 
@@ -64,6 +81,30 @@ func NewAsyncRepository(inner Repository, cfg *config.Config, buffer int, blobs 
 			}
 		}
 	}()
+
+	if _, ok := inner.(ignoredPathPersistence); ok {
+		a.ignoredWG.Add(1)
+		go func() {
+			defer a.ignoredWG.Done()
+			ticker := time.NewTicker(time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					if err := a.flushIgnoredPaths(); err != nil {
+						log.Printf("save ignored path stats failed: %v", err)
+					}
+				case <-a.ignoredStop:
+					if err := a.flushIgnoredPaths(); err != nil {
+						a.ignoredFlushErrMu.Lock()
+						a.ignoredFlushErr = err
+						a.ignoredFlushErrMu.Unlock()
+					}
+					return
+				}
+			}
+		}()
+	}
 
 	return a
 }
@@ -160,6 +201,125 @@ func (a *AsyncRepository) GetStats(since *time.Time) (*LogStats, error) {
 	return a.inner.GetStats(since)
 }
 
+func (a *AsyncRepository) RecordIgnoredPath(upstream, requestPath string, seenAt time.Time) error {
+	upstream = strings.TrimSpace(upstream)
+	requestPath = strings.TrimSpace(requestPath)
+	if upstream == "" || requestPath == "" {
+		return nil
+	}
+	if a.closed.Load() {
+		return ErrAsyncClosed
+	}
+
+	a.inflightMu.Lock()
+	if a.closed.Load() {
+		a.inflightMu.Unlock()
+		return ErrAsyncClosed
+	}
+	a.inflight++
+	a.inflightMu.Unlock()
+	defer func() {
+		a.inflightMu.Lock()
+		a.inflight--
+		if a.inflight == 0 && a.inflightCond != nil {
+			a.inflightCond.Broadcast()
+		}
+		a.inflightMu.Unlock()
+	}()
+
+	if seenAt.IsZero() {
+		seenAt = time.Now()
+	}
+	key := ignoredPathKey{upstream: upstream, path: requestPath}
+	a.ignoredMu.Lock()
+	entry, exists := a.pendingIgnored[key]
+	if !exists && a.pendingIgnoredByUpstream[upstream] >= IgnoredPathMaxEntriesPerUpstream {
+		a.ignoredMu.Unlock()
+		return nil
+	}
+	if !exists {
+		entry = IgnoredPathObservation{Upstream: upstream, Path: requestPath}
+		a.pendingIgnoredByUpstream[upstream]++
+	}
+	entry.Count++
+	if seenAt.After(entry.LastSeen) {
+		entry.LastSeen = seenAt
+	}
+	a.pendingIgnored[key] = entry
+	a.ignoredMu.Unlock()
+	return nil
+}
+
+func (a *AsyncRepository) flushIgnoredPaths() error {
+	store, ok := a.inner.(ignoredPathPersistence)
+	if !ok {
+		return nil
+	}
+	a.ignoredMu.Lock()
+	if len(a.pendingIgnored) == 0 {
+		a.ignoredMu.Unlock()
+		return nil
+	}
+	entries := make([]IgnoredPathObservation, 0, len(a.pendingIgnored))
+	for _, entry := range a.pendingIgnored {
+		entries = append(entries, entry)
+	}
+	a.pendingIgnored = make(map[ignoredPathKey]IgnoredPathObservation)
+	a.pendingIgnoredByUpstream = make(map[string]int)
+	a.ignoredMu.Unlock()
+
+	if err := store.UpsertIgnoredPaths(entries, IgnoredPathMaxEntriesPerUpstream); err != nil {
+		// Put observations back so a transient SQLite error does not lose audit counts.
+		a.ignoredMu.Lock()
+		for _, entry := range entries {
+			key := ignoredPathKey{upstream: entry.Upstream, path: entry.Path}
+			pending, exists := a.pendingIgnored[key]
+			if !exists {
+				pending = IgnoredPathObservation{Upstream: entry.Upstream, Path: entry.Path}
+				a.pendingIgnoredByUpstream[entry.Upstream]++
+			}
+			pending.Count += entry.Count
+			if entry.LastSeen.After(pending.LastSeen) {
+				pending.LastSeen = entry.LastSeen
+			}
+			a.pendingIgnored[key] = pending
+		}
+		a.ignoredMu.Unlock()
+		return err
+	}
+	return nil
+}
+
+func (a *AsyncRepository) ListIgnoredPaths(filter IgnoredPathFilter) (IgnoredPathListResult, error) {
+	store, ok := a.inner.(ignoredPathPersistence)
+	if !ok {
+		return IgnoredPathListResult{}, errors.New("ignored path storage is unavailable")
+	}
+	return store.ListIgnoredPaths(filter)
+}
+
+func (a *AsyncRepository) DeleteIgnoredPaths(upstream, requestPath string) (int64, error) {
+	if err := a.flushIgnoredPaths(); err != nil {
+		return 0, err
+	}
+	store, ok := a.inner.(ignoredPathPersistence)
+	if !ok {
+		return 0, errors.New("ignored path storage is unavailable")
+	}
+	return store.DeleteIgnoredPaths(upstream, requestPath)
+}
+
+func (a *AsyncRepository) DeleteIgnoredPathsBefore(before time.Time) (int64, error) {
+	if err := a.flushIgnoredPaths(); err != nil {
+		return 0, err
+	}
+	store, ok := a.inner.(ignoredPathPersistence)
+	if !ok {
+		return 0, errors.New("ignored path storage is unavailable")
+	}
+	return store.DeleteIgnoredPathsBefore(before)
+}
+
 func (a *AsyncRepository) Close() error {
 	a.closeOnce.Do(func() {
 		if a.inflightCond == nil {
@@ -172,8 +332,13 @@ func (a *AsyncRepository) Close() error {
 			a.inflightCond.Wait()
 		}
 		close(a.ch)
+		close(a.ignoredStop)
 		a.inflightMu.Unlock()
 	})
 	a.wg.Wait()
-	return a.inner.Close()
+	a.ignoredWG.Wait()
+	a.ignoredFlushErrMu.Lock()
+	flushErr := a.ignoredFlushErr
+	a.ignoredFlushErrMu.Unlock()
+	return errors.Join(flushErr, a.inner.Close())
 }
