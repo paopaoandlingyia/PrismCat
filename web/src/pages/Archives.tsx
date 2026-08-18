@@ -333,7 +333,7 @@ export function Archives() {
             </Tabs>
 
             <Dialog open={s3DialogOpen} onOpenChange={setS3DialogOpen}>
-                <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-4xl">
+                <DialogContent className="min-w-0 max-h-[85vh] overflow-x-hidden overflow-y-auto sm:max-w-4xl">
                     <DialogHeader>
                         <DialogTitle>{t('archives.find_s3_title')}</DialogTitle>
                         <DialogDescription>{t('archives.find_s3_description')}</DialogDescription>
@@ -351,19 +351,23 @@ export function Archives() {
                         </Button>
                     </div>
                     {s3Result?.s3_error && <div className="text-sm text-destructive">{s3Result.s3_error}</div>}
-                    <HistoryTable empty={t('archives.no_packages')} count={s3Result?.objects?.length ?? 0}>
-                        <Table>
-                            <TableHeader><TableRow><TableHead>{t('archives.object')}</TableHead><TableHead>{t('archives.size')}</TableHead><TableHead>{t('archives.modified')}</TableHead><TableHead className="w-16" /></TableRow></TableHeader>
-                            <TableBody>{(s3Result?.objects ?? []).map(object => (
-                                <TableRow key={object.key}>
-                                    <TableCell className="max-w-[580px] break-all font-mono text-xs">{object.key}</TableCell>
-                                    <TableCell>{formatSize(object.size)}</TableCell>
-                                    <TableCell className="whitespace-nowrap">{formatDate(object.last_modified, i18n.language)}</TableCell>
-                                    <TableCell><Button type="button" variant="ghost" size="icon-sm" disabled={action !== ''} onClick={() => void importObject(object.key)} title={t('archives.import')}><CloudDownload className="h-4 w-4" /></Button></TableCell>
-                                </TableRow>
-                            ))}</TableBody>
-                        </Table>
-                    </HistoryTable>
+                    <div className="min-w-0 max-w-full">
+                        <HistoryTable empty={t('archives.no_packages')} count={s3Result?.objects?.length ?? 0}>
+                            <Table className="min-w-[640px] table-fixed">
+                                <TableHeader><TableRow><TableHead>{t('archives.object')}</TableHead><TableHead className="w-24">{t('archives.size')}</TableHead><TableHead className="w-44">{t('archives.modified')}</TableHead><TableHead className="w-12" /></TableRow></TableHeader>
+                                <TableBody>{(s3Result?.objects ?? []).map(object => (
+                                    <TableRow key={object.key}>
+                                        <TableCell className="max-w-0 overflow-hidden">
+                                            <div className="truncate font-mono text-xs" title={object.key}>{object.key}</div>
+                                        </TableCell>
+                                        <TableCell className="whitespace-nowrap">{formatSize(object.size)}</TableCell>
+                                        <TableCell className="whitespace-nowrap">{formatDate(object.last_modified, i18n.language)}</TableCell>
+                                        <TableCell><Button type="button" variant="ghost" size="icon-sm" disabled={action !== ''} onClick={() => void importObject(object.key)} title={t('archives.import')}><CloudDownload className="h-4 w-4" /></Button></TableCell>
+                                    </TableRow>
+                                ))}</TableBody>
+                            </Table>
+                        </HistoryTable>
+                    </div>
                 </DialogContent>
             </Dialog>
         </div>
