@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -242,6 +243,170 @@ func TestImportDateRestoresAllPackagesForTheDay(t *testing.T) {
 	}
 }
 
+func TestDownloadVerifiedArchiveRejectsOversizeBeforeDownload(t *testing.T) {
+	const (
+		key   = "backups/prismcat/archive.tar.zst"
+		limit = int64(8)
+	)
+	store := &memoryObjectStore{objects: map[string][]byte{
+		key: []byte("0123456789"),
+	}}
+	store.objects[key+".manifest.json"] = testSidecarData(t, key, limit)
+	archivePath := filepath.Join(t.TempDir(), "archive.tar.zst")
+
+	_, err := downloadVerifiedArchiveWithLimit(context.Background(), store, key, archivePath, limit)
+	if err == nil || !strings.Contains(err.Error(), "exceeds download limit") {
+		t.Fatalf("error = %v, want download limit error", err)
+	}
+	if store.downloadCalls != 0 {
+		t.Fatalf("download calls = %d, want 0", store.downloadCalls)
+	}
+}
+
+func TestDownloadVerifiedArchiveEnforcesStreamLimit(t *testing.T) {
+	const (
+		key   = "backups/prismcat/archive.tar.zst"
+		limit = int64(8)
+	)
+	store := &memoryObjectStore{
+		objects:      map[string][]byte{key: []byte("0123456789")},
+		sizeOverride: map[string]int64{key: limit},
+	}
+	store.objects[key+".manifest.json"] = testSidecarData(t, key, limit)
+	archivePath := filepath.Join(t.TempDir(), "archive.tar.zst")
+
+	_, err := downloadVerifiedArchiveWithLimit(context.Background(), store, key, archivePath, limit)
+	if err == nil || !strings.Contains(err.Error(), "exceeds download limit") {
+		t.Fatalf("error = %v, want download limit error", err)
+	}
+	if store.downloadCalls != 1 {
+		t.Fatalf("download calls = %d, want 1", store.downloadCalls)
+	}
+}
+
+func TestWriteLimitedDownloadRemovesPartialFile(t *testing.T) {
+	archivePath := filepath.Join(t.TempDir(), "archive.tar.zst")
+	written, err := writeLimitedDownload(archivePath, strings.NewReader("0123456789"), 8)
+	if err == nil || !strings.Contains(err.Error(), "exceeds download limit") {
+		t.Fatalf("error = %v, want download limit error", err)
+	}
+	if written != 9 {
+		t.Fatalf("written = %d, want 9", written)
+	}
+	if _, statErr := os.Stat(archivePath); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("partial file still exists: %v", statErr)
+	}
+}
+
+func TestRunJobAbortsWhenRunningStatusUpdateFails(t *testing.T) {
+	baseRepo, blobs := newArchiveTestStorage(t, "job-status-failure")
+	repo := &failingArchiveUpdateRepository{
+		SQLiteRepository: baseRepo,
+		failJobUpdate: func(job storage.ArchiveJob) error {
+			if job.Status == "running" {
+				return errors.New("simulated job status failure")
+			}
+			return nil
+		},
+	}
+	manager, err := NewManager(archiveTestConfig(), repo, blobs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	job, err := manager.RunBlocking(context.Background(), "manual", time.Now())
+	if err == nil || !strings.Contains(err.Error(), "mark archive job running") {
+		t.Fatalf("error = %v, want running status error", err)
+	}
+	if job.Status != "failed" {
+		t.Fatalf("job status = %q, want failed", job.Status)
+	}
+	jobs, listErr := baseRepo.ListArchiveJobs(1)
+	if listErr != nil || len(jobs) != 1 || jobs[0].Status != "failed" || jobs[0].Error == "" {
+		t.Fatalf("persisted jobs = %#v, error = %v", jobs, listErr)
+	}
+	batches, listErr := baseRepo.ListArchiveBatches(1)
+	if listErr != nil || len(batches) != 0 {
+		t.Fatalf("batches = %#v, error = %v", batches, listErr)
+	}
+}
+
+func TestArchiveDayAbortsWhenUploadingStatusUpdateFails(t *testing.T) {
+	start := time.Date(2026, 8, 17, 0, 0, 0, 0, time.FixedZone("CST", 8*60*60))
+	baseRepo, blobs := newArchiveTestStorage(t, "batch-status-failure")
+	if err := baseRepo.SaveLog(&storage.RequestLog{
+		ID: "batch-status-log", CreatedAt: start.Add(time.Hour), Upstream: "test",
+		TargetURL: "https://example.test", Method: "POST", Path: "/",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	repo := &failingArchiveUpdateRepository{
+		SQLiteRepository: baseRepo,
+		failBatchUpdate: func(batch storage.ArchiveBatch) error {
+			if batch.Status == "uploading" {
+				return errors.New("simulated batch status failure")
+			}
+			return nil
+		},
+	}
+	manager, err := NewManager(archiveTestConfig(), repo, blobs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := &memoryObjectStore{objects: make(map[string][]byte)}
+	manager.store = func(config.ArchiveS3Config) (objectStore, error) { return store, nil }
+
+	job, err := manager.RunBlocking(context.Background(), "manual", start.Add(2*time.Hour))
+	if err == nil || !strings.Contains(err.Error(), "simulated batch status failure") {
+		t.Fatalf("error = %v, want batch status error", err)
+	}
+	if job.Status != "failed" {
+		t.Fatalf("job status = %q, want failed", job.Status)
+	}
+	if len(store.objects) != 0 {
+		t.Fatalf("uploaded objects = %d, want 0", len(store.objects))
+	}
+	batches, listErr := baseRepo.ListArchiveBatches(1)
+	if listErr != nil || len(batches) != 1 || batches[0].Status != "failed" || batches[0].Error == "" {
+		t.Fatalf("batches = %#v, error = %v", batches, listErr)
+	}
+}
+
+func testSidecarData(t *testing.T, key string, compressedBytes int64) []byte {
+	t.Helper()
+	data, err := json.Marshal(SidecarManifest{
+		Manifest: Manifest{FormatVersion: archiveFormatVersion, CompressedBytes: compressedBytes},
+		BatchID:  "test-batch", ObjectKey: key, PackageSHA256: strings.Repeat("0", 64),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}
+
+type failingArchiveUpdateRepository struct {
+	*storage.SQLiteRepository
+	failJobUpdate   func(storage.ArchiveJob) error
+	failBatchUpdate func(storage.ArchiveBatch) error
+}
+
+func (r *failingArchiveUpdateRepository) UpdateArchiveJob(job storage.ArchiveJob) error {
+	if r.failJobUpdate != nil {
+		if err := r.failJobUpdate(job); err != nil {
+			return err
+		}
+	}
+	return r.SQLiteRepository.UpdateArchiveJob(job)
+}
+
+func (r *failingArchiveUpdateRepository) UpdateArchiveBatch(batch storage.ArchiveBatch) error {
+	if r.failBatchUpdate != nil {
+		if err := r.failBatchUpdate(batch); err != nil {
+			return err
+		}
+	}
+	return r.SQLiteRepository.UpdateArchiveBatch(batch)
+}
+
 func archiveTestConfig() *config.Config {
 	return &config.Config{Archive: config.ArchiveConfig{
 		Enabled:   true,
@@ -252,8 +417,10 @@ func archiveTestConfig() *config.Config {
 }
 
 type memoryObjectStore struct {
-	objects     map[string][]byte
-	failSidecar bool
+	objects       map[string][]byte
+	failSidecar   bool
+	sizeOverride  map[string]int64
+	downloadCalls int
 }
 
 func (s *memoryObjectStore) test(context.Context, string) error { return nil }
@@ -287,12 +454,30 @@ func (s *memoryObjectStore) list(_ context.Context, prefix string) ([]S3Object, 
 	return objects, nil
 }
 
-func (s *memoryObjectStore) download(_ context.Context, key, filePath string) error {
+func (s *memoryObjectStore) size(_ context.Context, key string) (int64, error) {
 	data, ok := s.objects[key]
 	if !ok {
-		return os.ErrNotExist
+		return 0, os.ErrNotExist
 	}
-	return os.WriteFile(filePath, data, 0600)
+	if size, ok := s.sizeOverride[key]; ok {
+		return size, nil
+	}
+	return int64(len(data)), nil
+}
+
+func (s *memoryObjectStore) download(_ context.Context, key, filePath string, limit int64) (int64, error) {
+	s.downloadCalls++
+	data, ok := s.objects[key]
+	if !ok {
+		return 0, os.ErrNotExist
+	}
+	if int64(len(data)) > limit {
+		return limit + 1, fmt.Errorf("object exceeds download limit: read more than %d bytes", limit)
+	}
+	if err := os.WriteFile(filePath, data, 0600); err != nil {
+		return 0, err
+	}
+	return int64(len(data)), nil
 }
 
 func (s *memoryObjectStore) readBytes(_ context.Context, key string, limit int64) ([]byte, error) {

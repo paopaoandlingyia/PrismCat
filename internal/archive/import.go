@@ -24,9 +24,10 @@ import (
 )
 
 const (
-	maxArchiveEntryBytes = int64(64 << 30)
-	maxArchiveTotalBytes = int64(256 << 30)
-	maxArchiveEntries    = 2_000_000
+	maxArchiveEntryBytes    = int64(64 << 30)
+	maxArchiveTotalBytes    = int64(256 << 30)
+	maxArchiveDownloadBytes = int64(64 << 30)
+	maxArchiveEntries       = 2_000_000
 )
 
 func (m *Manager) ImportFromS3(ctx context.Context, key string) (*storage.ArchiveImport, error) {
@@ -95,6 +96,13 @@ func (m *Manager) ImportDate(ctx context.Context, date string) ([]storage.Archiv
 }
 
 func downloadVerifiedArchive(ctx context.Context, store objectStore, key, archivePath string) (SidecarManifest, error) {
+	return downloadVerifiedArchiveWithLimit(ctx, store, key, archivePath, maxArchiveDownloadBytes)
+}
+
+func downloadVerifiedArchiveWithLimit(ctx context.Context, store objectStore, key, archivePath string, limit int64) (SidecarManifest, error) {
+	if limit <= 0 {
+		return SidecarManifest{}, errors.New("backup package download limit must be positive")
+	}
 	sidecarData, err := store.readBytes(ctx, key+".manifest.json", 1<<20)
 	if err != nil {
 		return SidecarManifest{}, fmt.Errorf("read backup manifest: %w", err)
@@ -107,15 +115,38 @@ func downloadVerifiedArchive(ctx context.Context, store objectStore, key, archiv
 		sidecar.BatchID == "" || sidecar.PackageSHA256 == "" || sidecar.FormatVersion != archiveFormatVersion {
 		return SidecarManifest{}, errors.New("invalid backup manifest")
 	}
-	if err := store.download(ctx, key, archivePath); err != nil {
+	if sidecar.CompressedBytes <= 0 {
+		return SidecarManifest{}, errors.New("backup manifest has invalid package size")
+	}
+	if sidecar.CompressedBytes > limit {
+		return SidecarManifest{}, fmt.Errorf("backup package exceeds download limit: %d > %d", sidecar.CompressedBytes, limit)
+	}
+	objectSize, err := store.size(ctx, key)
+	if err != nil {
+		return SidecarManifest{}, fmt.Errorf("inspect backup package: %w", err)
+	}
+	if objectSize < 0 {
+		return SidecarManifest{}, errors.New("backup package has invalid object size")
+	}
+	if objectSize > limit {
+		return SidecarManifest{}, fmt.Errorf("backup package exceeds download limit: %d > %d", objectSize, limit)
+	}
+	if objectSize != sidecar.CompressedBytes {
+		return SidecarManifest{}, fmt.Errorf("backup package size mismatch: object has %d, manifest has %d", objectSize, sidecar.CompressedBytes)
+	}
+	downloadedBytes, err := store.download(ctx, key, archivePath, limit)
+	if err != nil {
 		return SidecarManifest{}, err
+	}
+	if downloadedBytes != sidecar.CompressedBytes {
+		return SidecarManifest{}, fmt.Errorf("backup package size mismatch: got %d, want %d", downloadedBytes, sidecar.CompressedBytes)
 	}
 	info, err := os.Stat(archivePath)
 	if err != nil {
 		return SidecarManifest{}, err
 	}
-	if sidecar.CompressedBytes > 0 && info.Size() != sidecar.CompressedBytes {
-		return SidecarManifest{}, fmt.Errorf("backup package size mismatch: got %d, want %d", info.Size(), sidecar.CompressedBytes)
+	if info.Size() != downloadedBytes {
+		return SidecarManifest{}, fmt.Errorf("downloaded backup file size mismatch: got %d, want %d", info.Size(), downloadedBytes)
 	}
 	packageSHA, err := fileSHA256(archivePath)
 	if err != nil {

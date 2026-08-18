@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -84,7 +85,8 @@ type objectStore interface {
 	upload(context.Context, string, string, string, string) (int64, error)
 	uploadBytes(context.Context, string, []byte, string) error
 	list(context.Context, string) ([]S3Object, error)
-	download(context.Context, string, string) error
+	size(context.Context, string) (int64, error)
+	download(context.Context, string, string, int64) (int64, error)
 	readBytes(context.Context, string, int64) ([]byte, error)
 }
 
@@ -250,14 +252,18 @@ func (m *Manager) start(trigger string, cutoff time.Time) (*storage.ArchiveJob, 
 	}
 	go func() {
 		defer m.end()
-		_ = m.runJob(context.Background(), &job, cfg)
+		if err := m.runJob(context.Background(), &job, cfg); err != nil {
+			log.Printf("archive job %s failed: %v", job.ID, err)
+		}
 	}()
 	return &job, nil
 }
 
 func (m *Manager) runJob(ctx context.Context, job *storage.ArchiveJob, cfg config.ArchiveConfig) error {
 	job.Status = "running"
-	_ = m.archive.UpdateArchiveJob(*job)
+	if err := m.archive.UpdateArchiveJob(*job); err != nil {
+		return m.failJob(job, fmt.Errorf("mark archive job running: %w", err))
+	}
 	if flusher, ok := m.repo.(interface{ Flush(context.Context) error }); ok {
 		if err := flusher.Flush(ctx); err != nil {
 			return m.failJob(job, err)
@@ -289,13 +295,18 @@ func (m *Manager) runJob(ctx context.Context, job *storage.ArchiveJob, cfg confi
 		}
 		job.PackageCount++
 		job.LogCount += batch.LogCount
-		_ = m.archive.UpdateArchiveJob(*job)
+		if err := m.archive.UpdateArchiveJob(*job); err != nil {
+			return m.failJob(job, fmt.Errorf("update archive job progress: %w", err))
+		}
 	}
 	now := time.Now().UTC()
 	job.Status = "complete"
 	job.CompletedAt = &now
 	job.Error = ""
-	return m.archive.UpdateArchiveJob(*job)
+	if err := m.archive.UpdateArchiveJob(*job); err != nil {
+		return m.failJob(job, fmt.Errorf("mark archive job complete: %w", err))
+	}
+	return nil
 }
 
 func (m *Manager) failJob(job *storage.ArchiveJob, err error) error {
@@ -303,7 +314,9 @@ func (m *Manager) failJob(job *storage.ArchiveJob, err error) error {
 	job.Status = "failed"
 	job.Error = err.Error()
 	job.CompletedAt = &now
-	_ = m.archive.UpdateArchiveJob(*job)
+	if updateErr := m.archive.UpdateArchiveJob(*job); updateErr != nil {
+		return errors.Join(err, fmt.Errorf("persist failed archive job state: %w", updateErr))
+	}
 	return err
 }
 
@@ -318,8 +331,12 @@ func (m *Manager) archiveDay(ctx context.Context, cfg config.ArchiveConfig, jobI
 	fail := func(err error) (*storage.ArchiveBatch, error) {
 		batch.Status = "failed"
 		batch.Error = err.Error()
-		_ = m.archive.UpdateArchiveBatch(batch)
-		_ = m.archive.ReleaseArchiveBatchLogs(batch.ID)
+		if updateErr := m.archive.UpdateArchiveBatch(batch); updateErr != nil {
+			err = errors.Join(err, fmt.Errorf("persist failed archive batch state: %w", updateErr))
+		}
+		if releaseErr := m.archive.ReleaseArchiveBatchLogs(batch.ID); releaseErr != nil {
+			err = errors.Join(err, fmt.Errorf("release archive batch logs: %w", releaseErr))
+		}
 		return &batch, err
 	}
 	reserved, err := m.archive.ReserveArchiveBatchLogs(batch.ID, start, end)
@@ -328,7 +345,9 @@ func (m *Manager) archiveDay(ctx context.Context, cfg config.ArchiveConfig, jobI
 	}
 	if reserved == 0 {
 		batch.Status = "empty"
-		_ = m.archive.UpdateArchiveBatch(batch)
+		if err := m.archive.UpdateArchiveBatch(batch); err != nil {
+			return fail(fmt.Errorf("mark archive batch empty: %w", err))
+		}
 		return &batch, nil
 	}
 

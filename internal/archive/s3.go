@@ -214,22 +214,59 @@ func (s *s3Store) list(ctx context.Context, prefix string) ([]S3Object, error) {
 	return out, nil
 }
 
-func (s *s3Store) download(ctx context.Context, key, path string) error {
+func (s *s3Store) size(ctx context.Context, key string) (int64, error) {
+	result, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(key)})
+	if err != nil {
+		return 0, err
+	}
+	if result.ContentLength == nil || *result.ContentLength < 0 {
+		return 0, errors.New("S3 object has invalid content length")
+	}
+	return *result.ContentLength, nil
+}
+
+func (s *s3Store) download(ctx context.Context, key, path string, limit int64) (int64, error) {
+	if limit <= 0 {
+		return 0, errors.New("download limit must be positive")
+	}
 	result, err := s.client.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(key)})
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer result.Body.Close()
+	if result.ContentLength != nil && *result.ContentLength > limit {
+		return 0, fmt.Errorf("S3 object exceeds download limit: %d > %d", *result.ContentLength, limit)
+	}
+	return writeLimitedDownload(path, result.Body, limit)
+}
+
+func writeLimitedDownload(path string, src io.Reader, limit int64) (int64, error) {
+	if limit <= 0 {
+		return 0, errors.New("download limit must be positive")
+	}
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0600)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	_, copyErr := io.Copy(f, result.Body)
+	ok := false
+	defer func() {
+		if !ok {
+			_ = os.Remove(path)
+		}
+	}()
+	written, copyErr := io.Copy(f, io.LimitReader(src, limit+1))
 	closeErr := f.Close()
 	if copyErr != nil {
-		return copyErr
+		return written, copyErr
 	}
-	return closeErr
+	if written > limit {
+		return written, fmt.Errorf("S3 object exceeds download limit: read more than %d bytes", limit)
+	}
+	if closeErr != nil {
+		return written, closeErr
+	}
+	ok = true
+	return written, nil
 }
 
 func (s *s3Store) readBytes(ctx context.Context, key string, limit int64) ([]byte, error) {
