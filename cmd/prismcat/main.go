@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/paopaoandlingyia/PrismCat/internal/archive"
 	"github.com/paopaoandlingyia/PrismCat/internal/config"
 	"github.com/paopaoandlingyia/PrismCat/internal/server"
 	"github.com/paopaoandlingyia/PrismCat/internal/storage"
@@ -34,8 +35,7 @@ logging:
     - api-key
     - x-api-key
   early_request_body_snapshot: false
-  detach_body_over_bytes: 2097152 # 2MB
-  body_preview_bytes: 524288      # 512KB
+  store_base64: false
 
 storage:
   database: "data/prismcat.db"
@@ -43,6 +43,25 @@ storage:
   max_storage_bytes: 0            # 0 = no limit
   blob_store: "fs"
   blob_dir: "data/blobs"
+  body_compression:
+    algorithm: zstd
+    level: 3
+
+archive:
+  enabled: false
+  s3:
+    endpoint: ""
+    region: ""
+    bucket: ""
+    access_key_id: ""
+    secret_access_key: ""
+    force_path_style: false
+  key_prefix: "backups/prismcat/${yyyy}/${MM}-${dd}"
+  schedule_time: "02:00"
+  timezone: "Asia/Shanghai"
+  zstd_level: 10
+  local_retention_hours: 24
+  import_retention_hours: 24
 
 usage_extraction:
   enabled: false
@@ -143,8 +162,8 @@ func main() {
 		log.Fatalf("初始化模型日志路径模板失败: %v", err)
 	}
 	log.Printf("PrismCat %s 启动中...", config.Version)
-	log.Printf("配置已加载: DetachBodyOverBytes=%d, BodyPreviewBytes=%d",
-		cfg.Logging.DetachBodyOverBytes, cfg.Logging.BodyPreviewBytes)
+	log.Printf("配置已加载: body compression=%s level=%d",
+		cfg.Storage.BodyCompression.Algorithm, cfg.Storage.BodyCompression.Level)
 
 	// 初始化存储
 	sqliteRepo, err := storage.NewSQLiteRepository(cfg.Storage.Database)
@@ -156,7 +175,11 @@ func main() {
 	var blobStore storage.BlobStore
 	switch cfg.Storage.BlobStore {
 	case "", "fs":
-		bs, err := storage.NewFileBlobStore(cfg.Storage.BlobDir)
+		bs, err := storage.NewFileBlobStoreWithCompression(
+			cfg.Storage.BlobDir,
+			cfg.Storage.BodyCompression.Algorithm,
+			cfg.Storage.BodyCompression.Level,
+		)
 		if err != nil {
 			log.Fatalf("初始化 blob 存储失败: %v", err)
 		}
@@ -164,9 +187,16 @@ func main() {
 	default:
 		log.Fatalf("不支持的 blob_store: %s", cfg.Storage.BlobStore)
 	}
+	if err := sqliteRepo.MigrateLegacyBodies(blobStore); err != nil {
+		log.Fatalf("迁移旧版正文存储失败: %v", err)
+	}
 
 	asyncRepo := storage.NewAsyncRepository(sqliteRepo, cfg, cfg.Storage.AsyncBuffer, blobStore)
 	defer asyncRepo.Close()
+	archiveManager, err := archive.NewManager(cfg, asyncRepo, blobStore)
+	if err != nil {
+		log.Fatalf("初始化归档服务失败: %v", err)
+	}
 
 	// Best-effort log retention cleanup.
 	stopRetention := make(chan struct{})
@@ -182,7 +212,8 @@ func main() {
 			var totalDeleted int64
 
 			// 1. Time-based retention.
-			if storageCfg.RetentionDays > 0 && (lastRetention.IsZero() || time.Since(lastRetention) >= 6*time.Hour) {
+			archiveEnabled := cfg.ArchiveSnapshot().Enabled
+			if !archiveEnabled && storageCfg.RetentionDays > 0 && (lastRetention.IsZero() || time.Since(lastRetention) >= 6*time.Hour) {
 				before := time.Now().Add(-time.Duration(storageCfg.RetentionDays) * 24 * time.Hour)
 				n, err := asyncRepo.DeleteLogsBefore(before)
 				if err != nil {
@@ -203,7 +234,7 @@ func main() {
 
 			// 2. Size-based cleanup. Reclaim orphaned blobs/free DB pages first;
 			// delete logs only if the storage limit is still exceeded.
-			if storageCfg.MaxStorageBytes > 0 && (lastSizeCheck.IsZero() || time.Since(lastSizeCheck) >= 6*time.Hour) {
+			if !archiveEnabled && storageCfg.MaxStorageBytes > 0 && (lastSizeCheck.IsZero() || time.Since(lastSizeCheck) >= 6*time.Hour) {
 				var fsStore *storage.FileBlobStore
 				if s, ok := blobStore.(*storage.FileBlobStore); ok {
 					fsStore = s
@@ -251,11 +282,81 @@ func main() {
 	}()
 	defer close(stopRetention)
 
+	// Daily S3 backup scheduler plus delayed local cleanup.
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		var lastScheduleAttempt time.Time
+		var lastLocalCleanup time.Time
+		var lastImportCleanup time.Time
+		run := func() {
+			archiveCfg := cfg.ArchiveSnapshot()
+			loc, err := time.LoadLocation(archiveCfg.Timezone)
+			if err != nil {
+				return
+			}
+			now := time.Now().In(loc)
+			if archiveCfg.Enabled && now.Format("15:04") >= archiveCfg.ScheduleTime && (lastScheduleAttempt.IsZero() || time.Since(lastScheduleAttempt) >= 5*time.Minute) {
+				jobs, _ := asyncRepo.ListArchiveJobs(100)
+				cutoff := startOfLocalDay(now, loc).UTC()
+				alreadyHandled := scheduledArchiveHandled(jobs, cutoff)
+				if !alreadyHandled {
+					job, err := archiveManager.StartScheduled(now)
+					if err != nil && !errors.Is(err, archive.ErrArchiveBusy) {
+						log.Printf("daily backup start failed: %v", err)
+					} else if job != nil {
+						log.Printf("daily backup job %s accepted with cutoff %s", job.ID, job.Cutoff.Format(time.RFC3339))
+					}
+				}
+				lastScheduleAttempt = time.Now()
+			}
+			if archiveCfg.Enabled && (lastLocalCleanup.IsZero() || time.Since(lastLocalCleanup) >= 5*time.Minute) {
+				if n, err := archiveManager.CleanupEligible(time.Now()); err != nil {
+					log.Printf("backed-up log cleanup failed: %v", err)
+				} else if n > 0 {
+					log.Printf("deleted %d backed-up logs after local retention", n)
+				}
+				lastLocalCleanup = time.Now()
+			}
+			if lastImportCleanup.IsZero() || time.Since(lastImportCleanup) >= time.Hour {
+				if n, err := archiveManager.DeleteExpiredImports(time.Now()); err != nil {
+					log.Printf("archive import TTL cleanup failed: %v", err)
+				} else if n > 0 {
+					log.Printf("deleted %d expired imported logs", n)
+				}
+				lastImportCleanup = time.Now()
+			}
+		}
+		run()
+		for {
+			select {
+			case <-ticker.C:
+				run()
+			case <-stopRetention:
+				return
+			}
+		}
+	}()
+
 	// 启动服务器
-	srv := server.New(cfg, asyncRepo, blobStore)
+	srv := server.New(cfg, asyncRepo, blobStore, archiveManager)
 
 	// 平台相关的运行逻辑（Windows: 系统托盘, 其他: 直接运行）
 	if err := platformRun(srv, cfg, *showConsole); err != nil {
 		log.Fatalf("运行失败: %v", err)
 	}
+}
+
+func startOfLocalDay(value time.Time, loc *time.Location) time.Time {
+	y, m, d := value.In(loc).Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, loc)
+}
+
+func scheduledArchiveHandled(jobs []storage.ArchiveJob, cutoff time.Time) bool {
+	for _, job := range jobs {
+		if job.Trigger == "scheduled" && job.Cutoff.Equal(cutoff) && job.Status != "failed" {
+			return true
+		}
+	}
+	return false
 }

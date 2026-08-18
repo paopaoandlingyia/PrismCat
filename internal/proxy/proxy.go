@@ -601,7 +601,7 @@ func (p *Proxy) publishRequestReady(logEntry *storage.RequestLog) {
 
 	contentType := storage.FirstHeaderValue(logEntry.RequestHeaders, "Content-Type")
 	contentEncoding := storage.FirstHeaderValue(logEntry.RequestHeaders, "Content-Encoding")
-	body, _ := p.formatLiveBody(contentType, contentEncoding, logEntry.RequestBodyRaw, p.cfg.LoggingSnapshot().BodyPreviewBytes)
+	body, _ := p.formatLiveBody(contentType, contentEncoding, logEntry.RequestBodyRaw, live.DefaultPreviewLimit)
 
 	p.live.UpdateSnapshot(logEntry.ID, func(snapshot *storage.RequestLog) {
 		snapshot.RequestBody = body
@@ -670,31 +670,29 @@ func (p *Proxy) completeLive(logEntry *storage.RequestLog) {
 	}
 
 	finalLog := logEntry.Clone()
-	loggingCfg := p.cfg.LoggingSnapshot()
-
 	requestBody, _ := p.formatLiveBody(
 		storage.FirstHeaderValue(finalLog.RequestHeaders, "Content-Type"),
 		storage.FirstHeaderValue(finalLog.RequestHeaders, "Content-Encoding"),
 		finalLog.RequestBodyRaw,
-		loggingCfg.BodyPreviewBytes,
+		live.DefaultPreviewLimit,
 	)
 	responseBody, _ := p.formatLiveBody(
 		storage.FirstHeaderValue(finalLog.ResponseHeaders, "Content-Type"),
 		storage.FirstHeaderValue(finalLog.ResponseHeaders, "Content-Encoding"),
 		finalLog.ResponseBodyRaw,
-		loggingCfg.BodyPreviewBytes,
+		live.DefaultPreviewLimit,
 	)
 	requestBodyOriginal, _ := p.formatLiveBody(
 		storage.FirstHeaderValue(finalLog.RequestHeaders, "Content-Type"),
 		storage.FirstHeaderValue(finalLog.RequestHeaders, "Content-Encoding"),
 		finalLog.RequestBodyOriginalRaw,
-		loggingCfg.BodyPreviewBytes,
+		live.DefaultPreviewLimit,
 	)
 	requestBodyFinal, _ := p.formatLiveBody(
 		storage.FirstHeaderValue(finalLog.RequestHeaders, "Content-Type"),
 		storage.FirstHeaderValue(finalLog.RequestHeaders, "Content-Encoding"),
 		finalLog.RequestBodyFinalRaw,
-		loggingCfg.BodyPreviewBytes,
+		live.DefaultPreviewLimit,
 	)
 
 	finalLog.RequestBody = requestBody

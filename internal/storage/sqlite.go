@@ -20,7 +20,15 @@ type SQLiteRepository struct {
 
 // NewSQLiteRepository creates a new SQLite repository.
 func NewSQLiteRepository(dbPath string) (*SQLiteRepository, error) {
-	db, err := sql.Open("sqlite", dbPath)
+	dsnSeparator := "?"
+	if strings.Contains(dbPath, "?") {
+		dsnSeparator = "&"
+	}
+	// DSN pragmas run for every pooled connection. A one-time PRAGMA call is
+	// connection-local and would otherwise leave foreign keys disabled on some
+	// readers/writers created later by database/sql.
+	dsn := dbPath + dsnSeparator + "_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
@@ -48,6 +56,8 @@ func NewSQLiteRepository(dbPath string) (*SQLiteRepository, error) {
 func applySQLitePragmas(db *sql.DB) error {
 	// Use Query so PRAGMA statements that return rows are handled consistently.
 	pragmas := []string{
+		"PRAGMA foreign_keys=ON;",
+		"PRAGMA auto_vacuum=INCREMENTAL;",
 		"PRAGMA journal_mode=WAL;",
 		"PRAGMA synchronous=NORMAL;",
 		"PRAGMA busy_timeout=5000;",
@@ -75,15 +85,9 @@ func (r *SQLiteRepository) migrate() error {
 		path TEXT NOT NULL,
 		query TEXT,
 		request_headers TEXT,
-		request_body TEXT,
-		request_body_original TEXT,
-		request_body_final TEXT,
-		request_body_ref TEXT,
 		request_body_size INTEGER DEFAULT 0,
 		status_code INTEGER DEFAULT 0,
 		response_headers TEXT,
-		response_body TEXT,
-		response_body_ref TEXT,
 		response_body_size INTEGER DEFAULT 0,
 		streaming INTEGER DEFAULT 0,
 		latency_ms INTEGER DEFAULT 0,
@@ -94,7 +98,21 @@ func (r *SQLiteRepository) migrate() error {
 		request_override_error TEXT,
 		request_header_override_applied INTEGER DEFAULT 0,
 		request_header_override_changes TEXT DEFAULT '',
-		request_headers_original TEXT DEFAULT ''
+		request_headers_original TEXT DEFAULT '',
+		trace_id TEXT DEFAULT '',
+		parent_log_id TEXT DEFAULT '',
+		trace_seq INTEGER DEFAULT 0,
+		usage_input_tokens INTEGER,
+		usage_output_tokens INTEGER,
+		usage_total_tokens INTEGER,
+		usage_raw TEXT DEFAULT '',
+		usage_source TEXT DEFAULT '',
+		body_storage_error TEXT DEFAULT '',
+		origin TEXT NOT NULL DEFAULT 'live',
+		backup_verified_at_unix_ms INTEGER,
+		backup_batch_id TEXT NOT NULL DEFAULT '',
+		delete_grace_started_at_unix_ms INTEGER,
+		import_batch_id TEXT DEFAULT ''
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_logs_created_at ON request_logs(created_at DESC);
@@ -109,7 +127,79 @@ func (r *SQLiteRepository) migrate() error {
 		note TEXT NOT NULL DEFAULT '',
 		labels TEXT NOT NULL DEFAULT '[]',
 		created_at_unix_ms INTEGER NOT NULL,
-		updated_at_unix_ms INTEGER NOT NULL
+		updated_at_unix_ms INTEGER NOT NULL,
+		FOREIGN KEY(log_id) REFERENCES request_logs(id) ON DELETE CASCADE
+	);
+
+	CREATE TABLE IF NOT EXISTS log_bodies (
+		log_id TEXT NOT NULL,
+		part TEXT NOT NULL CHECK(part IN ('request','request_original','request_final','response')),
+		blob_ref TEXT NOT NULL DEFAULT '',
+		captured_bytes INTEGER NOT NULL DEFAULT 0,
+		total_bytes INTEGER NOT NULL DEFAULT 0,
+		truncated INTEGER NOT NULL DEFAULT 0,
+		content_type TEXT NOT NULL DEFAULT '',
+		content_encoding TEXT NOT NULL DEFAULT '',
+		representation TEXT NOT NULL DEFAULT 'wire',
+		PRIMARY KEY(log_id, part),
+		FOREIGN KEY(log_id) REFERENCES request_logs(id) ON DELETE CASCADE
+	);
+	CREATE INDEX IF NOT EXISTS idx_log_bodies_blob_ref ON log_bodies(blob_ref);
+
+	CREATE TABLE IF NOT EXISTS archive_batches (
+		id TEXT PRIMARY KEY,
+		job_id TEXT NOT NULL DEFAULT '',
+		archive_date TEXT NOT NULL,
+		object_key TEXT NOT NULL DEFAULT '',
+		manifest_key TEXT NOT NULL DEFAULT '',
+		range_start_unix_ms INTEGER NOT NULL DEFAULT 0,
+		range_end_unix_ms INTEGER NOT NULL DEFAULT 0,
+		status TEXT NOT NULL,
+		log_count INTEGER NOT NULL DEFAULT 0,
+		body_count INTEGER NOT NULL DEFAULT 0,
+		logical_bytes INTEGER NOT NULL DEFAULT 0,
+		compressed_bytes INTEGER NOT NULL DEFAULT 0,
+		sha256 TEXT NOT NULL DEFAULT '',
+		error TEXT NOT NULL DEFAULT '',
+		created_at_unix_ms INTEGER NOT NULL,
+		updated_at_unix_ms INTEGER NOT NULL,
+		verified_at_unix_ms INTEGER
+	);
+	CREATE INDEX IF NOT EXISTS idx_archive_batches_date ON archive_batches(archive_date DESC);
+
+	CREATE TABLE IF NOT EXISTS archive_jobs (
+		id TEXT PRIMARY KEY,
+		trigger TEXT NOT NULL,
+		cutoff_unix_ms INTEGER NOT NULL,
+		status TEXT NOT NULL,
+		package_count INTEGER NOT NULL DEFAULT 0,
+		log_count INTEGER NOT NULL DEFAULT 0,
+		error TEXT NOT NULL DEFAULT '',
+		created_at_unix_ms INTEGER NOT NULL,
+		updated_at_unix_ms INTEGER NOT NULL,
+		completed_at_unix_ms INTEGER
+	);
+
+	CREATE TABLE IF NOT EXISTS archive_batch_items (
+		batch_id TEXT NOT NULL,
+		log_id TEXT NOT NULL UNIQUE,
+		PRIMARY KEY(batch_id, log_id)
+	);
+
+	CREATE TABLE IF NOT EXISTS archive_imports (
+		id TEXT PRIMARY KEY,
+		source_key TEXT NOT NULL DEFAULT '',
+		status TEXT NOT NULL,
+		log_count INTEGER NOT NULL DEFAULT 0,
+		error TEXT NOT NULL DEFAULT '',
+		created_at_unix_ms INTEGER NOT NULL,
+		expires_at_unix_ms INTEGER
+	);
+
+	CREATE TABLE IF NOT EXISTS archive_staged_blob_refs (
+		batch_id TEXT NOT NULL,
+		blob_ref TEXT NOT NULL,
+		PRIMARY KEY(batch_id, blob_ref)
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_log_annotations_saved ON log_annotations(saved);
@@ -132,13 +222,9 @@ func (r *SQLiteRepository) migrate() error {
 		return fmt.Errorf("database migrate failed: %w", err)
 	}
 
-	// Backward-compatible migration for existing DBs.
-	if err := r.ensureLogColumn("request_body_ref", "request_body_ref TEXT"); err != nil {
-		return err
-	}
-	if err := r.ensureLogColumn("response_body_ref", "response_body_ref TEXT"); err != nil {
-		return err
-	}
+	// Backward-compatible metadata migration for existing DBs. Legacy body
+	// columns are copied to log_bodies by MigrateLegacyBodies once a blob store
+	// is available, then the request_logs table is rebuilt without those columns.
 	if err := r.ensureLogColumn("created_at_unix_ms", "created_at_unix_ms INTEGER DEFAULT 0"); err != nil {
 		return err
 	}
@@ -146,12 +232,6 @@ func (r *SQLiteRepository) migrate() error {
 		return err
 	}
 	if err := r.ensureLogColumn("tag", "tag TEXT DEFAULT ''"); err != nil {
-		return err
-	}
-	if err := r.ensureLogColumn("request_body_original", "request_body_original TEXT DEFAULT ''"); err != nil {
-		return err
-	}
-	if err := r.ensureLogColumn("request_body_final", "request_body_final TEXT DEFAULT ''"); err != nil {
 		return err
 	}
 	if err := r.ensureLogColumn("request_override_applied", "request_override_applied INTEGER DEFAULT 0"); err != nil {
@@ -196,12 +276,63 @@ func (r *SQLiteRepository) migrate() error {
 	if err := r.ensureLogColumn("usage_source", "usage_source TEXT DEFAULT ''"); err != nil {
 		return err
 	}
+	if err := r.ensureLogColumn("body_storage_error", "body_storage_error TEXT DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := r.ensureLogColumn("origin", "origin TEXT NOT NULL DEFAULT 'live'"); err != nil {
+		return err
+	}
+	if err := r.ensureLogColumn("backup_verified_at_unix_ms", "backup_verified_at_unix_ms INTEGER"); err != nil {
+		return err
+	}
+	if err := r.ensureLogColumn("backup_batch_id", "backup_batch_id TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := r.ensureLogColumn("delete_grace_started_at_unix_ms", "delete_grace_started_at_unix_ms INTEGER"); err != nil {
+		return err
+	}
+	if legacy, err := r.hasColumn("request_logs", "archived_at_unix_ms"); err != nil {
+		return err
+	} else if legacy {
+		if _, err := r.db.Exec(`UPDATE request_logs
+			SET backup_verified_at_unix_ms=COALESCE(backup_verified_at_unix_ms, archived_at_unix_ms),
+				delete_grace_started_at_unix_ms=COALESCE(delete_grace_started_at_unix_ms, archived_at_unix_ms)
+			WHERE archived_at_unix_ms IS NOT NULL`); err != nil {
+			return fmt.Errorf("migrate archived backup timestamps: %w", err)
+		}
+	}
+	if err := r.ensureLogColumn("import_batch_id", "import_batch_id TEXT DEFAULT ''"); err != nil {
+		return err
+	}
 	// Index for unix timestamp based sort/filter.
 	if _, err := r.db.Exec("CREATE INDEX IF NOT EXISTS idx_logs_created_at_unix_ms ON request_logs(created_at_unix_ms DESC)"); err != nil {
 		return fmt.Errorf("create created_at_unix_ms index: %w", err)
 	}
+	if _, err := r.db.Exec("CREATE INDEX IF NOT EXISTS idx_logs_backup_status ON request_logs(origin, backup_verified_at_unix_ms)"); err != nil {
+		return fmt.Errorf("create backup status index: %w", err)
+	}
 	if err := r.backfillCreatedAtUnixMS(); err != nil {
 		return err
+	}
+	for _, col := range []struct{ name, def string }{
+		{"job_id", "job_id TEXT NOT NULL DEFAULT ''"},
+		{"manifest_key", "manifest_key TEXT NOT NULL DEFAULT ''"},
+		{"range_start_unix_ms", "range_start_unix_ms INTEGER NOT NULL DEFAULT 0"},
+		{"range_end_unix_ms", "range_end_unix_ms INTEGER NOT NULL DEFAULT 0"},
+	} {
+		if err := r.ensureTableColumn("archive_batches", col.name, col.def); err != nil {
+			return err
+		}
+	}
+	for _, indexSQL := range []string{
+		"CREATE INDEX IF NOT EXISTS idx_archive_batches_date ON archive_batches(archive_date DESC)",
+		"CREATE INDEX IF NOT EXISTS idx_archive_batches_verified_at ON archive_batches(verified_at_unix_ms DESC)",
+		"CREATE INDEX IF NOT EXISTS idx_archive_jobs_created_at ON archive_jobs(created_at_unix_ms DESC)",
+		"CREATE INDEX IF NOT EXISTS idx_archive_imports_created_at ON archive_imports(created_at_unix_ms DESC)",
+	} {
+		if _, err := r.db.Exec(indexSQL); err != nil {
+			return fmt.Errorf("create archive history index: %w", err)
+		}
 	}
 	// Index for tag filtering.
 	if _, err := r.db.Exec("CREATE INDEX IF NOT EXISTS idx_logs_tag ON request_logs(tag)"); err != nil {
@@ -218,14 +349,18 @@ func (r *SQLiteRepository) migrate() error {
 }
 
 func (r *SQLiteRepository) ensureLogColumn(colName, colDef string) error {
-	has, err := r.hasColumn("request_logs", colName)
+	return r.ensureTableColumn("request_logs", colName, colDef)
+}
+
+func (r *SQLiteRepository) ensureTableColumn(table, colName, colDef string) error {
+	has, err := r.hasColumn(table, colName)
 	if err != nil {
 		return err
 	}
 	if has {
 		return nil
 	}
-	if _, err := r.db.Exec(fmt.Sprintf("ALTER TABLE request_logs ADD COLUMN %s", colDef)); err != nil {
+	if _, err := r.db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s", table, colDef)); err != nil {
 		return fmt.Errorf("add column %s failed: %w", colName, err)
 	}
 	return nil
@@ -393,17 +528,30 @@ func (r *SQLiteRepository) SaveLog(log *RequestLog) error {
 		b, _ := json.Marshal(log.RequestHeadersOriginal)
 		reqHeadersOriginal = string(b)
 	}
+	origin := strings.TrimSpace(log.Origin)
+	if origin == "" {
+		origin = "live"
+	}
+	var backupVerifiedAtMS, deleteGraceStartedAtMS any
+	if log.BackupVerifiedAt != nil {
+		backupVerifiedAtMS = log.BackupVerifiedAt.UTC().UnixMilli()
+	}
+	if log.DeleteGraceStartedAt != nil {
+		deleteGraceStartedAtMS = log.DeleteGraceStartedAt.UTC().UnixMilli()
+	}
 
 	query := `
 	INSERT INTO request_logs (
 		id, created_at, created_at_unix_ms, upstream, upstream_target, target_url, method, path, query,
-		request_headers, request_body, request_body_original, request_body_final, request_body_ref, request_body_size,
-		status_code, response_headers, response_body, response_body_ref, response_body_size,
+		request_headers, request_body_size,
+		status_code, response_headers, response_body_size,
 		streaming, latency_ms, error, truncated, tag,
 		request_override_applied, request_override_rules, request_override_error,
 		request_header_override_applied, request_header_override_changes, request_headers_original,
 		trace_id, parent_log_id, trace_seq,
-		usage_input_tokens, usage_output_tokens, usage_total_tokens, usage_raw, usage_source
+		usage_input_tokens, usage_output_tokens, usage_total_tokens, usage_raw, usage_source,
+		body_storage_error, origin, backup_verified_at_unix_ms, backup_batch_id,
+		delete_grace_started_at_unix_ms, import_batch_id
 	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(id) DO UPDATE SET
 		created_at = excluded.created_at,
@@ -415,15 +563,9 @@ func (r *SQLiteRepository) SaveLog(log *RequestLog) error {
 		path = excluded.path,
 		query = excluded.query,
 		request_headers = excluded.request_headers,
-		request_body = excluded.request_body,
-		request_body_original = excluded.request_body_original,
-		request_body_final = excluded.request_body_final,
-		request_body_ref = excluded.request_body_ref,
 		request_body_size = excluded.request_body_size,
 		status_code = excluded.status_code,
 		response_headers = excluded.response_headers,
-		response_body = excluded.response_body,
-		response_body_ref = excluded.response_body_ref,
 		response_body_size = excluded.response_body_size,
 		streaming = excluded.streaming,
 		latency_ms = excluded.latency_ms,
@@ -443,32 +585,71 @@ func (r *SQLiteRepository) SaveLog(log *RequestLog) error {
 		usage_output_tokens = excluded.usage_output_tokens,
 		usage_total_tokens = excluded.usage_total_tokens,
 		usage_raw = excluded.usage_raw,
-		usage_source = excluded.usage_source
+		usage_source = excluded.usage_source,
+		body_storage_error = excluded.body_storage_error,
+		origin = excluded.origin,
+		backup_verified_at_unix_ms = excluded.backup_verified_at_unix_ms,
+		backup_batch_id = excluded.backup_batch_id,
+		delete_grace_started_at_unix_ms = excluded.delete_grace_started_at_unix_ms,
+		import_batch_id = excluded.import_batch_id
 	`
 
-	_, err := r.db.Exec(query,
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	if _, err = tx.Exec(query,
 		log.ID, log.CreatedAt, log.CreatedAt.UnixMilli(), log.Upstream, log.UpstreamTarget, log.TargetURL, log.Method, log.Path, log.Query,
-		string(reqHeaders), log.RequestBody, log.RequestBodyOriginal, log.RequestBodyFinal, log.RequestBodyRef, log.RequestBodySize,
-		log.StatusCode, string(respHeaders), log.ResponseBody, log.ResponseBodyRef, log.ResponseBodySize,
+		string(reqHeaders), log.RequestBodySize,
+		log.StatusCode, string(respHeaders), log.ResponseBodySize,
 		log.Streaming, log.Latency, log.Error, log.Truncated, log.Tag,
 		log.RequestOverrideApplied, string(overrideRules), log.RequestOverrideError,
 		log.RequestHeaderOverrideApplied, string(log.RequestHeaderOverrideChanges), reqHeadersOriginal,
 		log.TraceID, log.ParentLogID, log.TraceSeq,
 		log.UsageInputTokens, log.UsageOutputTokens, log.UsageTotalTokens, log.UsageRaw, log.UsageSource,
-	)
-	return err
+		log.BodyStorageError, origin, backupVerifiedAtMS, log.BackupBatchID, deleteGraceStartedAtMS, log.ImportBatchID,
+	); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	if _, err = tx.Exec("DELETE FROM log_bodies WHERE log_id = ?", log.ID); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	for _, body := range log.Bodies {
+		if !validBodyPart(body.Part) {
+			_ = tx.Rollback()
+			return fmt.Errorf("invalid body part %q", body.Part)
+		}
+		if body.Representation == "" {
+			body.Representation = "wire"
+		}
+		if _, err = tx.Exec(`
+			INSERT INTO log_bodies (
+				log_id, part, blob_ref, captured_bytes, total_bytes, truncated,
+				content_type, content_encoding, representation
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, log.ID, body.Part, body.BlobRef, body.CapturedBytes, body.TotalBytes,
+			boolInt(body.Truncated), body.ContentType, body.ContentEncoding, body.Representation); err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func (r *SQLiteRepository) GetLog(id string) (*RequestLog, error) {
 	query := `
 	SELECT id, created_at, upstream, upstream_target, target_url, method, path, query,
-		request_headers, request_body, request_body_original, request_body_final, request_body_ref, request_body_size,
-		status_code, response_headers, response_body, response_body_ref, response_body_size,
+		request_headers, request_body_size,
+		status_code, response_headers, response_body_size,
 		streaming, latency_ms, error, truncated, tag,
 		request_override_applied, request_override_rules, request_override_error,
 		request_header_override_applied, request_header_override_changes, request_headers_original,
 		trace_id, parent_log_id, trace_seq,
-		usage_input_tokens, usage_output_tokens, usage_total_tokens, usage_raw, usage_source
+		usage_input_tokens, usage_output_tokens, usage_total_tokens, usage_raw, usage_source,
+		body_storage_error, origin, backup_verified_at_unix_ms, backup_batch_id,
+		delete_grace_started_at_unix_ms, import_batch_id
 	FROM request_logs WHERE id = ?
 	`
 	row := r.db.QueryRow(query, id)
@@ -481,7 +662,76 @@ func (r *SQLiteRepository) GetLog(id string) (*RequestLog, error) {
 	} else if err != sql.ErrNoRows {
 		return nil, err
 	}
+	if log.Bodies, err = r.GetLogBodies(id); err != nil {
+		return nil, err
+	}
+	populateLegacyBodyRefs(log)
 	return log, nil
+}
+
+func validBodyPart(part string) bool {
+	switch part {
+	case BodyPartRequest, BodyPartRequestOriginal, BodyPartRequestFinal, BodyPartResponse:
+		return true
+	default:
+		return false
+	}
+}
+
+func (r *SQLiteRepository) GetLogBody(logID, part string) (LogBody, error) {
+	if !validBodyPart(part) {
+		return LogBody{}, fmt.Errorf("invalid body part %q", part)
+	}
+	var body LogBody
+	var truncated int
+	err := r.db.QueryRow(`
+		SELECT log_id, part, blob_ref, captured_bytes, total_bytes, truncated,
+			content_type, content_encoding, representation
+		FROM log_bodies WHERE log_id = ? AND part = ?
+	`, logID, part).Scan(&body.LogID, &body.Part, &body.BlobRef, &body.CapturedBytes,
+		&body.TotalBytes, &truncated, &body.ContentType, &body.ContentEncoding, &body.Representation)
+	body.Truncated = truncated == 1
+	body.Recoverable = body.BlobRef != "" && !body.Truncated
+	return body, err
+}
+
+func (r *SQLiteRepository) GetLogBodies(logID string) ([]LogBody, error) {
+	rows, err := r.db.Query(`
+		SELECT log_id, part, blob_ref, captured_bytes, total_bytes, truncated,
+			content_type, content_encoding, representation
+		FROM log_bodies WHERE log_id = ? ORDER BY
+			CASE part WHEN 'request' THEN 1 WHEN 'request_original' THEN 2
+			WHEN 'request_final' THEN 3 ELSE 4 END
+	`, logID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var bodies []LogBody
+	for rows.Next() {
+		var body LogBody
+		var truncated int
+		if err := rows.Scan(&body.LogID, &body.Part, &body.BlobRef, &body.CapturedBytes,
+			&body.TotalBytes, &truncated, &body.ContentType, &body.ContentEncoding, &body.Representation); err != nil {
+			return nil, err
+		}
+		body.Truncated = truncated == 1
+		body.Recoverable = body.BlobRef != "" && !body.Truncated
+		bodies = append(bodies, body)
+	}
+	return bodies, rows.Err()
+}
+
+func populateLegacyBodyRefs(log *RequestLog) {
+	if log == nil {
+		return
+	}
+	if body, ok := log.Body(BodyPartRequest); ok {
+		log.RequestBodyRef = body.BlobRef
+	}
+	if body, ok := log.Body(BodyPartResponse); ok {
+		log.ResponseBodyRef = body.BlobRef
+	}
 }
 
 func (r *SQLiteRepository) ListLogs(filter LogFilter) ([]*RequestLog, int64, error) {
@@ -508,7 +758,9 @@ func (r *SQLiteRepository) ListLogs(filter LogFilter) ([]*RequestLog, int64, err
 		COALESCE(a.saved, 0), COALESCE(a.status, 'none'), COALESCE(a.note, ''), COALESCE(a.labels, '[]'),
 		COALESCE(a.created_at_unix_ms, 0), COALESCE(a.updated_at_unix_ms, 0),
 		l.trace_id, l.parent_log_id, l.trace_seq,
-		l.usage_input_tokens, l.usage_output_tokens, l.usage_total_tokens
+		l.usage_input_tokens, l.usage_output_tokens, l.usage_total_tokens,
+		l.body_storage_error, l.origin, l.backup_verified_at_unix_ms, l.backup_batch_id,
+		l.delete_grace_started_at_unix_ms, l.import_batch_id
 	FROM request_logs l
 	LEFT JOIN log_annotations a ON a.log_id = l.id
 	%s
@@ -577,6 +829,14 @@ func buildLogWhereClause(filter LogFilter) (string, []interface{}) {
 		conditions = append(conditions, "l.streaming = ?")
 		args = append(args, *filter.Streaming)
 	}
+	switch filter.BackupStatus {
+	case BackupStatusPending:
+		conditions = append(conditions, "l.origin = 'live' AND l.backup_verified_at_unix_ms IS NULL")
+	case BackupStatusVerified:
+		conditions = append(conditions, "l.origin = 'live' AND l.backup_verified_at_unix_ms IS NOT NULL")
+	case BackupStatusRestored:
+		conditions = append(conditions, "l.origin = 'archive_import'")
+	}
 	if filter.Tag != "" {
 		conditions = append(conditions, "l.tag = ?")
 		args = append(args, filter.Tag)
@@ -615,13 +875,15 @@ func (r *SQLiteRepository) ExportLogs(ctx context.Context, filter LogFilter, eac
 	where, args := buildLogWhereClause(filter)
 	query := fmt.Sprintf(`
 	SELECT l.id, l.created_at, l.upstream, l.upstream_target, l.target_url, l.method, l.path, l.query,
-		l.request_headers, l.request_body, l.request_body_original, l.request_body_final, l.request_body_ref, l.request_body_size,
-		l.status_code, l.response_headers, l.response_body, l.response_body_ref, l.response_body_size,
+		l.request_headers, l.request_body_size,
+		l.status_code, l.response_headers, l.response_body_size,
 		l.streaming, l.latency_ms, l.error, l.truncated, l.tag,
 		l.request_override_applied, l.request_override_rules, l.request_override_error,
 		l.request_header_override_applied, l.request_header_override_changes, l.request_headers_original,
 		l.trace_id, l.parent_log_id, l.trace_seq,
 		l.usage_input_tokens, l.usage_output_tokens, l.usage_total_tokens, l.usage_raw, l.usage_source,
+		l.body_storage_error, l.origin, l.backup_verified_at_unix_ms, l.backup_batch_id,
+		l.delete_grace_started_at_unix_ms, l.import_batch_id,
 		COALESCE(a.saved, 0), COALESCE(a.status, 'none'), COALESCE(a.note, ''), COALESCE(a.labels, '[]'),
 		COALESCE(a.created_at_unix_ms, 0), COALESCE(a.updated_at_unix_ms, 0)
 	FROM request_logs l
@@ -641,6 +903,11 @@ func (r *SQLiteRepository) ExportLogs(ctx context.Context, filter LogFilter, eac
 		if err != nil {
 			return err
 		}
+		log.Bodies, err = r.GetLogBodies(log.ID)
+		if err != nil {
+			return err
+		}
+		populateLegacyBodyRefs(log)
 		if err := each(log); err != nil {
 			return err
 		}
@@ -755,9 +1022,10 @@ func (r *SQLiteRepository) CountDeletableLogs() (int64, error) {
 	return count, err
 }
 
-// Vacuum rebuilds the database file to reclaim unused pages.
+// Vacuum incrementally reclaims free pages. Fresh databases are configured
+// with auto_vacuum=INCREMENTAL, avoiding a blocking full database rebuild.
 func (r *SQLiteRepository) Vacuum() error {
-	_, err := r.db.Exec("VACUUM")
+	_, err := r.db.Exec("PRAGMA incremental_vacuum(4096)")
 	return err
 }
 
@@ -797,17 +1065,42 @@ func (r *SQLiteRepository) SaveLogAnnotation(logID string, annotation LogAnnotat
 	if annotation.Status != "none" {
 		annotation.Saved = true
 	}
+	tx, err := r.db.Begin()
+	if err != nil {
+		return LogAnnotation{}, err
+	}
+	var oldSaved int
+	if err := tx.QueryRow("SELECT COALESCE((SELECT saved FROM log_annotations WHERE log_id=?), 0)", logID).Scan(&oldSaved); err != nil {
+		_ = tx.Rollback()
+		return LogAnnotation{}, err
+	}
+	now := time.Now().UTC().UnixMilli()
+	resetGrace := func() error {
+		if oldSaved == 1 && !annotation.Saved {
+			_, err := tx.Exec(`UPDATE request_logs SET delete_grace_started_at_unix_ms=?
+				WHERE id=? AND backup_verified_at_unix_ms IS NOT NULL`, now, logID)
+			return err
+		}
+		return nil
+	}
 
 	if !annotation.Saved && annotation.Status == "none" && annotation.Note == "" && len(annotation.Labels) == 0 {
-		if _, err := r.db.Exec("DELETE FROM log_annotations WHERE log_id = ?", logID); err != nil {
+		if _, err := tx.Exec("DELETE FROM log_annotations WHERE log_id = ?", logID); err != nil {
+			_ = tx.Rollback()
+			return LogAnnotation{}, err
+		}
+		if err := resetGrace(); err != nil {
+			_ = tx.Rollback()
+			return LogAnnotation{}, err
+		}
+		if err := tx.Commit(); err != nil {
 			return LogAnnotation{}, err
 		}
 		return LogAnnotation{Status: "none"}, nil
 	}
 
-	now := time.Now().UTC().UnixMilli()
 	labelsJSON, _ := json.Marshal(annotation.Labels)
-	_, err := r.db.Exec(`
+	_, err = tx.Exec(`
 		INSERT INTO log_annotations (
 			log_id, saved, status, note, labels, created_at_unix_ms, updated_at_unix_ms
 		) VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -819,6 +1112,14 @@ func (r *SQLiteRepository) SaveLogAnnotation(logID string, annotation LogAnnotat
 			updated_at_unix_ms = excluded.updated_at_unix_ms
 	`, logID, boolInt(annotation.Saved), annotation.Status, annotation.Note, string(labelsJSON), now, now)
 	if err != nil {
+		_ = tx.Rollback()
+		return LogAnnotation{}, err
+	}
+	if err := resetGrace(); err != nil {
+		_ = tx.Rollback()
+		return LogAnnotation{}, err
+	}
+	if err := tx.Commit(); err != nil {
 		return LogAnnotation{}, err
 	}
 	return r.GetLogAnnotation(logID)
@@ -1025,13 +1326,15 @@ func (r *SQLiteRepository) ListTraces(filter TraceFilter) ([]TraceSummary, int64
 func (r *SQLiteRepository) GetTraceRequests(traceID string) ([]*RequestLog, error) {
 	query := `
 	SELECT id, created_at, upstream, upstream_target, target_url, method, path, query,
-		request_headers, request_body, request_body_original, request_body_final, request_body_ref, request_body_size,
-		status_code, response_headers, response_body, response_body_ref, response_body_size,
+		request_headers, request_body_size,
+		status_code, response_headers, response_body_size,
 		streaming, latency_ms, error, truncated, tag,
 		request_override_applied, request_override_rules, request_override_error,
 		request_header_override_applied, request_header_override_changes, request_headers_original,
 		trace_id, parent_log_id, trace_seq,
-		usage_input_tokens, usage_output_tokens, usage_total_tokens, usage_raw, usage_source
+		usage_input_tokens, usage_output_tokens, usage_total_tokens, usage_raw, usage_source,
+		body_storage_error, origin, backup_verified_at_unix_ms, backup_batch_id,
+		delete_grace_started_at_unix_ms, import_batch_id
 	FROM request_logs
 	WHERE trace_id = ?
 	ORDER BY trace_seq, created_at_unix_ms
@@ -1051,6 +1354,11 @@ func (r *SQLiteRepository) GetTraceRequests(traceID string) ([]*RequestLog, erro
 		if annotation, aErr := r.GetLogAnnotation(log.ID); aErr == nil {
 			log.Annotation = annotation
 		}
+		log.Bodies, err = r.GetLogBodies(log.ID)
+		if err != nil {
+			return nil, err
+		}
+		populateLegacyBodyRefs(log)
 		logs = append(logs, log)
 	}
 	if err := rows.Err(); err != nil {
@@ -1063,16 +1371,16 @@ func (r *SQLiteRepository) Close() error {
 	return r.db.Close()
 }
 
-// ListBlobRefs returns all distinct blob refs currently referenced by logs.
+// ListBlobRefs returns all distinct blob refs currently referenced by body
+// metadata. Archive/import staging tables are added to this union by their
+// migrations so GC cannot race an active batch.
 func (r *SQLiteRepository) ListBlobRefs() ([]string, error) {
 	query := `
-	SELECT request_body_ref AS ref
-	FROM request_logs
-	WHERE request_body_ref IS NOT NULL AND request_body_ref != ''
+	SELECT DISTINCT blob_ref AS ref
+	FROM log_bodies
+	WHERE blob_ref IS NOT NULL AND blob_ref != ''
 	UNION
-	SELECT response_body_ref AS ref
-	FROM request_logs
-	WHERE response_body_ref IS NOT NULL AND response_body_ref != ''
+	SELECT blob_ref AS ref FROM archive_staged_blob_refs
 	`
 	rows, err := r.db.Query(query)
 	if err != nil {
@@ -1103,6 +1411,7 @@ func (r *SQLiteRepository) scanLogSummary(scanner interface{ Scan(...interface{}
 	var annotationLabels string
 	var annotationCreatedMS, annotationUpdatedMS int64
 	var usageInput, usageOutput, usageTotal sql.NullInt64
+	var backupVerifiedAt, deleteGraceStartedAt sql.NullInt64
 
 	err := scanner.Scan(
 		&log.ID, &log.CreatedAt, &log.Upstream, &log.UpstreamTarget, &log.TargetURL, &log.Method, &log.Path, &log.Query,
@@ -1112,6 +1421,7 @@ func (r *SQLiteRepository) scanLogSummary(scanner interface{ Scan(...interface{}
 		&annotationCreatedMS, &annotationUpdatedMS,
 		&log.TraceID, &log.ParentLogID, &log.TraceSeq,
 		&usageInput, &usageOutput, &usageTotal,
+		&log.BodyStorageError, &log.Origin, &backupVerifiedAt, &log.BackupBatchID, &deleteGraceStartedAt, &log.ImportBatchID,
 	)
 	if err != nil {
 		return nil, err
@@ -1124,6 +1434,14 @@ func (r *SQLiteRepository) scanLogSummary(scanner interface{ Scan(...interface{}
 	log.UsageOutputTokens = nullIntPtr(usageOutput)
 	log.UsageTotalTokens = nullIntPtr(usageTotal)
 	log.CreatedAt = log.CreatedAt.UTC()
+	if backupVerifiedAt.Valid {
+		v := time.UnixMilli(backupVerifiedAt.Int64).UTC()
+		log.BackupVerifiedAt = &v
+	}
+	if deleteGraceStartedAt.Valid {
+		v := time.UnixMilli(deleteGraceStartedAt.Int64).UTC()
+		log.DeleteGraceStartedAt = &v
+	}
 	log.Annotation.Saved = annotationSaved == 1
 	log.Annotation.Status = normalizeAnnotationStatus(log.Annotation.Status)
 	_ = json.Unmarshal([]byte(annotationLabels), &log.Annotation.Labels)
@@ -1145,16 +1463,18 @@ func (r *SQLiteRepository) scanLog(scanner interface{ Scan(...interface{}) error
 	var headerOverrideChanges, reqHeadersOriginal string
 	var usageInput, usageOutput, usageTotal sql.NullInt64
 	var usageRaw, usageSource sql.NullString
+	var backupVerifiedAt, deleteGraceStartedAt sql.NullInt64
 
 	err := scanner.Scan(
 		&log.ID, &log.CreatedAt, &log.Upstream, &log.UpstreamTarget, &log.TargetURL, &log.Method, &log.Path, &log.Query,
-		&reqHeaders, &log.RequestBody, &log.RequestBodyOriginal, &log.RequestBodyFinal, &log.RequestBodyRef, &log.RequestBodySize,
-		&log.StatusCode, &respHeaders, &log.ResponseBody, &log.ResponseBodyRef, &log.ResponseBodySize,
+		&reqHeaders, &log.RequestBodySize,
+		&log.StatusCode, &respHeaders, &log.ResponseBodySize,
 		&streaming, &log.Latency, &log.Error, &truncated, &log.Tag,
 		&overrideApplied, &overrideRules, &log.RequestOverrideError,
 		&headerOverrideApplied, &headerOverrideChanges, &reqHeadersOriginal,
 		&log.TraceID, &log.ParentLogID, &log.TraceSeq,
 		&usageInput, &usageOutput, &usageTotal, &usageRaw, &usageSource,
+		&log.BodyStorageError, &log.Origin, &backupVerifiedAt, &log.BackupBatchID, &deleteGraceStartedAt, &log.ImportBatchID,
 	)
 	if err != nil {
 		return nil, err
@@ -1174,6 +1494,14 @@ func (r *SQLiteRepository) scanLog(scanner interface{ Scan(...interface{}) error
 		log.UsageSource = usageSource.String
 	}
 	log.CreatedAt = log.CreatedAt.UTC()
+	if backupVerifiedAt.Valid {
+		v := time.UnixMilli(backupVerifiedAt.Int64).UTC()
+		log.BackupVerifiedAt = &v
+	}
+	if deleteGraceStartedAt.Valid {
+		v := time.UnixMilli(deleteGraceStartedAt.Int64).UTC()
+		log.DeleteGraceStartedAt = &v
+	}
 
 	if reqHeaders != "" && reqHeaders != "null" {
 		log.RequestHeaders = unmarshalHeaders(reqHeaders)
@@ -1205,16 +1533,18 @@ func (r *SQLiteRepository) scanLogWithAnnotation(scanner interface{ Scan(...inte
 	var annotationSaved int
 	var annotationLabels string
 	var annotationCreatedMS, annotationUpdatedMS int64
+	var backupVerifiedAt, deleteGraceStartedAt sql.NullInt64
 
 	err := scanner.Scan(
 		&log.ID, &log.CreatedAt, &log.Upstream, &log.UpstreamTarget, &log.TargetURL, &log.Method, &log.Path, &log.Query,
-		&reqHeaders, &log.RequestBody, &log.RequestBodyOriginal, &log.RequestBodyFinal, &log.RequestBodyRef, &log.RequestBodySize,
-		&log.StatusCode, &respHeaders, &log.ResponseBody, &log.ResponseBodyRef, &log.ResponseBodySize,
+		&reqHeaders, &log.RequestBodySize,
+		&log.StatusCode, &respHeaders, &log.ResponseBodySize,
 		&streaming, &log.Latency, &log.Error, &truncated, &log.Tag,
 		&overrideApplied, &overrideRules, &log.RequestOverrideError,
 		&headerOverrideApplied, &headerOverrideChanges, &reqHeadersOriginal,
 		&log.TraceID, &log.ParentLogID, &log.TraceSeq,
 		&usageInput, &usageOutput, &usageTotal, &usageRaw, &usageSource,
+		&log.BodyStorageError, &log.Origin, &backupVerifiedAt, &log.BackupBatchID, &deleteGraceStartedAt, &log.ImportBatchID,
 		&annotationSaved, &log.Annotation.Status, &log.Annotation.Note, &annotationLabels,
 		&annotationCreatedMS, &annotationUpdatedMS,
 	)
@@ -1236,6 +1566,14 @@ func (r *SQLiteRepository) scanLogWithAnnotation(scanner interface{ Scan(...inte
 		log.UsageSource = usageSource.String
 	}
 	log.CreatedAt = log.CreatedAt.UTC()
+	if backupVerifiedAt.Valid {
+		v := time.UnixMilli(backupVerifiedAt.Int64).UTC()
+		log.BackupVerifiedAt = &v
+	}
+	if deleteGraceStartedAt.Valid {
+		v := time.UnixMilli(deleteGraceStartedAt.Int64).UTC()
+		log.DeleteGraceStartedAt = &v
+	}
 
 	if reqHeaders != "" && reqHeaders != "null" {
 		log.RequestHeaders = unmarshalHeaders(reqHeaders)

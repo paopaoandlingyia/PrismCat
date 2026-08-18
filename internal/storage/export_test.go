@@ -36,6 +36,10 @@ func TestSQLiteRepositoryExportLogsUsesFiltersAndFullRows(t *testing.T) {
 		Path:         "/v1/responses",
 		RequestBody:  `{"prompt":"hello"}`,
 		ResponseBody: `{"answer":"world"}`,
+		Bodies: []LogBody{
+			{Part: BodyPartRequest, BlobRef: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", CapturedBytes: 18, TotalBytes: 18, Representation: "wire"},
+			{Part: BodyPartResponse, BlobRef: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", CapturedBytes: 18, TotalBytes: 18, Representation: "wire"},
+		},
 	}); err != nil {
 		t.Fatalf("SaveLog(matched) returned error: %v", err)
 	}
@@ -64,8 +68,8 @@ func TestSQLiteRepositoryExportLogsUsesFiltersAndFullRows(t *testing.T) {
 		t.Fatalf("exported logs = %d, want 1", len(exported))
 	}
 	got := exported[0]
-	if got.ID != "matched" || got.RequestBody == "" || got.ResponseBody == "" {
-		t.Fatalf("exported log missing full fields: %#v", got)
+	if got.ID != "matched" || got.RequestBody != "" || got.ResponseBody != "" || len(got.Bodies) != 2 {
+		t.Fatalf("exported log should contain metadata without SQLite body text: %#v", got)
 	}
 	if !got.Annotation.Saved || got.Annotation.Status != "todo" || len(got.Annotation.Labels) != 1 {
 		t.Fatalf("exported annotation = %#v, want saved todo export", got.Annotation)

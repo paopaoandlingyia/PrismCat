@@ -2,22 +2,22 @@ package storage
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"strings"
 
 	"github.com/paopaoandlingyia/PrismCat/internal/config"
 	"github.com/paopaoandlingyia/PrismCat/internal/httpbody"
 	"github.com/paopaoandlingyia/PrismCat/internal/usage"
 )
 
-// PrepareLogForPersistence converts raw captured bodies into bounded previews
-// and stores recoverable raw bodies in the blob store before persistence.
+// PrepareLogForPersistence extracts usage while the response is still in
+// memory, then externalizes every non-empty wire body. SQLite only receives
+// body metadata through RequestLog.Bodies.
 func PrepareLogForPersistence(logEntry *RequestLog, cfg *config.Config, blobs ...BlobStore) {
 	if logEntry == nil || cfg == nil {
 		return
 	}
-
-	loggingCfg := cfg.LoggingSnapshot()
-	blobStore := firstBlobStore(blobs)
 
 	if len(logEntry.ResponseBodyRaw) > 0 {
 		usageResult := usage.Extract(
@@ -36,82 +36,86 @@ func PrepareLogForPersistence(logEntry *RequestLog, cfg *config.Config, blobs ..
 		}
 	}
 
-	var requestUnrecoverablyTruncated bool
-	if len(logEntry.RequestBodyRaw) > 0 {
-		formatted := formatCapturedBodyForPersistence(
-			logEntry.RequestBodyRaw,
-			FirstHeaderValue(logEntry.RequestHeaders, "Content-Type"),
-			FirstHeaderValue(logEntry.RequestHeaders, "Content-Encoding"),
-			loggingCfg.MaxRequestBody,
-			loggingCfg.BodyPreviewBytes,
-			loggingCfg.DetachBodyOverBytes,
-			!loggingCfg.StoreBase64,
-		)
-		logEntry.RequestBody = formatted.Text
-		requestUnrecoverablyTruncated = formatted.Truncated
-		if shouldStoreRawBody(logEntry.RequestBodyRaw, formatted.Truncated, formatted.Binary, logEntry.RequestBodyRef, loggingCfg.DetachBodyOverBytes) {
-			logEntry.RequestBodyRef = putBodyBlob(blobStore, "request", logEntry.RequestBodyRaw)
+	blobStore := firstBlobStore(blobs)
+	logEntry.Bodies = nil
+	var storageErrors []string
+	requestType := FirstHeaderValue(logEntry.RequestHeaders, "Content-Type")
+	requestEncoding := FirstHeaderValue(logEntry.RequestHeaders, "Content-Encoding")
+	responseType := FirstHeaderValue(logEntry.ResponseHeaders, "Content-Type")
+	responseEncoding := FirstHeaderValue(logEntry.ResponseHeaders, "Content-Encoding")
+	loggingCfg := cfg.LoggingSnapshot()
+
+	formatTransient := func(raw []byte, contentType, contentEncoding string, max int64) string {
+		if len(raw) == 0 {
+			return ""
 		}
-		if logEntry.RequestBodyRef != "" {
-			requestUnrecoverablyTruncated = false
+		// Deprecated tests/embedders may still set BodyPreviewBytes in memory.
+		// It never reaches YAML and SQLite never persists this formatted text.
+		if loggingCfg.BodyPreviewBytes > 0 && loggingCfg.BodyPreviewBytes < max {
+			return httpbody.FormatPreviewForDisplay(contentType, contentEncoding, raw, httpbody.FormatOptions{
+				MaxOutputBytes:  loggingCfg.BodyPreviewBytes,
+				TrimLargeBase64: !loggingCfg.StoreBase64,
+			}).Text
 		}
+		return httpbody.FormatForDisplay(contentType, contentEncoding, raw, httpbody.FormatOptions{
+			MaxOutputBytes:  max,
+			TrimLargeBase64: !loggingCfg.StoreBase64,
+		}).Text
 	}
-	if len(logEntry.RequestBodyOriginalRaw) > 0 {
-		formatted := formatCapturedBodyForPersistence(
-			logEntry.RequestBodyOriginalRaw,
-			FirstHeaderValue(logEntry.RequestHeaders, "Content-Type"),
-			FirstHeaderValue(logEntry.RequestHeaders, "Content-Encoding"),
-			loggingCfg.MaxRequestBody,
-			loggingCfg.BodyPreviewBytes,
-			loggingCfg.DetachBodyOverBytes,
-			!loggingCfg.StoreBase64,
-		)
-		logEntry.RequestBodyOriginal = formatted.Text
-		requestUnrecoverablyTruncated = requestUnrecoverablyTruncated || formatted.Truncated
-	}
-	if len(logEntry.RequestBodyFinalRaw) > 0 {
-		formatted := formatCapturedBodyForPersistence(
-			logEntry.RequestBodyFinalRaw,
-			FirstHeaderValue(logEntry.RequestHeaders, "Content-Type"),
-			FirstHeaderValue(logEntry.RequestHeaders, "Content-Encoding"),
-			loggingCfg.MaxRequestBody,
-			loggingCfg.BodyPreviewBytes,
-			loggingCfg.DetachBodyOverBytes,
-			!loggingCfg.StoreBase64,
-		)
-		logEntry.RequestBodyFinal = formatted.Text
-		if formatted.Truncated && logEntry.RequestBodyRef == "" {
-			requestUnrecoverablyTruncated = true
+	logEntry.RequestBody = formatTransient(logEntry.RequestBodyRaw, requestType, requestEncoding, loggingCfg.MaxRequestBody)
+	logEntry.RequestBodyOriginal = formatTransient(logEntry.RequestBodyOriginalRaw, requestType, requestEncoding, loggingCfg.MaxRequestBody)
+	logEntry.RequestBodyFinal = formatTransient(logEntry.RequestBodyFinalRaw, requestType, requestEncoding, loggingCfg.MaxRequestBody)
+	logEntry.ResponseBody = formatTransient(logEntry.ResponseBodyRaw, responseType, responseEncoding, loggingCfg.MaxResponseBody)
+
+	add := func(part string, raw []byte, total int64, truncated bool, contentType, contentEncoding string) {
+		if len(raw) == 0 {
+			return
 		}
+		if total <= 0 {
+			total = int64(len(raw))
+		}
+		body := LogBody{
+			LogID:           logEntry.ID,
+			Part:            part,
+			CapturedBytes:   int64(len(raw)),
+			TotalBytes:      total,
+			Truncated:       truncated || total > int64(len(raw)),
+			ContentType:     contentType,
+			ContentEncoding: contentEncoding,
+			Representation:  "wire",
+		}
+		if blobStore == nil {
+			storageErrors = append(storageErrors, part+": blob store is unavailable")
+			body.Truncated = true
+		} else {
+			ref, err := blobStore.Put(context.Background(), raw)
+			if err != nil {
+				storageErrors = append(storageErrors, fmt.Sprintf("%s: %v", part, err))
+				body.Truncated = true
+				log.Printf("blob put (%s) failed: %v", part, err)
+			} else {
+				body.BlobRef = ref
+				body.Recoverable = !body.Truncated
+			}
+		}
+		logEntry.Bodies = append(logEntry.Bodies, body)
 	}
 
-	var responseUnrecoverablyTruncated bool
-	if len(logEntry.ResponseBodyRaw) > 0 {
-		formatted := formatCapturedBodyForPersistence(
-			logEntry.ResponseBodyRaw,
-			FirstHeaderValue(logEntry.ResponseHeaders, "Content-Type"),
-			FirstHeaderValue(logEntry.ResponseHeaders, "Content-Encoding"),
-			loggingCfg.MaxResponseBody,
-			loggingCfg.BodyPreviewBytes,
-			loggingCfg.DetachBodyOverBytes,
-			!loggingCfg.StoreBase64,
-		)
-		logEntry.ResponseBody = formatted.Text
-		responseUnrecoverablyTruncated = formatted.Truncated
-		if shouldStoreRawBody(logEntry.ResponseBodyRaw, formatted.Truncated, formatted.Binary, logEntry.ResponseBodyRef, loggingCfg.DetachBodyOverBytes) {
-			logEntry.ResponseBodyRef = putBodyBlob(blobStore, "response", logEntry.ResponseBodyRaw)
-		}
-		if logEntry.ResponseBodyRef != "" {
-			responseUnrecoverablyTruncated = false
-		}
-	}
+	add(BodyPartRequest, logEntry.RequestBodyRaw, logEntry.RequestBodySize,
+		logEntry.RequestBodyCaptureTruncated, requestType, requestEncoding)
+	add(BodyPartRequestOriginal, logEntry.RequestBodyOriginalRaw, int64(len(logEntry.RequestBodyOriginalRaw)),
+		false, requestType, requestEncoding)
+	add(BodyPartRequestFinal, logEntry.RequestBodyFinalRaw, int64(len(logEntry.RequestBodyFinalRaw)),
+		false, requestType, requestEncoding)
+	add(BodyPartResponse, logEntry.ResponseBodyRaw, logEntry.ResponseBodySize,
+		logEntry.ResponseBodyCaptureTruncated, responseType, responseEncoding)
 
-	logEntry.Truncated = logEntry.Truncated ||
-		logEntry.RequestBodyCaptureTruncated ||
-		logEntry.ResponseBodyCaptureTruncated ||
-		requestUnrecoverablyTruncated ||
-		responseUnrecoverablyTruncated
+	logEntry.BodyStorageError = strings.Join(storageErrors, "; ")
+	logEntry.Truncated = logEntry.Truncated || logEntry.RequestBodyCaptureTruncated ||
+		logEntry.ResponseBodyCaptureTruncated || len(storageErrors) > 0
 
+	// SQLite ignores formatted body fields and persists only Bodies metadata.
+	populateLegacyBodyRefs(logEntry)
 	logEntry.RequestBodyRaw = nil
 	logEntry.RequestBodyOriginalRaw = nil
 	logEntry.RequestBodyFinalRaw = nil
@@ -120,52 +124,9 @@ func PrepareLogForPersistence(logEntry *RequestLog, cfg *config.Config, blobs ..
 	logEntry.ResponseBodyCaptureTruncated = false
 }
 
-func formatCapturedBodyForPersistence(body []byte, contentType string, contentEncoding string, maxOutputBytes int64, previewBytes int64, detachOverBytes int64, trimLargeBase64 bool) httpbody.FormatResult {
-	if len(body) == 0 {
-		return httpbody.FormatResult{}
-	}
-
-	if detachOverBytes > 0 {
-		return httpbody.FormatPreviewForDisplay(contentType, contentEncoding, body, httpbody.FormatOptions{
-			MaxOutputBytes:  previewBytes,
-			TrimLargeBase64: trimLargeBase64,
-		})
-	}
-
-	return httpbody.FormatForDisplay(contentType, contentEncoding, body, httpbody.FormatOptions{
-		MaxOutputBytes:  maxOutputBytes,
-		TrimLargeBase64: trimLargeBase64,
-	})
-}
-
-func shouldStoreRawBody(body []byte, previewTruncated bool, binary bool, existingRef string, detachOverBytes int64) bool {
-	if len(body) == 0 || existingRef != "" {
-		return false
-	}
-	if binary {
-		return true
-	}
-	if detachOverBytes <= 0 {
-		return false
-	}
-	return previewTruncated || int64(len(body)) > detachOverBytes
-}
-
 func firstBlobStore(blobs []BlobStore) BlobStore {
 	if len(blobs) == 0 {
 		return nil
 	}
 	return blobs[0]
-}
-
-func putBodyBlob(blobs BlobStore, kind string, body []byte) string {
-	if blobs == nil || len(body) == 0 {
-		return ""
-	}
-	ref, err := blobs.Put(context.Background(), body)
-	if err != nil {
-		log.Printf("blob put (%s binary) failed: %v", kind, err)
-		return ""
-	}
-	return ref
 }

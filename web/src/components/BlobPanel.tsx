@@ -1,4 +1,4 @@
-import { Cloud, Download, ExternalLink, FileArchive, Image, Info } from 'lucide-react'
+import { Download, ExternalLink, FileArchive, HardDrive, Image, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -13,7 +13,6 @@ interface BlobPanelProps {
     loading: boolean
     error: string | null
     onLoad: () => void
-    onUsePreview: () => void
 }
 
 export function BlobPanel({
@@ -25,7 +24,6 @@ export function BlobPanel({
     loading,
     error,
     onLoad,
-    onUsePreview,
 }: BlobPanelProps) {
     const { t } = useTranslation()
     const blobUrl = `/api/blobs/${encodeURIComponent(blobRef)}`
@@ -40,7 +38,7 @@ export function BlobPanel({
                 {binary ? (
                     isImage ? <Image className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> : <FileArchive className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 ) : (
-                    <Cloud className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <HardDrive className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 )}
                 <span className="font-medium text-foreground">
                     {binary ? t('log_detail.binary_response', 'Binary response') : isLoaded ? t('log_detail.blob_loaded') : t('log_detail.blob_detached')}
@@ -75,16 +73,7 @@ export function BlobPanel({
                     </TooltipContent>
                 </Tooltip>
                 <div className="ml-auto flex items-center gap-0.5">
-                    {!binary && (isLoaded ? (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={onUsePreview}
-                            className="h-7 px-2 text-xs font-medium"
-                        >
-                            {t('log_detail.use_preview')}
-                        </Button>
-                    ) : (
+                    {!binary && !isLoaded && (
                         <Button
                             variant="ghost"
                             size="sm"
@@ -94,7 +83,7 @@ export function BlobPanel({
                         >
                             {loading ? t('common.loading') : t('log_detail.load_full')}
                         </Button>
-                    ))}
+                    )}
                     <a
                         href={blobUrl}
                         target="_blank"

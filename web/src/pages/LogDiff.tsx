@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import { TextDiffViewer } from '@/components/TextDiffViewer'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { fetchLog, type RequestLog } from '@/lib/api'
+import { fetchLog, fetchLogBody, type RequestLog } from '@/lib/api'
 import { cn, formatDate, formatSize, METHOD_CLASS, getStatusColor } from '@/lib/utils'
 import { copyText } from '@/lib/clipboard'
 
@@ -16,6 +16,8 @@ interface LogDiffState {
     log: RequestLog | null
     loading: boolean
     error: string | null
+    originalBody: string
+    finalBody: string
 }
 
 function createLogDiffState(id: string | undefined): LogDiffState {
@@ -24,6 +26,8 @@ function createLogDiffState(id: string | undefined): LogDiffState {
         log: null,
         loading: Boolean(id),
         error: id ? null : 'missing-id',
+        originalBody: '',
+        finalBody: '',
     }
 }
 
@@ -44,9 +48,17 @@ export function LogDiff() {
             return
         }
 
-        fetchLog(id)
-            .then((next) => {
-                if (!cancelled) setState({ id, log: next, loading: false, error: null })
+        Promise.all([
+            fetchLog(id),
+            fetchLogBody(id, 'request_original'),
+            fetchLogBody(id, 'request_final'),
+        ])
+            .then(([next, original, final]) => {
+                if (!cancelled) setState({
+                    id, log: next, loading: false, error: null,
+                    originalBody: original.body,
+                    finalBody: final.body,
+                })
             })
             .catch((err) => {
                 if (!cancelled) {
@@ -55,6 +67,8 @@ export function LogDiff() {
                         log: null,
                         loading: false,
                         error: err instanceof Error ? err.message : t('common.error'),
+                        originalBody: '',
+                        finalBody: '',
                     })
                 }
             })
@@ -68,8 +82,8 @@ export function LogDiff() {
     const error = currentState.error === 'missing-id'
         ? t('log_diff.missing_id', 'Missing log id')
         : currentState.error
-    const originalBody = log?.request_body_original ?? ''
-    const finalBody = log?.request_body_final ?? ''
+    const originalBody = currentState.originalBody
+    const finalBody = currentState.finalBody
     const hasDiff = Boolean(originalBody && finalBody && originalBody !== finalBody)
     const targetPath = useMemo(() => {
         if (!log) return ''

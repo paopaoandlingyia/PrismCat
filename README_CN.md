@@ -281,8 +281,6 @@ logging:
     - Authorization
     - api-key
     - x-api-key
-  detach_body_over_bytes: 2097152 # 超过 2MB 的内容按需加载
-  body_preview_bytes: 524288      # 内联可读预览；长期高频运行可适当调小
   early_request_body_snapshot: false
 
 logging_rules:
@@ -292,6 +290,30 @@ logging_rules:
 
 storage:
   retention_days: 30              # 日志保留天数，0 = 永久
+  body_compression:
+    algorithm: zstd
+    level: 3
+
+archive:
+  enabled: false
+  s3:
+    endpoint: ""                    # 留空使用 AWS 官方地址
+    region: cn-northwest-1
+    bucket: your-bucket
+    access_key_id: ""
+    secret_access_key: ""
+    force_path_style: false
+  key_prefix: backups/prismcat/${yyyy}/${MM}-${dd}
+  schedule_time: "02:00"
+  timezone: Asia/Shanghai
+  zstd_level: 10
+  local_retention_hours: 24         # 校验成功后至少保留 1 小时
+  import_retention_hours: 24
+
+# key_prefix 可选占位符：${yyyy}（四位年）、${MM}（两位月）、${dd}（两位日）。
+# 每日任务备份今天零点以前的全部积压；“立即备份”包含点击前的当天日志。
+# 所有日志（包括“已保存”日志）都会备份；已保存日志不会被自动删除。
+# 普通日志仅在 .tar.zst、SHA-256 和 sidecar 均校验成功并超过宽限期后清理。
 
 upstreams:
   openai:

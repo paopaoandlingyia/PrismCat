@@ -281,8 +281,6 @@ logging:
     - Authorization
     - api-key
     - x-api-key
-  detach_body_over_bytes: 2097152 # Load bodies > 2MB on demand
-  body_preview_bytes: 524288      # Inline readable preview; lower for high-frequency long-running use
   early_request_body_snapshot: false
 
 logging_rules:
@@ -292,6 +290,32 @@ logging_rules:
 
 storage:
   retention_days: 30              # Log retention in days; 0 = keep forever
+  body_compression:
+    algorithm: zstd
+    level: 3
+
+archive:
+  enabled: false
+  s3:
+    endpoint: ""                    # Empty uses the official AWS endpoint
+    region: cn-northwest-1
+    bucket: your-bucket
+    access_key_id: ""
+    secret_access_key: ""
+    force_path_style: false
+  key_prefix: backups/prismcat/${yyyy}/${MM}-${dd}
+  schedule_time: "02:00"
+  timezone: Asia/Shanghai
+  zstd_level: 10
+  local_retention_hours: 24         # Keep verified local logs for at least 1 hour
+  import_retention_hours: 24
+
+# Optional key_prefix placeholders: ${yyyy} (four-digit year), ${MM} (two-digit
+# month), and ${dd} (two-digit day). The daily job backs up all backlog before
+# local midnight; Back Up Now includes today's logs created before the click.
+# Every log, including saved logs, is backed up. Saved logs are never deleted
+# automatically. Ordinary logs are deleted only after the package, SHA-256,
+# and sidecar are verified and the configured local grace period has elapsed.
 
 upstreams:
   openai:

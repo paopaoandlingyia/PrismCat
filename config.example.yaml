@@ -126,12 +126,6 @@ logging:
   # 代价：每个请求会额外多一次数据库写入（高并发下可能降低吞吐/更易丢日志）。
   early_request_body_snapshot: false
 
-  # 超过此大小的完整 Body 会自动分离到 blob 存储（内容寻址 + 去重）
-  detach_body_over_bytes: 2097152 # 2MB；设为 0 可禁用；留空则默认 2MB
-  # 写入日志时最多保留多少可读 Body 预览；完整 Body 仍会按上方配置保存到 blob
-  # 长期高频运行可适当调小；低频调试可调大，便于详情页直接预览更多内容
-  body_preview_bytes: 524288      # 512KB；设为 0 可关闭预览
-
   # 需要脱敏的请求头
   sensitive_headers:
     - "Authorization"
@@ -151,14 +145,37 @@ storage:
   # 日志保留天数；0 = 永久保留
   retention_days: 30
 
-  # blob 存储（用于分离大 body）
+  # 所有非空正文均写入内容寻址 blob
   blob_store: "fs"
   blob_dir: "./data/blobs"
+  body_compression:
+    algorithm: "zstd" # zstd / none
+    level: 3           # 1-19，仅影响后续新 blob
   
   # async_buffer controls the capacity of the async log queue.
   # Larger values allow handling higher burst throughput but use more memory.
   # Default: 4096
   # async_buffer: 4096
+
+# S3 归档（整个 tar 流使用 Zstd 压缩，生成标准 .tar.zst）
+# 每日任务处理今天零点前的积压；立即备份处理点击前的全部日志（含当天）。
+# 已保存日志同样进入归档，但不会自动删除；普通日志校验成功后延迟清理。
+archive:
+  enabled: false
+  s3:
+    endpoint: ""
+    region: ""
+    bucket: ""
+    access_key_id: ""
+    secret_access_key: ""
+    force_path_style: false
+  # 日期占位符均可选：${yyyy} 四位年、${MM} 两位月、${dd} 两位日。
+  key_prefix: "backups/prismcat/${yyyy}/${MM}-${dd}"
+  schedule_time: "02:00"
+  timezone: "Asia/Shanghai"
+  zstd_level: 10
+  local_retention_hours: 24 # 最小 1；清理器每 5 分钟执行
+  import_retention_hours: 24
 
 # 请求参数覆盖（默认关闭）
 # 开启后 PrismCat 会在命中规则时修改最终发往上游的 JSON 请求体和/或请求头。

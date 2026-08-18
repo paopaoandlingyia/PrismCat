@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -23,6 +24,7 @@ type Config struct {
 	Logging   LoggingConfig             `yaml:"logging"`
 	LogRules  LoggingRulesConfig        `yaml:"logging_rules"`
 	Storage   StorageConfig             `yaml:"storage"`
+	Archive   ArchiveConfig             `yaml:"archive"`
 	Overrides RequestOverridesConfig    `yaml:"request_overrides"`
 	Usage     UsageExtractionConfig     `yaml:"usage_extraction"`
 
@@ -207,16 +209,15 @@ type LoggingConfig struct {
 	// request.
 	EarlyRequestBodySnapshot bool `yaml:"early_request_body_snapshot"`
 
-	// DetachBodyOverBytes detaches large captured bodies into the blob store.
-	// Log details keep only an inline preview + a content-addressed reference.
-	//
-	// 0: disable detaching. Omit the field to use the default.
-	DetachBodyOverBytes int64 `yaml:"detach_body_over_bytes"`
-	// BodyPreviewBytes controls how many bytes of readable body preview are kept
-	// inline in request_logs.request_body/response_body while the full body is
-	// loaded on demand from the blob store when detached.
-	// 0: disable preview (store empty preview).
-	BodyPreviewBytes int64 `yaml:"body_preview_bytes"`
+	// Deprecated compatibility fields. They are intentionally excluded from
+	// YAML and ignored by persistence; all non-empty bodies are externalized.
+	DetachBodyOverBytes int64 `yaml:"-" json:"-"`
+	BodyPreviewBytes    int64 `yaml:"-" json:"-"`
+}
+
+type BodyCompressionConfig struct {
+	Algorithm string `yaml:"algorithm" json:"algorithm"`
+	Level     int    `yaml:"level" json:"level"`
 }
 
 // StorageConfig 存储配置
@@ -232,8 +233,32 @@ type StorageConfig struct {
 	BlobStore string `yaml:"blob_store"`
 	// BlobDir is used when BlobStore == "fs".
 	BlobDir string `yaml:"blob_dir"`
+	// BodyCompression applies only to newly written blobs. Each blob records its
+	// codec in a versioned envelope, so historical blobs remain self-describing.
+	BodyCompression BodyCompressionConfig `yaml:"body_compression"`
 	// AsyncBuffer controls the capacity of the async log queue.
 	AsyncBuffer int `yaml:"async_buffer"`
+}
+
+type ArchiveS3Config struct {
+	Endpoint        string `yaml:"endpoint" json:"endpoint"`
+	Region          string `yaml:"region" json:"region"`
+	Bucket          string `yaml:"bucket" json:"bucket"`
+	AccessKeyID     string `yaml:"access_key_id" json:"access_key_id"`
+	SecretAccessKey string `yaml:"secret_access_key" json:"-"`
+	ForcePathStyle  bool   `yaml:"force_path_style" json:"force_path_style"`
+}
+
+// ArchiveConfig controls scheduled S3 backup and delayed local cleanup.
+type ArchiveConfig struct {
+	Enabled              bool            `yaml:"enabled" json:"enabled"`
+	S3                   ArchiveS3Config `yaml:"s3" json:"s3"`
+	KeyPrefix            string          `yaml:"key_prefix" json:"key_prefix"`
+	ScheduleTime         string          `yaml:"schedule_time" json:"schedule_time"`
+	Timezone             string          `yaml:"timezone" json:"timezone"`
+	ZstdLevel            int             `yaml:"zstd_level" json:"zstd_level"`
+	LocalRetentionHours  int             `yaml:"local_retention_hours" json:"local_retention_hours"`
+	ImportRetentionHours int             `yaml:"import_retention_hours" json:"import_retention_hours"`
 }
 
 var (
@@ -263,16 +288,26 @@ func Load(path string) (*Config, error) {
 			MaxRequestBody:           5 << 20,  // 5MB
 			MaxResponseBody:          32 << 20, // 32MB
 			SensitiveHeaders:         []string{"Authorization", "x-api-key", "api-key"},
-			StoreBase64:              true,
+			StoreBase64:              false,
 			EarlyRequestBodySnapshot: false,
-			DetachBodyOverBytes:      2 << 20,    // 2MB
-			BodyPreviewBytes:         512 * 1024, // 512KB
 		},
 		Storage: StorageConfig{
-			Database:    "./data/prismcat.db",
-			BlobStore:   "fs",
-			BlobDir:     "./data/blobs",
+			Database:  "./data/prismcat.db",
+			BlobStore: "fs",
+			BlobDir:   "./data/blobs",
+			BodyCompression: BodyCompressionConfig{
+				Algorithm: "zstd",
+				Level:     3,
+			},
 			AsyncBuffer: 4096,
+		},
+		Archive: ArchiveConfig{
+			KeyPrefix:            "backups/prismcat/${yyyy}/${MM}-${dd}",
+			ScheduleTime:         "02:00",
+			Timezone:             "Asia/Shanghai",
+			ZstdLevel:            10,
+			LocalRetentionHours:  24,
+			ImportRetentionHours: 24,
 		},
 		Overrides: RequestOverridesConfig{
 			MaxBodyBytes: 1 << 20,
@@ -356,6 +391,8 @@ func Load(path string) (*Config, error) {
 	c.LogRules = logRules
 	c.Overrides = NormalizeRequestOverrides(c.Overrides)
 	c.Usage = NormalizeUsageExtraction(c.Usage)
+	c.Storage = NormalizeStorageConfig(c.Storage)
+	c.Archive = NormalizeArchiveConfig(c.Archive)
 
 	// 确保目录存在
 	dbDir := filepath.Dir(c.Storage.Database)
@@ -433,6 +470,137 @@ func NormalizePathRoutingPrefix(prefix string) string {
 		return "/_proxy"
 	}
 	return prefix
+}
+
+func NormalizeStorageConfig(in StorageConfig) StorageConfig {
+	in.BlobStore = strings.ToLower(strings.TrimSpace(in.BlobStore))
+	if in.BlobStore == "" {
+		in.BlobStore = "fs"
+	}
+	in.BodyCompression.Algorithm = strings.ToLower(strings.TrimSpace(in.BodyCompression.Algorithm))
+	if in.BodyCompression.Algorithm != "none" {
+		in.BodyCompression.Algorithm = "zstd"
+	}
+	if in.BodyCompression.Level < 1 || in.BodyCompression.Level > 19 {
+		in.BodyCompression.Level = 3
+	}
+	if in.AsyncBuffer <= 0 {
+		in.AsyncBuffer = 4096
+	}
+	return in
+}
+
+func NormalizeArchiveConfig(in ArchiveConfig) ArchiveConfig {
+	in.S3.Endpoint = strings.TrimRight(strings.TrimSpace(in.S3.Endpoint), "/")
+	in.S3.Region = strings.TrimSpace(in.S3.Region)
+	in.S3.Bucket = strings.TrimSpace(in.S3.Bucket)
+	in.S3.AccessKeyID = strings.TrimSpace(in.S3.AccessKeyID)
+	in.S3.SecretAccessKey = strings.TrimSpace(in.S3.SecretAccessKey)
+	in.KeyPrefix = strings.TrimRight(strings.TrimSpace(in.KeyPrefix), "/")
+	if in.KeyPrefix == "" {
+		in.KeyPrefix = "backups/prismcat/${yyyy}/${MM}-${dd}"
+	}
+	if _, err := time.Parse("15:04", in.ScheduleTime); err != nil {
+		in.ScheduleTime = "02:00"
+	}
+	if in.Timezone == "" {
+		in.Timezone = "Asia/Shanghai"
+	}
+	if _, err := time.LoadLocation(in.Timezone); err != nil {
+		in.Timezone = "Asia/Shanghai"
+	}
+	if in.ZstdLevel < 1 || in.ZstdLevel > 19 {
+		in.ZstdLevel = 10
+	}
+	if in.LocalRetentionHours < 1 {
+		in.LocalRetentionHours = 24
+	}
+	if in.ImportRetentionHours < 0 {
+		in.ImportRetentionHours = 24
+	}
+	return in
+}
+
+// ValidateArchiveConfig validates values that must not be silently normalized.
+func ValidateArchiveConfig(in ArchiveConfig) error {
+	if err := ValidateArchiveKeyPrefix(in.KeyPrefix); err != nil {
+		return err
+	}
+	if _, err := time.Parse("15:04", strings.TrimSpace(in.ScheduleTime)); err != nil {
+		return fmt.Errorf("schedule_time must use HH:MM in 24-hour time")
+	}
+	if _, err := time.LoadLocation(strings.TrimSpace(in.Timezone)); err != nil {
+		return fmt.Errorf("timezone is invalid")
+	}
+	if in.ZstdLevel < 1 || in.ZstdLevel > 19 {
+		return fmt.Errorf("zstd_level must be between 1 and 19")
+	}
+	if in.LocalRetentionHours < 1 {
+		return fmt.Errorf("local_retention_hours must be at least 1")
+	}
+	if in.ImportRetentionHours < 0 {
+		return fmt.Errorf("import_retention_hours must be zero or greater")
+	}
+	if in.S3.Endpoint != "" {
+		u, err := url.Parse(in.S3.Endpoint)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.RawQuery != "" || u.Fragment != "" {
+			return fmt.Errorf("S3 endpoint must be an absolute HTTP(S) URL without query or fragment")
+		}
+	}
+	if in.Enabled && (strings.TrimSpace(in.S3.Region) == "" || strings.TrimSpace(in.S3.Bucket) == "" || strings.TrimSpace(in.S3.AccessKeyID) == "" || strings.TrimSpace(in.S3.SecretAccessKey) == "") {
+		return fmt.Errorf("enabled S3 backup requires region, bucket, access_key_id, and secret_access_key")
+	}
+	return nil
+}
+
+func ValidateArchiveKeyPrefix(prefix string) error {
+	prefix = strings.TrimSpace(prefix)
+	if prefix == "" {
+		return fmt.Errorf("key_prefix is required")
+	}
+	if strings.HasPrefix(prefix, "/") || strings.HasSuffix(prefix, "/") || strings.Contains(prefix, "\\") || strings.Contains(prefix, "//") {
+		return fmt.Errorf("key_prefix contains an invalid path separator")
+	}
+	if strings.IndexFunc(prefix, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 {
+		return fmt.Errorf("key_prefix contains a control character")
+	}
+	for rest := prefix; ; {
+		start := strings.Index(rest, "${")
+		if start < 0 {
+			break
+		}
+		end := strings.Index(rest[start+2:], "}")
+		if end < 0 {
+			return fmt.Errorf("key_prefix contains an incomplete placeholder")
+		}
+		token := rest[start : start+2+end+1]
+		if token != "${yyyy}" && token != "${MM}" && token != "${dd}" {
+			return fmt.Errorf("unsupported key_prefix placeholder %s", token)
+		}
+		rest = rest[start+2+end+1:]
+	}
+	resolved := strings.NewReplacer("${yyyy}", "2006", "${MM}", "01", "${dd}", "02").Replace(prefix)
+	if strings.Contains(resolved, "${") || strings.Contains(resolved, "}") {
+		return fmt.Errorf("key_prefix contains an invalid placeholder")
+	}
+	resolved = ResolveArchiveKeyPrefix(prefix, time.Date(2006, 1, 2, 0, 0, 0, 0, time.UTC))
+	for _, part := range strings.Split(resolved, "/") {
+		if part == "" || part == "." || part == ".." {
+			return fmt.Errorf("key_prefix contains an unsafe path segment")
+		}
+	}
+	if len(resolved)+128 > 1024 {
+		return fmt.Errorf("key_prefix is too long")
+	}
+	return nil
+}
+
+func ResolveArchiveKeyPrefix(prefix string, day time.Time) string {
+	return strings.NewReplacer(
+		"${yyyy}", day.Format("2006"),
+		"${MM}", day.Format("01"),
+		"${dd}", day.Format("02"),
+	).Replace(strings.TrimRight(strings.TrimSpace(prefix), "/"))
 }
 
 func normalizeUpstreams(in map[string]UpstreamConfig) (map[string]UpstreamConfig, error) {
@@ -818,6 +986,12 @@ func (c *Config) StorageSnapshot() StorageConfig {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.Storage
+}
+
+func (c *Config) ArchiveSnapshot() ArchiveConfig {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.Archive
 }
 
 func (c *Config) RequestOverridesSnapshot() RequestOverridesConfig {

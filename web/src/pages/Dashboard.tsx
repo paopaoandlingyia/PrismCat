@@ -5,6 +5,7 @@ import { StatsCards } from '@/components/StatsCards'
 import { LogTable } from '@/components/LogTable'
 import { LogFilters } from '@/components/LogFilters'
 import { useTranslation } from 'react-i18next'
+import { useArchiveFeatureEnabled } from '@/lib/archiveFeature'
 
 const LogDetailPanel = lazy(async () => {
     const module = await import('@/components/LogDetail')
@@ -13,6 +14,7 @@ const LogDetailPanel = lazy(async () => {
 
 export function Dashboard() {
     const { t } = useTranslation()
+    const archiveEnabled = useArchiveFeatureEnabled()
 
     // 状态
     const [logs, setLogs] = useState<RequestLog[]>([])
@@ -69,6 +71,12 @@ export function Dashboard() {
     useEffect(() => {
         loadLogs()
     }, [loadLogs])
+
+    useEffect(() => {
+        if (!archiveEnabled && filter.backup_status) {
+            setFilter(current => ({ ...current, backup_status: undefined, offset: 0 }))
+        }
+    }, [archiveEnabled, filter.backup_status])
 
     const handleSelectLog = useCallback(async (log: RequestLog) => {
         setSelectedLog(log)

@@ -67,8 +67,9 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table'
-import { DEFAULT_UPSTREAM_TIMEOUT_SECONDS, fetchUpstreams, addUpstream, removeUpstream, activateUpstreamTarget, fetchConfig, updateConfig, fetchSystemMetrics, fetchUpdateInfo, fetchStorageUsage, fetchModelPathTemplates } from '@/lib/api'
-import type { Upstream, UpstreamTarget, AppConfig, SystemMetrics, UpdateInfo, StorageUsage, LoggingPathFilter, ModelPathTemplate } from '@/lib/api'
+import { DEFAULT_UPSTREAM_TIMEOUT_SECONDS, fetchUpstreams, addUpstream, removeUpstream, activateUpstreamTarget, fetchConfig, updateConfig, fetchSystemMetrics, fetchUpdateInfo, fetchStorageUsage, fetchModelPathTemplates, fetchArchives, fetchArchiveDeletionPreview, testArchiveConnection, runArchiveNow } from '@/lib/api'
+import { notifyArchiveFeatureChanged } from '@/lib/archiveFeature'
+import type { Upstream, UpstreamTarget, AppConfig, SystemMetrics, UpdateInfo, StorageUsage, LoggingPathFilter, ModelPathTemplate, ArchiveStatus } from '@/lib/api'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -155,6 +156,35 @@ const usageExtractionExample = JSON.stringify([
         },
     },
 ], null, 2)
+
+function validateArchiveKeyPrefix(value: string): string {
+    const prefix = value.trim()
+    if (!prefix) return 'required'
+    if (prefix.startsWith('/') || prefix.endsWith('/') || prefix.includes('\\') || prefix.includes('//')) return 'separator'
+    if ([...prefix].some(character => {
+        const code = character.charCodeAt(0)
+        return code < 0x20 || code === 0x7f
+    })) return 'control'
+    const placeholders = [...prefix.matchAll(/\$\{([^}]*)\}/g)]
+    if (placeholders.some(match => !['yyyy', 'MM', 'dd'].includes(match[1]))) return 'placeholder'
+    const resolved = prefix.replaceAll('${yyyy}', '2026').replaceAll('${MM}', '08').replaceAll('${dd}', '17')
+    if (resolved.includes('${') || resolved.includes('}')) return 'placeholder'
+    if (resolved.split('/').some(part => !part || part === '.' || part === '..')) return 'segment'
+    if (resolved.length + 128 > 1024) return 'length'
+    return ''
+}
+
+function archiveDateParts(timezone: string) {
+    try {
+        const parts = new Intl.DateTimeFormat('en-US', {
+            timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit',
+        }).formatToParts(new Date())
+        const get = (type: string) => parts.find(part => part.type === type)?.value ?? ''
+        return { yyyy: get('year'), MM: get('month'), dd: get('day') }
+    } catch {
+        return { yyyy: '2026', MM: '08', dd: '17' }
+    }
+}
 
 function getErrorMessage(error: unknown, fallback: string) {
     return error instanceof Error ? error.message : fallback
@@ -840,13 +870,31 @@ export function Settings() {
     const [maxRequestBody, setMaxRequestBody] = useState(5120)
     const [maxResponseBody, setMaxResponseBody] = useState(32768)
     const [sensitiveHeaders, setSensitiveHeaders] = useState('')
-    const [detachBodyOver, setDetachBodyOver] = useState(2048)
-    const [bodyPreview, setBodyPreview] = useState(512)
     const [storeBase64, setStoreBase64] = useState(true)
     const [earlyRequestBodySnapshot, setEarlyRequestBodySnapshot] = useState(false)
+    const [bodyCompressionAlgorithm, setBodyCompressionAlgorithm] = useState<'zstd' | 'none'>('zstd')
+    const [bodyCompressionLevel, setBodyCompressionLevel] = useState(3)
 
     const [retentionDays, setRetentionDays] = useState(30)
     const [maxStorageGB, setMaxStorageGB] = useState(0)
+    const [archiveEnabled, setArchiveEnabled] = useState(false)
+    const [archiveEndpoint, setArchiveEndpoint] = useState('')
+    const [archiveRegion, setArchiveRegion] = useState('')
+    const [archiveBucket, setArchiveBucket] = useState('')
+    const [archiveAccessKeyID, setArchiveAccessKeyID] = useState('')
+    const [archiveSecretAccessKey, setArchiveSecretAccessKey] = useState('')
+    const [archiveSecretConfigured, setArchiveSecretConfigured] = useState(false)
+    const [archiveForcePathStyle, setArchiveForcePathStyle] = useState(false)
+    const [archiveKeyPrefix, setArchiveKeyPrefix] = useState('backups/prismcat/${yyyy}/${MM}-${dd}')
+    const [archiveScheduleTime, setArchiveScheduleTime] = useState('02:00')
+    const [archiveTimezone, setArchiveTimezone] = useState('Asia/Shanghai')
+    const [archiveZstdLevel, setArchiveZstdLevel] = useState(10)
+    const [archiveLocalRetentionHours, setArchiveLocalRetentionHours] = useState(24)
+    const [archiveImportRetentionHours, setArchiveImportRetentionHours] = useState(24)
+    const [archiveDeletionPreview, setArchiveDeletionPreview] = useState(0)
+    const [archiveStatus, setArchiveStatus] = useState<ArchiveStatus | null>(null)
+    const [archiveAction, setArchiveAction] = useState<'test' | 'run' | ''>('')
+    const archiveKeyInputRef = useRef<HTMLInputElement>(null)
     const [requestOverridesEnabled, setRequestOverridesEnabled] = useState(false)
     const [overrideMaxBodyKB, setOverrideMaxBodyKB] = useState(1024)
     const [overrideRulesText, setOverrideRulesText] = useState('')
@@ -868,6 +916,22 @@ export function Settings() {
 
     const domainSuffix = config?.server?.proxy_domains?.[0] || 'localhost'
     const previewUpstreamName = upstreams[0]?.name || 'openai'
+    const archiveKeyError = validateArchiveKeyPrefix(archiveKeyPrefix)
+    const archiveKeySample = useMemo(() => {
+        const parts = archiveDateParts(archiveTimezone)
+        const resolved = archiveKeyPrefix.trim()
+            .replaceAll('${yyyy}', parts.yyyy)
+            .replaceAll('${MM}', parts.MM)
+            .replaceAll('${dd}', parts.dd)
+        return {
+            date: `${parts.yyyy}-${parts.MM}-${parts.dd}`,
+            key: `${resolved}/prismcat-${parts.yyyy}${parts.MM}${parts.dd}-<batch-id>.tar.zst`,
+        }
+    }, [archiveKeyPrefix, archiveTimezone])
+    const archiveS3Ready = Boolean(
+        archiveRegion.trim() && archiveBucket.trim() && archiveAccessKeyID.trim()
+        && (archiveSecretConfigured || archiveSecretAccessKey.trim()),
+    )
     const sortedUpstreams = useMemo(() => {
         return [...upstreams].sort((a, b) => {
             const orderDiff = (a.order || 0) - (b.order || 0)
@@ -1077,12 +1141,26 @@ export function Settings() {
             setMaxRequestBody(Math.round(configData.logging.max_request_body / 1024))
             setMaxResponseBody(Math.round(configData.logging.max_response_body / 1024))
             setSensitiveHeaders(configData.logging.sensitive_headers.join('\n'))
-            setDetachBodyOver(Math.round(configData.logging.detach_body_over_bytes / 1024))
-            setBodyPreview(Math.round(configData.logging.body_preview_bytes / 1024))
             setStoreBase64(configData.logging.store_base64)
             setEarlyRequestBodySnapshot(configData.logging.early_request_body_snapshot)
+            setBodyCompressionAlgorithm(configData.storage.body_compression?.algorithm ?? 'zstd')
+            setBodyCompressionLevel(configData.storage.body_compression?.level ?? 3)
             setRetentionDays(configData.storage.retention_days)
             setMaxStorageGB(parseFloat((configData.storage.max_storage_bytes / (1024 * 1024 * 1024)).toFixed(2)))
+            setArchiveEnabled(configData.archive?.enabled ?? false)
+            setArchiveEndpoint(configData.archive?.s3?.endpoint ?? '')
+            setArchiveRegion(configData.archive?.s3?.region ?? '')
+            setArchiveBucket(configData.archive?.s3?.bucket ?? '')
+            setArchiveAccessKeyID(configData.archive?.s3?.access_key_id ?? '')
+            setArchiveSecretAccessKey('')
+            setArchiveSecretConfigured(configData.archive?.s3?.secret_configured ?? false)
+            setArchiveForcePathStyle(configData.archive?.s3?.force_path_style ?? false)
+            setArchiveKeyPrefix(configData.archive?.key_prefix ?? 'backups/prismcat/${yyyy}/${MM}-${dd}')
+            setArchiveScheduleTime(configData.archive?.schedule_time ?? '02:00')
+            setArchiveTimezone(configData.archive?.timezone ?? 'Asia/Shanghai')
+            setArchiveZstdLevel(configData.archive?.zstd_level ?? 10)
+            setArchiveLocalRetentionHours(configData.archive?.local_retention_hours ?? 24)
+            setArchiveImportRetentionHours(configData.archive?.import_retention_hours ?? 24)
             setEnablePathRouting(configData.server.enable_path_routing)
             setPathRoutingPrefix(configData.server.path_routing_prefix || '/_proxy')
             setRequestOverridesEnabled(configData.request_overrides?.enabled ?? false)
@@ -1167,6 +1245,94 @@ export function Settings() {
             setStorageLoading(false)
         }
     }
+
+    const refreshArchiveStatus = async () => {
+        try {
+            setArchiveStatus(await fetchArchives(false))
+        } catch (err) {
+            toast.error(getErrorMessage(err, t('settings.archive_status_failed')))
+        }
+    }
+
+    const archiveConfigPayload = () => ({
+        enabled: archiveEnabled,
+        s3: {
+            endpoint: archiveEndpoint,
+            region: archiveRegion,
+            bucket: archiveBucket,
+            access_key_id: archiveAccessKeyID,
+            secret_access_key: archiveSecretAccessKey,
+            force_path_style: archiveForcePathStyle,
+        },
+        key_prefix: archiveKeyPrefix,
+        schedule_time: archiveScheduleTime,
+        timezone: archiveTimezone,
+        zstd_level: archiveZstdLevel,
+        local_retention_hours: archiveLocalRetentionHours,
+        import_retention_hours: archiveImportRetentionHours,
+    })
+
+    const insertArchivePlaceholder = (token: string) => {
+        const input = archiveKeyInputRef.current
+        const start = input?.selectionStart ?? archiveKeyPrefix.length
+        const end = input?.selectionEnd ?? start
+        setArchiveKeyPrefix(`${archiveKeyPrefix.slice(0, start)}${token}${archiveKeyPrefix.slice(end)}`)
+        window.setTimeout(() => {
+            input?.focus()
+            input?.setSelectionRange(start + token.length, start + token.length)
+        }, 0)
+    }
+
+    const handleArchiveTest = async () => {
+        setArchiveAction('test')
+        try {
+            await testArchiveConnection(archiveConfigPayload())
+            toast.success(t('settings.archive_test_success'))
+            await refreshArchiveStatus()
+        } catch (err) {
+            toast.error(getErrorMessage(err, t('settings.archive_test_failed')))
+        } finally {
+            setArchiveAction('')
+        }
+    }
+
+    const handleArchiveRun = async () => {
+        setArchiveAction('run')
+        try {
+            await runArchiveNow()
+            toast.success(t('settings.archive_run_success'))
+            await refreshArchiveStatus()
+        } catch (err) {
+            toast.error(getErrorMessage(err, t('settings.archive_run_failed')))
+        } finally {
+            setArchiveAction('')
+        }
+    }
+
+    useEffect(() => {
+        if (activeTab !== 'logging') return
+        void refreshArchiveStatus()
+        // Archive state is refreshed explicitly after commands; configuration
+        // loading should not continuously poll S3 from the settings form.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeTab])
+
+    useEffect(() => {
+        if (activeTab !== 'logging' || !archiveStatus?.running) return
+        const timer = window.setInterval(() => void refreshArchiveStatus(), 2000)
+        return () => window.clearInterval(timer)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeTab, archiveStatus?.running])
+
+    useEffect(() => {
+        if (activeTab !== 'logging' || archiveLocalRetentionHours < 1) return
+        const timer = window.setTimeout(() => {
+            void fetchArchiveDeletionPreview(archiveLocalRetentionHours)
+                .then(setArchiveDeletionPreview)
+                .catch(() => setArchiveDeletionPreview(0))
+        }, 250)
+        return () => window.clearTimeout(timer)
+    }, [activeTab, archiveLocalRetentionHours])
 
     const handleAddUpstream = async (e: FormEvent) => {
         e.preventDefault()
@@ -1812,6 +1978,14 @@ export function Settings() {
     }
 
     const handleSaveAll = async () => {
+		if (archiveKeyError) {
+			toast.error(t(`settings.archive_key_error_${archiveKeyError}`))
+			return
+		}
+		if (archiveEnabled && !archiveS3Ready) {
+			toast.error(t('settings.archive_s3_required'))
+			return
+		}
         setSaving(true)
         try {
             const overrideRules = parseOverrideRules()
@@ -1826,19 +2000,23 @@ export function Settings() {
                     max_request_body: maxRequestBody * 1024,
                     max_response_body: maxResponseBody * 1024,
                     sensitive_headers: sensitiveHeaders.split('\n').map(s => s.trim()).filter(Boolean),
-                    detach_body_over_bytes: detachBodyOver * 1024,
-                    body_preview_bytes: bodyPreview * 1024,
                     store_base64: storeBase64,
                     early_request_body_snapshot: earlyRequestBodySnapshot,
                 },
                 storage: {
                     retention_days: retentionDays,
                     max_storage_bytes: Math.round(maxStorageGB * 1024 * 1024 * 1024),
+                    body_compression: {
+                        algorithm: bodyCompressionAlgorithm,
+                        level: bodyCompressionLevel,
+                    },
                 },
+                archive: archiveConfigPayload(),
                 request_overrides: buildOverridesPayload(overrideBindings, overrideRules),
                 usage_extraction: buildUsageExtractionPayload(usageBindings, usageRules),
             })
             await saveDirtyTargetBindings()
+            notifyArchiveFeatureChanged(archiveEnabled)
             toast.success(t('settings.config_saved'))
             loadData()
         } catch (err: unknown) {
@@ -2695,7 +2873,7 @@ export function Settings() {
                                         title={t('settings.section_content_size')}
                                         description={t('settings.section_content_size_desc')}
                                     >
-                                        <div className="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
+                                        <div className="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-2">
                                             <FieldBlock
                                                 label={t('settings.max_request_body')}
                                                 hint={t('settings.max_request_body_hint')}
@@ -2726,36 +2904,42 @@ export function Settings() {
                                                     className="h-9 w-full rounded-md border-input bg-background text-sm transition-colors focus-visible:bg-background"
                                                 />
                                             </FieldBlock>
-                                            <FieldBlock
-                                                label={t('settings.detach_body_over_bytes')}
-                                                hint={t('settings.detach_body_over_bytes_hint')}
-                                                htmlFor="detach-over"
-                                                unit="KB"
-                                            >
+                                        </div>
+                                    </SettingSection>
+
+                                    <SettingSection
+                                        title={t('settings.body_storage_title')}
+                                        description={t('settings.body_storage_desc')}
+                                    >
+                                        <div className="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-2">
+                                            <FieldBlock label={t('settings.body_compression_algorithm')} htmlFor="body-compression">
+                                                <Select value={bodyCompressionAlgorithm} onValueChange={value => setBodyCompressionAlgorithm(value as 'zstd' | 'none')}>
+                                                    <SelectTrigger id="body-compression" className="h-9 w-full rounded-md border-input bg-background">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="zstd">Zstd</SelectItem>
+                                                        <SelectItem value="none">{t('settings.body_compression_none')}</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </FieldBlock>
+                                            <FieldBlock label={t('settings.body_compression_level')} hint={t('settings.body_compression_level_hint')} htmlFor="body-compression-level">
                                                 <Input
-                                                    id="detach-over"
+                                                    id="body-compression-level"
                                                     type="number"
-                                                    min="0"
-                                                    value={detachBodyOver}
-                                                    onChange={e => setDetachBodyOver(Number(e.target.value))}
-                                                    className="h-9 w-full rounded-md border-input bg-background text-sm transition-colors focus-visible:bg-background"
+                                                    min="1"
+                                                    max="19"
+                                                    value={bodyCompressionLevel}
+                                                    disabled={bodyCompressionAlgorithm === 'none'}
+                                                    onChange={e => setBodyCompressionLevel(Number(e.target.value))}
+                                                    className="h-9 w-full rounded-md border-input bg-background text-sm"
                                                 />
                                             </FieldBlock>
-                                            <FieldBlock
-                                                label={t('settings.body_preview_bytes')}
-                                                hint={t('settings.body_preview_bytes_hint')}
-                                                htmlFor="body-preview"
-                                                unit="KB"
-                                            >
-                                                <Input
-                                                    id="body-preview"
-                                                    type="number"
-                                                    min="0"
-                                                    value={bodyPreview}
-                                                    onChange={e => setBodyPreview(Number(e.target.value))}
-                                                    className="h-9 w-full rounded-md border-input bg-background text-sm transition-colors focus-visible:bg-background"
-                                                />
-                                            </FieldBlock>
+                                        </div>
+                                        <div className="mt-5 grid grid-cols-1 gap-3 border-t border-input pt-5 sm:grid-cols-3">
+                                            <div><div className="text-xs text-muted-foreground">{t('settings.storage_usage_database')}</div><div className="mt-1 font-mono text-sm">{formatBytes(storageUsage?.database_bytes)}</div></div>
+                                            <div><div className="text-xs text-muted-foreground">{t('settings.storage_usage_blobs')}</div><div className="mt-1 font-mono text-sm">{formatBytes(storageUsage?.blob_bytes)}</div></div>
+                                            <div className="flex items-end"><Button type="button" variant="outline" size="sm" onClick={handleCalculateStorage} disabled={storageLoading}><RefreshCw className={cn('mr-2 h-3.5 w-3.5', storageLoading && 'animate-spin')} />{t('settings.storage_usage_calculate')}</Button></div>
                                         </div>
                                     </SettingSection>
 
@@ -2795,6 +2979,91 @@ export function Settings() {
                                                     className="h-9 w-full rounded-md border-input bg-background text-sm transition-colors focus-visible:bg-background"
                                                 />
                                             </FieldBlock>
+                                        </div>
+                                    </SettingSection>
+
+                                    <SettingSection
+                                        title={t('settings.archive_title')}
+                                        description={t('settings.archive_desc')}
+                                        action={<Switch checked={archiveEnabled} onCheckedChange={setArchiveEnabled} aria-label={t('settings.archive_enabled')} />}
+                                    >
+                                        <div className="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
+                                            <FieldBlock label={t('settings.archive_endpoint')} hint={t('settings.archive_endpoint_hint')} htmlFor="archive-endpoint">
+                                                <Input id="archive-endpoint" value={archiveEndpoint} onChange={e => setArchiveEndpoint(e.target.value)} placeholder="https://s3.example.com" className="h-9 font-mono text-xs" />
+                                            </FieldBlock>
+                                            <FieldBlock label={t('settings.archive_region')} htmlFor="archive-region">
+                                                <Input id="archive-region" value={archiveRegion} onChange={e => setArchiveRegion(e.target.value)} placeholder="cn-northwest-1" className="h-9 font-mono text-xs" />
+                                            </FieldBlock>
+                                            <FieldBlock label={t('settings.archive_bucket')} htmlFor="archive-bucket">
+                                                <Input id="archive-bucket" value={archiveBucket} onChange={e => setArchiveBucket(e.target.value)} className="h-9 font-mono text-xs" />
+                                            </FieldBlock>
+                                            <FieldBlock label={t('settings.archive_access_key')} htmlFor="archive-access-key">
+                                                <Input id="archive-access-key" value={archiveAccessKeyID} onChange={e => setArchiveAccessKeyID(e.target.value)} autoComplete="off" className="h-9 font-mono text-xs" />
+                                            </FieldBlock>
+                                            <FieldBlock label={t('settings.archive_secret_key')} hint={archiveSecretConfigured ? t('settings.archive_secret_configured') : undefined} htmlFor="archive-secret-key">
+                                                <Input id="archive-secret-key" type="password" value={archiveSecretAccessKey} onChange={e => setArchiveSecretAccessKey(e.target.value)} autoComplete="new-password" placeholder={archiveSecretConfigured ? t('settings.archive_secret_unchanged') : ''} className="h-9 font-mono text-xs" />
+                                            </FieldBlock>
+                                            <div className="flex min-h-16 items-center justify-between gap-4 border-b border-input pb-3">
+                                                <div><Label>{t('settings.archive_force_path_style')}</Label><p className="mt-1 text-xs text-muted-foreground">{t('settings.archive_force_path_style_hint')}</p></div>
+                                                <Switch checked={archiveForcePathStyle} onCheckedChange={setArchiveForcePathStyle} />
+                                            </div>
+                                            <div className="sm:col-span-2 lg:col-span-3">
+                                                <FieldBlock label={t('settings.archive_key_prefix')} htmlFor="archive-prefix">
+                                                    <Input ref={archiveKeyInputRef} id="archive-prefix" value={archiveKeyPrefix} onChange={e => setArchiveKeyPrefix(e.target.value)} placeholder="backups/prismcat/${yyyy}/${MM}-${dd}" aria-invalid={Boolean(archiveKeyError)} className={cn('h-9 font-mono text-xs', archiveKeyError && 'border-destructive')} />
+                                                </FieldBlock>
+                                                <div className="mt-2 space-y-1.5 text-xs text-muted-foreground">
+                                                    <p>{t('settings.archive_key_tokens')}</p>
+                                                    {[
+                                                        { token: '${yyyy}', description: t('settings.archive_key_token_year') },
+                                                        { token: '${MM}', description: t('settings.archive_key_token_month') },
+                                                        { token: '${dd}', description: t('settings.archive_key_token_day') },
+                                                    ].map(item => (
+                                                        <div key={item.token} className="flex min-h-7 flex-wrap items-center gap-2">
+                                                            <Button type="button" variant="outline" size="sm" className="h-7 w-20 px-2 font-mono text-xs" onClick={() => insertArchivePlaceholder(item.token)}>{item.token}</Button>
+                                                            <span>{item.description}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                <p className={cn('mt-2 break-all font-mono text-xs', archiveKeyError ? 'text-destructive' : 'text-muted-foreground')}>
+                                                    {archiveKeyError ? t(`settings.archive_key_error_${archiveKeyError}`) : `${t('settings.archive_key_sample', { date: archiveKeySample.date })}: ${archiveKeySample.key}`}
+                                                </p>
+                                            </div>
+                                            <FieldBlock label={t('settings.archive_schedule_time')} htmlFor="archive-time">
+                                                <Input id="archive-time" type="time" value={archiveScheduleTime} onChange={e => setArchiveScheduleTime(e.target.value)} className="h-9" />
+                                            </FieldBlock>
+                                            <FieldBlock label={t('settings.archive_timezone')} htmlFor="archive-timezone">
+                                                <Input id="archive-timezone" value={archiveTimezone} onChange={e => setArchiveTimezone(e.target.value)} className="h-9 font-mono text-xs" />
+                                            </FieldBlock>
+                                            <FieldBlock label={t('settings.archive_zstd_level')} hint={t('settings.archive_zstd_level_hint')} htmlFor="archive-level">
+                                                <Input id="archive-level" type="number" min="1" max="19" value={archiveZstdLevel} onChange={e => setArchiveZstdLevel(Number(e.target.value))} className="h-9" />
+                                            </FieldBlock>
+                                            <FieldBlock label={t('settings.archive_local_retention')} hint={t('settings.archive_local_retention_hint', { count: archiveDeletionPreview })} unit={t('settings.hours')} htmlFor="archive-local-retention">
+                                                <Input id="archive-local-retention" type="number" min="1" value={archiveLocalRetentionHours} onChange={e => setArchiveLocalRetentionHours(Number(e.target.value))} className="h-9" />
+                                            </FieldBlock>
+                                            <FieldBlock label={t('settings.archive_import_retention')} unit={t('settings.hours')} htmlFor="archive-retention">
+                                                <Input id="archive-retention" type="number" min="0" value={archiveImportRetentionHours} onChange={e => setArchiveImportRetentionHours(Number(e.target.value))} className="h-9" />
+                                            </FieldBlock>
+                                        </div>
+                                        <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-input pt-5">
+                                            <Button type="button" variant="outline" size="sm" onClick={handleArchiveTest} disabled={archiveAction !== '' || Boolean(archiveKeyError) || !archiveS3Ready}>
+                                                <RefreshCw className={cn('mr-2 h-3.5 w-3.5', archiveAction === 'test' && 'animate-spin')} />{t('settings.archive_test')}
+                                            </Button>
+                                            <Button type="button" variant="outline" size="sm" onClick={handleArchiveRun} disabled={archiveAction !== '' || !archiveEnabled || Boolean(archiveKeyError) || !archiveS3Ready}>
+                                                <Upload className="mr-2 h-3.5 w-3.5" />{t('settings.archive_run_now')}
+                                            </Button>
+                                            <span className="text-xs text-muted-foreground">
+                                                {archiveStatus?.running
+                                                    ? t('settings.archive_running')
+                                                    : archiveStatus?.jobs?.[0]
+                                                        ? `${t(`archives.status_${archiveStatus.jobs[0].status}`, archiveStatus.jobs[0].status)} · ${archiveStatus.jobs[0].log_count} ${t('archives.logs')}${archiveStatus.jobs[0].error ? ` · ${archiveStatus.jobs[0].error}` : ''}`
+                                                        : t('settings.archive_never_run')}
+                                            </span>
+                                            <span className="text-xs text-muted-foreground">
+                                                {t('settings.archive_pending_delete', { count: archiveStatus?.pending_delete_count ?? 0 })}
+                                                {archiveStatus?.earliest_delete_at
+                                                    ? ` · ${t('settings.archive_earliest_delete', { time: new Date(archiveStatus.earliest_delete_at).toLocaleString() })}`
+                                                    : ''}
+                                            </span>
                                         </div>
                                     </SettingSection>
 
@@ -3775,7 +4044,7 @@ export function Settings() {
                                 <Button
                                     type="button"
                                     onClick={handleSaveAll}
-                                    disabled={saving}
+                                    disabled={saving || Boolean(archiveKeyError) || (archiveEnabled && !archiveS3Ready)}
                                     variant="default"
                                     size="lg"
                                     className="h-9 min-w-[160px] rounded-md font-medium transition-all whitespace-nowrap"

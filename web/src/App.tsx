@@ -1,5 +1,5 @@
 import { BrowserRouter, Navigate, Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Globe, LayoutDashboard, LogOut, Network, Settings as SettingsIcon, Zap } from 'lucide-react'
+import { ArchiveRestore, Globe, LayoutDashboard, LogOut, Network, Settings as SettingsIcon, Zap } from 'lucide-react'
 import { PrismCatLogo } from '@/components/PrismCatLogo'
 import { useTranslation } from 'react-i18next'
 import { Dashboard } from '@/pages/Dashboard'
@@ -12,6 +12,8 @@ import { Suspense, lazy, useState, useEffect } from 'react'
 import { fetchAuthStatus, fetchConfig, login, logout as logoutRequest, setupPassword } from '@/lib/api'
 import { isSettingsTab, logRequestDiffRoute, settingsTabLabelKeys, settingsTabPath, settingsTabs } from '@/lib/routes'
 import { Login } from '@/pages/Login'
+import { ArchiveFeatureProvider } from '@/components/ArchiveFeatureProvider'
+import { listenForArchiveFeatureChanges } from '@/lib/archiveFeature'
 
 const PlaygroundPage = lazy(async () => {
   const module = await import('@/pages/Playground')
@@ -33,6 +35,11 @@ const TraceDetailPage = lazy(async () => {
   return { default: module.TraceDetail }
 })
 
+const ArchivesPage = lazy(async () => {
+  const module = await import('@/pages/Archives')
+  return { default: module.Archives }
+})
+
 interface AppLayoutProps {
   onSignOut: () => void
 }
@@ -41,6 +48,8 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
   const { t, i18n } = useTranslation()
   const location = useLocation()
   const [version, setVersion] = useState<string>('v1.4.0') // 初始显式 v1.4.0，直到接口返回
+  const [archiveEnabled, setArchiveEnabled] = useState(false)
+  const [featureConfigLoaded, setFeatureConfigLoaded] = useState(false)
 
   useEffect(() => {
     fetchConfig()
@@ -48,9 +57,16 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
         if (cfg.version) {
           setVersion(cfg.version.startsWith('v') ? cfg.version : `v${cfg.version}`)
         }
+        setArchiveEnabled(Boolean(cfg.archive?.enabled))
       })
       .catch(err => console.error('Failed to fetch version:', err))
+      .finally(() => setFeatureConfigLoaded(true))
   }, [])
+
+  useEffect(() => listenForArchiveFeatureChanges((enabled) => {
+    setArchiveEnabled(enabled)
+    setFeatureConfigLoaded(true)
+  }), [])
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0 })
@@ -61,6 +77,7 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
     { to: '/', labelKey: 'nav.dashboard', icon: LayoutDashboard },
     { to: '/playground', labelKey: 'nav.playground', icon: Zap },
     { to: '/traces', labelKey: 'nav.traces', icon: Network },
+    ...(archiveEnabled ? [{ to: '/archives', labelKey: 'nav.archives', icon: ArchiveRestore }] : []),
     { to: '/settings', labelKey: 'nav.settings', icon: SettingsIcon },
   ]
 
@@ -83,6 +100,7 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
   )
 
   return (
+    <ArchiveFeatureProvider enabled={archiveEnabled}>
     <div className="min-h-screen bg-background">
       {/* 侧边栏 - 桌面 */}
       <aside
@@ -259,6 +277,7 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
                 <Route path="/logging-rules/models" element={<Navigate to="/settings/logging/models" replace />} />
                 <Route path="/logging-rules/ignored" element={<Navigate to="/settings/logging/ignored" replace />} />
                 <Route path="/logging-rules/*" element={<Navigate to="/settings/logging/models" replace />} />
+                <Route path="/archives" element={!featureConfigLoaded ? routeFallback : archiveEnabled ? <ArchivesPage /> : <Navigate to="/" replace />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/settings/:tab" element={<SettingsPage />} />
                 <Route path="/settings/:tab/:subtab" element={<SettingsPage />} />
@@ -268,6 +287,7 @@ function AppLayout({ onSignOut }: AppLayoutProps) {
         </main>
       </div>
     </div>
+    </ArchiveFeatureProvider>
   )
 }
 

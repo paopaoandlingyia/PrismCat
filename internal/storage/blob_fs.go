@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -11,7 +12,19 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/klauspost/compress/zstd"
+)
+
+var blobEnvelopeMagic = [4]byte{'P', 'C', 'B', 'L'}
+
+const (
+	blobEnvelopeVersion = byte(1)
+	blobCodecNone       = byte(0)
+	blobCodecZstd       = byte(1)
+	blobEnvelopeSize    = 16
 )
 
 // ErrRefSetEmpty 表示引用列表为空,但仓库里确实有 blob。
@@ -28,6 +41,9 @@ var ErrRefSetEmpty = errors.New("blob gc: reference set is empty but the store i
 // Layout: <baseDir>/<hash[:2]>/<hash>
 type FileBlobStore struct {
 	baseDir string
+	mu      sync.RWMutex
+	codec   string
+	level   int
 }
 
 func NewFileBlobStore(baseDir string) (*FileBlobStore, error) {
@@ -37,7 +53,32 @@ func NewFileBlobStore(baseDir string) (*FileBlobStore, error) {
 	if err := os.MkdirAll(baseDir, 0755); err != nil {
 		return nil, err
 	}
-	return &FileBlobStore{baseDir: baseDir}, nil
+	return &FileBlobStore{baseDir: baseDir, codec: "zstd", level: 3}, nil
+}
+
+func NewFileBlobStoreWithCompression(baseDir, algorithm string, level int) (*FileBlobStore, error) {
+	store, err := NewFileBlobStore(baseDir)
+	if err != nil {
+		return nil, err
+	}
+	store.SetCompression(algorithm, level)
+	return store, nil
+}
+
+// SetCompression changes the encoding used for future blobs. Existing blobs
+// remain readable because the codec is stored in each blob envelope.
+func (s *FileBlobStore) SetCompression(algorithm string, level int) {
+	algorithm = strings.ToLower(strings.TrimSpace(algorithm))
+	if algorithm != "none" {
+		algorithm = "zstd"
+	}
+	if level < 1 || level > 19 {
+		level = 3
+	}
+	s.mu.Lock()
+	s.codec = algorithm
+	s.level = level
+	s.mu.Unlock()
 }
 
 func (s *FileBlobStore) Put(ctx context.Context, data []byte) (string, error) {
@@ -58,7 +99,11 @@ func (s *FileBlobStore) Put(ctx context.Context, data []byte) (string, error) {
 	}
 
 	tmpPath := filepath.Join(dir, ".tmp-"+hexHash+"-"+strconv.FormatInt(time.Now().UnixNano(), 10))
-	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+	encoded, err := s.encode(data)
+	if err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(tmpPath, encoded, 0644); err != nil {
 		return "", err
 	}
 
@@ -90,7 +135,89 @@ func (s *FileBlobStore) Get(ctx context.Context, ref string) ([]byte, error) {
 		}
 		return nil, err
 	}
-	return b, nil
+	data, err := decodeBlobEnvelope(b)
+	if err != nil {
+		return nil, fmt.Errorf("decode blob %s: %w", ref, err)
+	}
+	sum := sha256.Sum256(data)
+	if hex.EncodeToString(sum[:]) != hexHash {
+		return nil, fmt.Errorf("decode blob %s: checksum mismatch", ref)
+	}
+	return data, nil
+}
+
+func (s *FileBlobStore) encode(data []byte) ([]byte, error) {
+	s.mu.RLock()
+	codec, level := s.codec, s.level
+	s.mu.RUnlock()
+
+	payload := data
+	codecID := blobCodecNone
+	storedLevel := byte(0)
+	if codec == "zstd" {
+		encoder, err := zstd.NewWriter(nil,
+			zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(level)),
+			zstd.WithEncoderCRC(true),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("create zstd encoder: %w", err)
+		}
+		compressed := encoder.EncodeAll(data, nil)
+		encoder.Close()
+		if len(compressed) < len(data) {
+			payload = compressed
+			codecID = blobCodecZstd
+			storedLevel = byte(level)
+		}
+	}
+
+	out := make([]byte, blobEnvelopeSize+len(payload))
+	copy(out[:4], blobEnvelopeMagic[:])
+	out[4] = blobEnvelopeVersion
+	out[5] = codecID
+	out[6] = storedLevel
+	binary.BigEndian.PutUint64(out[8:16], uint64(len(data)))
+	copy(out[blobEnvelopeSize:], payload)
+	return out, nil
+}
+
+func decodeBlobEnvelope(stored []byte) ([]byte, error) {
+	if len(stored) < 4 || string(stored[:4]) != string(blobEnvelopeMagic[:]) {
+		// Legacy blobs were raw payloads without an envelope.
+		return stored, nil
+	}
+	if len(stored) < blobEnvelopeSize {
+		return nil, errors.New("truncated blob envelope")
+	}
+	if stored[4] != blobEnvelopeVersion {
+		return nil, fmt.Errorf("unsupported blob envelope version %d", stored[4])
+	}
+	expected := binary.BigEndian.Uint64(stored[8:16])
+	if expected > uint64(^uint(0)>>1) {
+		return nil, errors.New("blob is too large for this platform")
+	}
+	payload := stored[blobEnvelopeSize:]
+	var data []byte
+	switch stored[5] {
+	case blobCodecNone:
+		data = append([]byte(nil), payload...)
+	case blobCodecZstd:
+		decoder, err := zstd.NewReader(nil)
+		if err != nil {
+			return nil, fmt.Errorf("create zstd decoder: %w", err)
+		}
+		data, err = decoder.DecodeAll(payload, make([]byte, 0, int(expected)))
+		decoder.Close()
+		if err != nil {
+			return nil, fmt.Errorf("zstd: %w", err)
+		}
+	default:
+		return nil, fmt.Errorf("unsupported blob codec %d", stored[5])
+	}
+	if uint64(len(data)) != expected {
+		return nil, fmt.Errorf("size mismatch: got %d, want %d", len(data), expected)
+	}
+	return data, nil
 }
 
 func (s *FileBlobStore) Exists(ctx context.Context, ref string) (bool, error) {
@@ -145,6 +272,17 @@ func isBlobFileName(name string) bool {
 }
 
 func (s *FileBlobStore) GarbageCollect(ctx context.Context, referencedRefs []string, minAge time.Duration) (int, error) {
+	return s.garbageCollect(ctx, referencedRefs, minAge, false)
+}
+
+// GarbageCollectConfirmed permits an empty reference set after a caller has
+// just committed a known database cleanup. Ordinary periodic GC retains the
+// empty-set guard that protects against a mismatched database/blob directory.
+func (s *FileBlobStore) GarbageCollectConfirmed(ctx context.Context, referencedRefs []string, minAge time.Duration) (int, error) {
+	return s.garbageCollect(ctx, referencedRefs, minAge, true)
+}
+
+func (s *FileBlobStore) garbageCollect(ctx context.Context, referencedRefs []string, minAge time.Duration, allowEmpty bool) (int, error) {
 	_ = ctx
 
 	referenced := make(map[string]struct{}, len(referencedRefs))
@@ -157,7 +295,7 @@ func (s *FileBlobStore) GarbageCollect(ctx context.Context, referencedRefs []str
 	}
 
 	// 空引用列表 + 非空仓库 = 库和 blob 仓库对不上,而不是全都成了孤儿
-	if len(referenced) == 0 {
+	if len(referenced) == 0 && !allowEmpty {
 		empty, err := s.isEmpty()
 		if err != nil {
 			return 0, err

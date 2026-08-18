@@ -29,7 +29,8 @@ type AsyncRepository struct {
 	cfg   *config.Config
 	blobs BlobStore
 
-	ch        chan *RequestLog
+	ch        chan asyncItem
+	sendMu    sync.Mutex
 	closeOnce sync.Once
 	closed    atomic.Bool
 
@@ -54,6 +55,11 @@ type ignoredPathKey struct {
 	path     string
 }
 
+type asyncItem struct {
+	log     *RequestLog
+	barrier chan struct{}
+}
+
 // NewAsyncRepository creates an async wrapper with a bounded queue.
 func NewAsyncRepository(inner Repository, cfg *config.Config, buffer int, blobs ...BlobStore) *AsyncRepository {
 	if buffer <= 0 {
@@ -63,7 +69,7 @@ func NewAsyncRepository(inner Repository, cfg *config.Config, buffer int, blobs 
 		inner:                    inner,
 		cfg:                      cfg,
 		blobs:                    firstBlobStore(blobs),
-		ch:                       make(chan *RequestLog, buffer),
+		ch:                       make(chan asyncItem, buffer),
 		pendingIgnored:           make(map[ignoredPathKey]IgnoredPathObservation),
 		pendingIgnoredByUpstream: make(map[string]int),
 		ignoredStop:              make(chan struct{}),
@@ -73,9 +79,13 @@ func NewAsyncRepository(inner Repository, cfg *config.Config, buffer int, blobs 
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
-		for entry := range a.ch {
-			PrepareLogForPersistence(entry, a.cfg, a.blobs)
-			if err := a.inner.SaveLog(entry); err != nil {
+		for item := range a.ch {
+			if item.barrier != nil {
+				close(item.barrier)
+				continue
+			}
+			PrepareLogForPersistence(item.log, a.cfg, a.blobs)
+			if err := a.inner.SaveLog(item.log); err != nil {
 				// Best-effort: avoid crashing the proxy path.
 				log.Printf("save log failed: %v", err)
 			}
@@ -140,8 +150,10 @@ func (a *AsyncRepository) SaveLog(log *RequestLog) error {
 	}()
 
 	c := log.Clone()
+	a.sendMu.Lock()
+	defer a.sendMu.Unlock()
 	select {
-	case a.ch <- c:
+	case a.ch <- asyncItem{log: c}:
 		return nil
 	default:
 		a.dropped.Add(1)
@@ -149,8 +161,54 @@ func (a *AsyncRepository) SaveLog(log *RequestLog) error {
 	}
 }
 
+// Flush waits until every log enqueued before the call has been persisted.
+func (a *AsyncRepository) Flush(ctx context.Context) error {
+	if a.closed.Load() {
+		return ErrAsyncClosed
+	}
+	barrier := make(chan struct{})
+	a.sendMu.Lock()
+	select {
+	case a.ch <- asyncItem{barrier: barrier}:
+		a.sendMu.Unlock()
+	case <-ctx.Done():
+		a.sendMu.Unlock()
+		return ctx.Err()
+	}
+	select {
+	case <-barrier:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 func (a *AsyncRepository) GetLog(id string) (*RequestLog, error) {
 	return a.inner.GetLog(id)
+}
+
+func (a *AsyncRepository) GetLogBody(logID, part string) (LogBody, error) {
+	repo, ok := a.inner.(BodyRepository)
+	if !ok {
+		return LogBody{}, errors.New("body repository is unavailable")
+	}
+	return repo.GetLogBody(logID, part)
+}
+
+func (a *AsyncRepository) GetLogBodies(logID string) ([]LogBody, error) {
+	repo, ok := a.inner.(BodyRepository)
+	if !ok {
+		return nil, errors.New("body repository is unavailable")
+	}
+	return repo.GetLogBodies(logID)
+}
+
+func (a *AsyncRepository) ListBlobRefs() ([]string, error) {
+	repo, ok := a.inner.(BlobRefRepository)
+	if !ok {
+		return nil, errors.New("blob reference repository is unavailable")
+	}
+	return repo.ListBlobRefs()
 }
 
 func (a *AsyncRepository) ListLogs(filter LogFilter) ([]*RequestLog, int64, error) {
@@ -318,6 +376,205 @@ func (a *AsyncRepository) DeleteIgnoredPathsBefore(before time.Time) (int64, err
 		return 0, errors.New("ignored path storage is unavailable")
 	}
 	return store.DeleteIgnoredPathsBefore(before)
+}
+
+func (a *AsyncRepository) archiveRepository() (ArchiveRepository, error) {
+	repo, ok := a.inner.(ArchiveRepository)
+	if !ok {
+		return nil, errors.New("archive repository is unavailable")
+	}
+	return repo, nil
+}
+
+func (a *AsyncRepository) RecoverInterruptedArchiveWork(now time.Time) error {
+	r, err := a.archiveRepository()
+	if err != nil {
+		return err
+	}
+	return r.RecoverInterruptedArchiveWork(now)
+}
+
+func (a *AsyncRepository) OldestUnarchivedLogTime(before time.Time) (*time.Time, error) {
+	r, err := a.archiveRepository()
+	if err != nil {
+		return nil, err
+	}
+	return r.OldestUnarchivedLogTime(before)
+}
+func (a *AsyncRepository) CreateArchiveJob(v ArchiveJob) error {
+	r, err := a.archiveRepository()
+	if err != nil {
+		return err
+	}
+	return r.CreateArchiveJob(v)
+}
+func (a *AsyncRepository) UpdateArchiveJob(v ArchiveJob) error {
+	r, err := a.archiveRepository()
+	if err != nil {
+		return err
+	}
+	return r.UpdateArchiveJob(v)
+}
+func (a *AsyncRepository) ListArchiveJobs(limit int) ([]ArchiveJob, error) {
+	r, err := a.archiveRepository()
+	if err != nil {
+		return nil, err
+	}
+	return r.ListArchiveJobs(limit)
+}
+func (a *AsyncRepository) ListArchiveJobsPage(offset, limit int) ([]ArchiveJob, int64, error) {
+	r, err := a.archiveRepository()
+	if err != nil {
+		return nil, 0, err
+	}
+	return r.ListArchiveJobsPage(offset, limit)
+}
+func (a *AsyncRepository) CreateArchiveBatch(v ArchiveBatch) error {
+	r, err := a.archiveRepository()
+	if err != nil {
+		return err
+	}
+	return r.CreateArchiveBatch(v)
+}
+func (a *AsyncRepository) UpdateArchiveBatch(v ArchiveBatch) error {
+	r, err := a.archiveRepository()
+	if err != nil {
+		return err
+	}
+	return r.UpdateArchiveBatch(v)
+}
+func (a *AsyncRepository) ListArchiveBatches(limit int) ([]ArchiveBatch, error) {
+	r, err := a.archiveRepository()
+	if err != nil {
+		return nil, err
+	}
+	return r.ListArchiveBatches(limit)
+}
+func (a *AsyncRepository) ListArchiveBatchesPage(filter ArchiveBatchFilter) ([]ArchiveBatch, int64, error) {
+	r, err := a.archiveRepository()
+	if err != nil {
+		return nil, 0, err
+	}
+	return r.ListArchiveBatchesPage(filter)
+}
+func (a *AsyncRepository) ReserveArchiveBatchLogs(id string, start, end time.Time) (int64, error) {
+	r, err := a.archiveRepository()
+	if err != nil {
+		return 0, err
+	}
+	return r.ReserveArchiveBatchLogs(id, start, end)
+}
+func (a *AsyncRepository) ReleaseArchiveBatchLogs(id string) error {
+	r, err := a.archiveRepository()
+	if err != nil {
+		return err
+	}
+	return r.ReleaseArchiveBatchLogs(id)
+}
+func (a *AsyncRepository) ExportArchiveBatch(ctx context.Context, id string, each func(*RequestLog) error) error {
+	r, err := a.archiveRepository()
+	if err != nil {
+		return err
+	}
+	return r.ExportArchiveBatch(ctx, id, each)
+}
+func (a *AsyncRepository) MarkArchiveBatchVerified(id string, at time.Time) (int64, error) {
+	r, err := a.archiveRepository()
+	if err != nil {
+		return 0, err
+	}
+	return r.MarkArchiveBatchVerified(id, at)
+}
+func (a *AsyncRepository) DeleteEligibleBackedLogs(cutoff time.Time, limit int) (int64, error) {
+	r, err := a.archiveRepository()
+	if err != nil {
+		return 0, err
+	}
+	return r.DeleteEligibleBackedLogs(cutoff, limit)
+}
+func (a *AsyncRepository) CountEligibleBackedLogs(cutoff time.Time) (int64, error) {
+	r, err := a.archiveRepository()
+	if err != nil {
+		return 0, err
+	}
+	return r.CountEligibleBackedLogs(cutoff)
+}
+func (a *AsyncRepository) PendingBackedLogCleanup() (int64, *time.Time, error) {
+	r, err := a.archiveRepository()
+	if err != nil {
+		return 0, nil, err
+	}
+	return r.PendingBackedLogCleanup()
+}
+func (a *AsyncRepository) LogExists(id string) (bool, error) {
+	r, err := a.archiveRepository()
+	if err != nil {
+		return false, err
+	}
+	return r.LogExists(id)
+}
+func (a *AsyncRepository) SaveImportedLog(log *RequestLog) error {
+	r, err := a.archiveRepository()
+	if err != nil {
+		return err
+	}
+	return r.SaveImportedLog(log)
+}
+func (a *AsyncRepository) CreateArchiveImport(v ArchiveImport) error {
+	r, err := a.archiveRepository()
+	if err != nil {
+		return err
+	}
+	return r.CreateArchiveImport(v)
+}
+func (a *AsyncRepository) UpdateArchiveImport(v ArchiveImport) error {
+	r, err := a.archiveRepository()
+	if err != nil {
+		return err
+	}
+	return r.UpdateArchiveImport(v)
+}
+func (a *AsyncRepository) ListArchiveImports() ([]ArchiveImport, error) {
+	r, err := a.archiveRepository()
+	if err != nil {
+		return nil, err
+	}
+	return r.ListArchiveImports()
+}
+func (a *AsyncRepository) ListArchiveImportsPage(offset, limit int) ([]ArchiveImport, int64, error) {
+	r, err := a.archiveRepository()
+	if err != nil {
+		return nil, 0, err
+	}
+	return r.ListArchiveImportsPage(offset, limit)
+}
+func (a *AsyncRepository) DeleteArchiveImport(id string) (int64, error) {
+	r, err := a.archiveRepository()
+	if err != nil {
+		return 0, err
+	}
+	return r.DeleteArchiveImport(id)
+}
+func (a *AsyncRepository) DeleteExpiredArchiveImports(now time.Time) (int64, error) {
+	r, err := a.archiveRepository()
+	if err != nil {
+		return 0, err
+	}
+	return r.DeleteExpiredArchiveImports(now)
+}
+func (a *AsyncRepository) StageArchiveBlobRef(id, ref string) error {
+	r, err := a.archiveRepository()
+	if err != nil {
+		return err
+	}
+	return r.StageArchiveBlobRef(id, ref)
+}
+func (a *AsyncRepository) ClearArchiveBlobRefs(id string) error {
+	r, err := a.archiveRepository()
+	if err != nil {
+		return err
+	}
+	return r.ClearArchiveBlobRefs(id)
 }
 
 func (a *AsyncRepository) Close() error {

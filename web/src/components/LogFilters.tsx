@@ -13,6 +13,7 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
+import { useArchiveFeatureEnabled } from '@/lib/archiveFeature'
 import {
     Tooltip,
     TooltipContent,
@@ -55,6 +56,7 @@ export function LogFilters({
     loading,
 }: LogFiltersProps) {
     const { t } = useTranslation()
+    const archiveEnabled = useArchiveFeatureEnabled()
 
     // 本地暂存的筛选条件（不触发查询）
     const [draftState, setDraftState] = useState(() => ({
@@ -128,15 +130,16 @@ export function LogFilters({
     const isSavedChanged = (draft.saved ?? undefined) !== (filter.saved ?? undefined)
     const isAnnotationStatusChanged = (draft.annotation_status || '') !== (filter.annotation_status || '')
     const isAnnotationLabelChanged = (draft.annotation_label || '') !== (filter.annotation_label || '')
+    const isBackupStatusChanged = archiveEnabled && (draft.backup_status || '') !== (filter.backup_status || '')
     const isTimeChanged = (draft.start_time || '') !== (filter.start_time || '') ||
         (draft.end_time || '') !== (filter.end_time || '')
     const hasChanges = isPathChanged || isUpstreamChanged || isMethodChanged || isStatusCodeChanged || isTraceIdChanged || isTagChanged ||
-        isSavedChanged || isAnnotationStatusChanged || isAnnotationLabelChanged || isTimeChanged
+        isSavedChanged || isAnnotationStatusChanged || isAnnotationLabelChanged || isBackupStatusChanged || isTimeChanged
 
     // 次级筛选默认收起,但只要有生效的条件就展开,避免"筛了却看不见"
     const activeAdvancedCount = [
         draft.upstream, draft.method, draft.status_code, draft.tag,
-        draft.saved, draft.annotation_status, draft.annotation_label,
+        draft.saved, draft.annotation_status, draft.annotation_label, archiveEnabled ? draft.backup_status : undefined,
     ].filter(value => value !== undefined && value !== '').length
     const [showAdvanced, setShowAdvanced] = useState(activeAdvancedCount > 0)
 
@@ -251,7 +254,7 @@ export function LogFilters({
             </div>
 
             {showAdvanced && (
-                <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7">
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-8">
                     <Select
                         value={draft.upstream || "all"}
                         onValueChange={(val) => setDraft({ ...draft, upstream: val === "all" ? "" : val })}
@@ -339,6 +342,27 @@ export function LogFilters({
                             <SelectItem value="unsaved">{t('filters.unsaved_only')}</SelectItem>
                         </SelectContent>
                     </Select>
+
+                    {archiveEnabled && <Select
+                        value={draft.backup_status || 'all'}
+                        onValueChange={(val) => setDraft({
+                            ...draft,
+                            backup_status: val === 'all' ? undefined : val as LogFilter['backup_status'],
+                        })}
+                    >
+                        <SelectTrigger className={cn(
+                            "w-full h-8 bg-background border border-input hover:bg-accent",
+                            isBackupStatusChanged && "border-primary/50 ring-1 ring-primary/20"
+                        )}>
+                            <SelectValue placeholder={t('filters.backup_all')} />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">{t('filters.backup_all')}</SelectItem>
+                            <SelectItem value="pending">{t('filters.backup_pending')}</SelectItem>
+                            <SelectItem value="verified">{t('filters.backup_verified')}</SelectItem>
+                            <SelectItem value="restored">{t('filters.backup_restored')}</SelectItem>
+                        </SelectContent>
+                    </Select>}
 
                     <Select
                         value={draft.annotation_status || 'all'}

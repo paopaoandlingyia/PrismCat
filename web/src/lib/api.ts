@@ -19,6 +19,7 @@ export interface RequestLog {
     response_body?: string
     response_body_ref?: string
     response_body_size: number
+    bodies?: LogBodyMetadata[]
     streaming: boolean
     latency_ms: number
     error?: string
@@ -38,7 +39,29 @@ export interface RequestLog {
     usage_total_tokens?: number
     usage_raw?: string
     usage_source?: string
+    body_storage_error?: string
+    origin?: 'live' | 'archive_import'
+    archived_at?: string
+    backup_verified_at?: string
+    backup_batch_id?: string
+    delete_grace_started_at?: string
+    delete_eligible_at?: string
+    import_batch_id?: string
     annotation: LogAnnotation
+}
+
+export type LogBodyPart = 'request' | 'request_original' | 'request_final' | 'response'
+
+export interface LogBodyMetadata {
+    part: LogBodyPart
+    blob_ref?: string
+    captured_bytes: number
+    total_bytes: number
+    truncated: boolean
+    content_type?: string
+    content_encoding?: string
+    representation: 'wire' | string
+    recoverable: boolean
 }
 
 export interface HeaderOverrideChange {
@@ -187,6 +210,7 @@ export interface LogFilter {
     saved?: boolean
     annotation_status?: LogAnnotationStatus
     annotation_label?: string
+    backup_status?: 'pending' | 'verified' | 'restored'
     start_time?: string
     end_time?: string
     offset?: number
@@ -461,15 +485,20 @@ export interface AppConfig {
         max_response_body: number
         sensitive_headers: string[]
         early_request_body_snapshot: boolean
-        detach_body_over_bytes: number
-        body_preview_bytes: number
         store_base64: boolean
     }
     storage: {
         database: string
         retention_days: number
         max_storage_bytes: number
+        blob_store: string
+        blob_dir: string
+        body_compression: {
+            algorithm: 'zstd' | 'none'
+            level: number
+        }
     }
+    archive: ArchiveConfig
     request_overrides: {
         enabled: boolean
         max_body_bytes: number
@@ -515,14 +544,17 @@ export interface ConfigUpdate {
         max_response_body?: number
         sensitive_headers?: string[]
         early_request_body_snapshot?: boolean
-        detach_body_over_bytes?: number
-        body_preview_bytes?: number
         store_base64?: boolean
     }
     storage?: {
         retention_days?: number
         max_storage_bytes?: number
+        body_compression?: {
+            algorithm: 'zstd' | 'none'
+            level: number
+        }
     }
+    archive?: ArchiveConfig
     request_overrides?: {
         enabled?: boolean
         max_body_bytes?: number
@@ -652,13 +684,202 @@ export interface LogBodyResponse {
     body_decoded?: boolean
     body_decoded_from?: string
     decode_failed?: boolean
+    recoverable?: boolean
+    metadata?: LogBodyMetadata
 }
 
-export async function fetchLogBody(id: string, part: 'request' | 'response'): Promise<LogBodyResponse> {
+export async function fetchLogBody(id: string, part: LogBodyPart): Promise<LogBodyResponse> {
     const params = new URLSearchParams({ part })
     const response = await fetch(`${API_BASE}/logs/${encodeURIComponent(id)}/body?${params}`)
     if (!response.ok) throw new Error('获取 Body 失败')
     return response.json()
+}
+
+export interface ArchiveConfig {
+    enabled: boolean
+    s3: {
+        endpoint: string
+        region: string
+        bucket: string
+        access_key_id: string
+        secret_access_key?: string
+        secret_configured?: boolean
+        clear_secret_access_key?: boolean
+        force_path_style: boolean
+    }
+    key_prefix: string
+    schedule_time: string
+    timezone: string
+    zstd_level: number
+    local_retention_hours: number
+    import_retention_hours: number
+}
+
+export interface ArchiveJob {
+    id: string
+    trigger: 'manual' | 'scheduled' | string
+    cutoff: string
+    status: string
+    package_count: number
+    log_count: number
+    error?: string
+    created_at: string
+    updated_at: string
+    completed_at?: string
+}
+
+export interface ArchiveBatch {
+    id: string
+    job_id?: string
+    trigger?: 'manual' | 'scheduled' | string
+    archive_date: string
+    object_key?: string
+    manifest_key?: string
+    range_start: string
+    range_end: string
+    status: string
+    log_count: number
+    body_count: number
+    logical_bytes: number
+    compressed_bytes: number
+    sha256?: string
+    error?: string
+    created_at: string
+    updated_at: string
+    verified_at?: string
+}
+
+export interface ArchiveImport {
+    id: string
+    source_key?: string
+    status: string
+    log_count: number
+    error?: string
+    created_at: string
+    expires_at?: string
+}
+
+export interface ArchiveObject {
+    key: string
+    size: number
+    last_modified: string
+    etag?: string
+}
+
+export interface ArchiveStatus {
+    enabled: boolean
+    key_prefix: string
+    schedule_time: string
+    timezone: string
+    running: boolean
+    s3_reachable: boolean
+    s3_error?: string
+    pending_date?: string
+    pending_delete_count: number
+    earliest_delete_at?: string
+    jobs: ArchiveJob[] | null
+    batches: ArchiveBatch[] | null
+    imports: ArchiveImport[] | null
+    objects: ArchiveObject[] | null
+}
+
+export interface ArchivePage<T> {
+    items: T[] | null
+    total: number
+    offset: number
+    limit: number
+}
+
+export type ArchiveDateType = 'completed_at' | 'archive_date'
+
+async function archiveCommand(path: string, init?: RequestInit) {
+    const response = await fetch(`${API_BASE}${path}`, init)
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: '请求失败' }))
+        throw new Error(error.error || '归档操作失败')
+    }
+    return response
+}
+
+export async function fetchArchives(includeS3 = true, date?: string): Promise<ArchiveStatus> {
+    const params = new URLSearchParams({ include_s3: String(includeS3) })
+    if (date) params.set('date', date)
+    const response = await archiveCommand(`/archives?${params}`)
+    return response.json()
+}
+
+export async function fetchArchivePackages(options: {
+    dateType?: ArchiveDateType
+    date?: string
+    jobId?: string
+    offset?: number
+    limit?: number
+} = {}): Promise<ArchivePage<ArchiveBatch>> {
+    const params = new URLSearchParams({
+        date_type: options.dateType ?? 'completed_at',
+        offset: String(options.offset ?? 0),
+        limit: String(options.limit ?? 50),
+    })
+    if (options.date) params.set('date', options.date)
+    if (options.jobId) params.set('job_id', options.jobId)
+    const response = await archiveCommand(`/archives/packages?${params}`)
+    return response.json()
+}
+
+export async function fetchArchiveJobs(offset = 0, limit = 50): Promise<ArchivePage<ArchiveJob>> {
+    const params = new URLSearchParams({ offset: String(offset), limit: String(limit) })
+    const response = await archiveCommand(`/archives/jobs?${params}`)
+    return response.json()
+}
+
+export async function fetchArchiveImports(offset = 0, limit = 50): Promise<ArchivePage<ArchiveImport>> {
+    const params = new URLSearchParams({ offset: String(offset), limit: String(limit) })
+    const response = await archiveCommand(`/archives/imports?${params}`)
+    return response.json()
+}
+
+export async function testArchiveConnection(config: ArchiveConfig): Promise<void> {
+    await archiveCommand('/archives/test', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config),
+    })
+}
+
+export async function runArchiveNow(): Promise<ArchiveJob> {
+    const response = await archiveCommand('/archives/run', { method: 'POST' })
+    const result = await response.json()
+    return result.job
+}
+
+export async function fetchArchiveDeletionPreview(hours: number): Promise<number> {
+    const response = await archiveCommand(`/archives/deletion-preview?hours=${hours}`)
+    const result = await response.json()
+    return result.count ?? 0
+}
+
+export async function importArchiveObject(key: string): Promise<ArchiveImport> {
+    const response = await archiveCommand('/archives/import', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }),
+    })
+    return response.json()
+}
+
+export async function importArchiveDate(date: string): Promise<ArchiveImport[]> {
+    const response = await archiveCommand('/archives/import-date', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date }),
+    })
+    const result = await response.json()
+    return result.imports ?? []
+}
+
+export async function uploadArchive(file: File): Promise<ArchiveImport> {
+    const body = new FormData()
+    body.append('file', file)
+    const response = await archiveCommand('/archives/import-upload', { method: 'POST', body })
+    return response.json()
+}
+
+export async function deleteArchiveImport(id: string): Promise<void> {
+    await archiveCommand(`/archive-imports/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
 
 // Replay (Playground)

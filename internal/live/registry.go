@@ -8,6 +8,8 @@ import (
 
 type EventType string
 
+const DefaultPreviewLimit int64 = 64 << 10
+
 const (
 	EventSnapshot      EventType = "snapshot"
 	EventResponseChunk EventType = "response_chunk"
