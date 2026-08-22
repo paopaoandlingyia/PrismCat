@@ -196,7 +196,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	targetURL, err := url.Parse(upstream.Target)
 	if err != nil {
-		http.Error(w, "invalid upstream config", http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("invalid upstream config (%s): %v", upstream.Target, err), http.StatusInternalServerError)
 		return
 	}
 

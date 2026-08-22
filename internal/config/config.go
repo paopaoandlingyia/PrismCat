@@ -435,6 +435,28 @@ func NormalizePathRoutingPrefix(prefix string) string {
 	return prefix
 }
 
+// NormalizeUpstreamTarget validates and normalizes an upstream destination URL.
+// It strips surrounding whitespace (clipboards often carry a trailing newline or
+// space when pasting a URL, which later makes url.Parse fail and every request
+// return 500 / "上游配置无效") and requires an http/https URL with a host.
+func NormalizeUpstreamTarget(target string) (string, error) {
+	trimmed := strings.TrimSpace(target)
+	if trimmed == "" {
+		return "", fmt.Errorf("target is required")
+	}
+	u, err := url.Parse(trimmed)
+	if err != nil {
+		return "", fmt.Errorf("invalid target %q: %v", trimmed, err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return "", fmt.Errorf("target %q must be an http or https URL", trimmed)
+	}
+	if u.Host == "" {
+		return "", fmt.Errorf("target %q is missing a host", trimmed)
+	}
+	return trimmed, nil
+}
+
 func normalizeUpstreams(in map[string]UpstreamConfig) (map[string]UpstreamConfig, error) {
 	if in == nil {
 		return make(map[string]UpstreamConfig), nil
@@ -483,9 +505,11 @@ func normalizeUpstreams(in map[string]UpstreamConfig) (map[string]UpstreamConfig
 			v.OutboundProxy = outboundProxy
 		}
 		if len(v.Targets) == 0 {
-			if strings.TrimSpace(v.Target) == "" {
-				return nil, fmt.Errorf("upstream %q: target is required", n)
+			target, err := NormalizeUpstreamTarget(v.Target)
+			if err != nil {
+				return nil, fmt.Errorf("upstream %q: %w", n, err)
 			}
+			v.Target = target
 			v.ActiveTarget = ""
 			if v.Timeout <= 0 {
 				v.Timeout = DefaultUpstreamTimeoutSeconds
@@ -507,10 +531,11 @@ func normalizeUpstreamTargets(upstreamName string, in map[string]UpstreamTargetC
 		if _, exists := out[n]; exists {
 			return nil, fmt.Errorf("upstream %q has duplicate target name %q (case-insensitive)", upstreamName, n)
 		}
-		target.URL = strings.TrimSpace(target.URL)
-		if target.URL == "" {
-			return nil, fmt.Errorf("upstream %q target %q: url is required", upstreamName, n)
+		normalizedURL, err := NormalizeUpstreamTarget(target.URL)
+		if err != nil {
+			return nil, fmt.Errorf("upstream %q target %q: %w", upstreamName, n, err)
 		}
+		target.URL = normalizedURL
 		if target.Timeout <= 0 {
 			target.Timeout = DefaultUpstreamTimeoutSeconds
 		}
