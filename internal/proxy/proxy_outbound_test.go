@@ -114,6 +114,33 @@ func TestProxyUsesUpstreamOutboundProxy(t *testing.T) {
 	}
 }
 
+func TestProxyDoesNotExposeInvalidUpstreamTarget(t *testing.T) {
+	const invalidTarget = "http://user:secret@[::1"
+	cfg := &config.Config{
+		Server: config.ServerConfig{ProxyDomains: []string{"localhost"}},
+		Upstreams: map[string]config.UpstreamConfig{
+			"openai": {
+				Target:        invalidTarget,
+				OutboundProxy: "env",
+			},
+		},
+	}
+
+	p := New(cfg, newProxyTestRepo(), nil, nil)
+	req := httptest.NewRequest(http.MethodGet, "http://openai.localhost:8080/v1/models", nil)
+	req.Host = "openai.localhost:8080"
+	rr := httptest.NewRecorder()
+
+	p.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+	if got := rr.Body.String(); got != "invalid upstream config\n" {
+		t.Fatalf("body = %q, want generic error without target details", got)
+	}
+}
+
 func TestClientCanceledResponseIsNotForwardError(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
