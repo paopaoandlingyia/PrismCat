@@ -515,3 +515,91 @@ func TestTargetPresetsRejectLegacyDestinationFields(t *testing.T) {
 		t.Fatalf("normalizeUpstreams() error = %v, want mixed-form validation error", err)
 	}
 }
+
+func TestNormalizeUpstreamTarget(t *testing.T) {
+	tests := []struct {
+		name    string
+		target  string
+		want    string
+		wantErr bool
+	}{
+		{name: "clean_http", target: "http://192.0.2.1:3564", want: "http://192.0.2.1:3564"},
+		{name: "clean_https", target: "https://api.openai.com", want: "https://api.openai.com"},
+		{name: "trailing_newline", target: "http://192.0.2.1:3564\n", want: "http://192.0.2.1:3564"},
+		{name: "trailing_crlf", target: "http://192.0.2.1:3564\r\n", want: "http://192.0.2.1:3564"},
+		{name: "trailing_space", target: "http://192.0.2.1:3564 ", want: "http://192.0.2.1:3564"},
+		{name: "leading_space", target: "  http://192.0.2.1:3564", want: "http://192.0.2.1:3564"},
+		{name: "tab", target: "http://192.0.2.1:3564\t", want: "http://192.0.2.1:3564"},
+		{name: "empty", target: "", wantErr: true},
+		{name: "whitespace_only", target: "   \n", wantErr: true},
+		{name: "no_scheme", target: "192.0.2.1:3564", wantErr: true},
+		{name: "unsupported_scheme", target: "ftp://example.com/file", wantErr: true},
+		{name: "missing_host", target: "https://", wantErr: true},
+		{name: "not_a_url", target: "not a url", wantErr: true},
+		{name: "path_target", target: "http://example.com/base", want: "http://example.com/base"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NormalizeUpstreamTarget(tt.target)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("NormalizeUpstreamTarget(%q) succeeded with %q, want error", tt.target, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("NormalizeUpstreamTarget(%q) unexpected error: %v", tt.target, err)
+			}
+			if got != tt.want {
+				t.Fatalf("NormalizeUpstreamTarget(%q) = %q, want %q", tt.target, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeUpstreamsTrimsAndRejectsTargets(t *testing.T) {
+	// Legacy single-target form: surrounding whitespace is stripped.
+	got, err := normalizeUpstreams(map[string]UpstreamConfig{
+		"demo": {Target: "http://192.0.2.1:3564\n"},
+	})
+	if err != nil {
+		t.Fatalf("normalizeUpstreams returned error: %v", err)
+	}
+	if got["demo"].Target != "http://192.0.2.1:3564" {
+		t.Fatalf("Target = %q, want trimmed %q", got["demo"].Target, "http://192.0.2.1:3564")
+	}
+
+	// Truly invalid targets are rejected with a clear error.
+	if _, err := normalizeUpstreams(map[string]UpstreamConfig{
+		"bad": {Target: "not a url"},
+	}); err == nil || !strings.Contains(err.Error(), "bad") {
+		t.Fatalf("normalizeUpstreams() error = %v, want validation error mentioning upstream name", err)
+	}
+
+	// Multi-target (preset) form: URL is trimmed and validated too.
+	got, err = normalizeUpstreams(map[string]UpstreamConfig{
+		"openai": {
+			Targets: map[string]UpstreamTargetConfig{
+				"primary": {URL: " https://api.openai.com "},
+			},
+			ActiveTarget: "primary",
+		},
+	})
+	if err != nil {
+		t.Fatalf("normalizeUpstreams (targets) returned error: %v", err)
+	}
+	if got["openai"].Targets["primary"].URL != "https://api.openai.com" {
+		t.Fatalf("Target URL = %q, want trimmed %q", got["openai"].Targets["primary"].URL, "https://api.openai.com")
+	}
+
+	if _, err := normalizeUpstreams(map[string]UpstreamConfig{
+		"openai": {
+			Targets: map[string]UpstreamTargetConfig{
+				"bad": {URL: "no scheme"},
+			},
+			ActiveTarget: "bad",
+		},
+	}); err == nil {
+		t.Fatal("normalizeUpstreams accepted an invalid preset target URL")
+	}
+}

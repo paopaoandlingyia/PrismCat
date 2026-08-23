@@ -1192,7 +1192,7 @@ func (h *Handler) resolveReplayTarget(upstreamName string, target string, path s
 	}
 	targetURL, err := url.Parse(upstream.Target)
 	if err != nil {
-		return "", "", "", 0, fmt.Errorf("上游配置无效")
+		return "", "", "", 0, fmt.Errorf("上游配置无效（%s）: %v", upstream.Target, err)
 	}
 
 	fullURL := strings.TrimRight(targetURL.String(), "/")

@@ -1173,7 +1173,7 @@ export function Settings() {
         try {
             await addUpstream(
                 newName,
-                newTarget,
+                newTarget.trim(),
                 newTimeout,
                 newResponseHeaderTimeout,
                 newResponseBodyFirstByteTimeout,
@@ -1766,7 +1766,7 @@ export function Settings() {
             }
             await addUpstream(
                 committed.name,
-                committed.usesTargetPresets ? '' : committed.target,
+                committed.usesTargetPresets ? '' : committed.target.trim(),
                 committed.usesTargetPresets ? 0 : committed.timeout,
                 committed.usesTargetPresets ? 0 : committed.responseHeaderTimeout,
                 committed.usesTargetPresets ? 0 : committed.responseBodyFirstByteTimeout,
