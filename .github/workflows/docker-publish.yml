@@ -1,14 +1,18 @@
 name: Docker Publish
 
 on:
-  workflow_dispatch: # 支持手动点击按钮触发
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: '要重新构建的版本标签（例如 v1.15.0）'
+        required: true
   push:
-    tags: [ 'v*' ] # 当你推送 v1.0.0 这种标签时依然会自动构建
+    tags: ['v*']
 
 env:
   REGISTRY: ghcr.io
-  # Docker/OCI image names must be lowercase.
   IMAGE_NAME: prismcat
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
 
 jobs:
   build:
@@ -20,6 +24,21 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Verify release tag
+        shell: bash
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release tag: $RELEASE_TAG" >&2
+            exit 1
+          fi
+          ACTUAL_TAG="$(git describe --tags --exact-match HEAD)"
+          if [[ "$ACTUAL_TAG" != "$RELEASE_TAG" ]]; then
+            echo "Checked out $ACTUAL_TAG instead of $RELEASE_TAG" >&2
+            exit 1
+          fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -37,16 +56,15 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=semver,pattern={{version}}
-            type=ref,event=branch
-            latest
+            type=semver,pattern={{version}},value=${{ env.RELEASE_TAG }}
+            type=raw,value=latest
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v7
         with:
           context: .
           push: true
-          tags: ${{ steps.meta.outputs.tags }}    # 修正：加上了 steps. 前缀
-          labels: ${{ steps.meta.outputs.labels }} # 修正：加上了 steps. 前缀
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

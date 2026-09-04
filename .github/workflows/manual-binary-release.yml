@@ -1,19 +1,23 @@
-name: Manual Binary Release (按需编译)
+name: Binary Release
 
 on:
+  push:
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       tag_name:
-        description: '要补充文件的 Release 标签 (例如 v1.6.0)'
+        description: '要重新构建的版本标签（例如 v1.15.0）'
         required: true
-        default: 'v1.14.0'
+
+env:
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
 
 jobs:
-  build-and-release:
+  build:
+    name: Build ${{ matrix.goos }}-${{ matrix.goarch }}
     runs-on: ubuntu-latest
     permissions:
-      contents: write # 必须有写入权限才能更新 Release
-    
+      contents: read
     strategy:
       matrix:
         include:
@@ -30,44 +34,91 @@ jobs:
             suffix: .exe
 
     steps:
-      - name: 检出代码
+      - name: Checkout release tag
         uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_TAG }}
 
-      - name: 设置 Node.js
+      - name: Verify release tag
+        shell: bash
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release tag: $RELEASE_TAG" >&2
+            exit 1
+          fi
+          ACTUAL_TAG="$(git describe --tags --exact-match HEAD)"
+          if [[ "$ACTUAL_TAG" != "$RELEASE_TAG" ]]; then
+            echo "Checked out $ACTUAL_TAG instead of $RELEASE_TAG" >&2
+            exit 1
+          fi
+
+      - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
           node-version: 24
-          cache: 'npm'
+          cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - name: 编译前端 UI
+      - name: Build web UI
+        shell: bash
         run: |
           cd web
           npm ci
           npm run build
-          # 将编译结果同步到 Go 嵌入目录
-          mkdir -p ../internal/server/ui
           find ../internal/server/ui -mindepth 1 ! -name README.md -exec rm -rf {} +
           cp -r dist/* ../internal/server/ui/
 
-      - name: 设置 Go 环境
+      - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.25.7' # 对应 go.mod 里的版本
+          go-version: '1.25.7'
 
-      - name: 交叉编译二进制文件
+      - name: Build binary
+        shell: bash
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: 0 # 关键：关闭 CGO 使二进制文件在 Linux/macOS 上具备极致的便携性
+          CGO_ENABLED: 0
         run: |
-          VERSION="${{ github.event.inputs.tag_name }}"
-          VERSION="${VERSION#v}"
-          ASSET_NAME="prismcat-${{ github.event.inputs.tag_name }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}"
-          go build -ldflags="-s -w -X github.com/paopaoandlingyia/PrismCat/internal/config.Version=${VERSION}" -o "${ASSET_NAME}" ./cmd/prismcat
-          echo "ASSET_NAME=${ASSET_NAME}" >> "$GITHUB_ENV"
+          VERSION="${RELEASE_TAG#v}"
+          ASSET_NAME="prismcat-${RELEASE_TAG}-${GOOS}-${GOARCH}${{ matrix.suffix }}"
+          go build -ldflags="-s -w -X github.com/paopaoandlingyia/PrismCat/internal/config.Version=${VERSION}" -o "$ASSET_NAME" ./cmd/prismcat
+          echo "ASSET_NAME=$ASSET_NAME" >> "$GITHUB_ENV"
 
-      - name: 上传到现有的 Release
-        run: gh release upload "${{ github.event.inputs.tag_name }}" "${ASSET_NAME}" --clobber
+      - name: Stage binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: prismcat-${{ env.RELEASE_TAG }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: binary-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Create release or replace assets on an explicit rerun
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "::notice::Release $RELEASE_TAG already exists; replacing assets built from the same immutable tag."
+            gh release upload "$RELEASE_TAG" release-assets/* --clobber
+          else
+            gh release create "$RELEASE_TAG" release-assets/* \
+              --verify-tag \
+              --generate-notes \
+              --title "$RELEASE_TAG"
+          fi
