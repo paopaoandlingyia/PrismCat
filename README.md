@@ -296,10 +296,13 @@ storage:
 upstreams:
   openai:
     target: "https://api.openai.com"
-    timeout: 120 # Total timeout for the entire upstream request and response
+    timeout: 300 # Total timeout for the entire upstream request and response; new configs default to 5 minutes
     response_header_timeout: 60 # Advanced: wait for HTTP status/headers; 0 disables; always bounded by total timeout
     response_body_first_byte_timeout: 30 # Advanced: wait for the first response body byte after headers; applies to all responses
     response_body_idle_timeout: 15 # Advanced: maximum silence after the body starts; resets whenever data arrives
+    sse_keepalive: # Optional; off by default, and heartbeats never extend the total timeout
+      mode: off # off, after_headers, or full (including the response-header wait)
+      interval: 15 # Upstream silence before PrismCat sends a downstream SSE comment
     outbound_proxy: "env"          # env, direct, or a proxy URL such as http://127.0.0.1:7890
     logging_path_filter:            # all, allowlist, or denylist; Ant and RE2 regex rules can be mixed
       mode: allowlist
@@ -310,7 +313,7 @@ upstreams:
           pattern: "^/v1/chat/completions$"
   gemini:
     target: "https://generativelanguage.googleapis.com"
-    timeout: 120
+    timeout: 300
     response_header_timeout: 0
     response_body_first_byte_timeout: 0
     response_body_idle_timeout: 0 # 0 disables the corresponding stage timeout
@@ -322,18 +325,20 @@ upstreams:
     targets:
       primary:
         url: "https://api.openai.com"
-        timeout: 120
+        timeout: 300
         outbound_proxy: "env"
         request_overrides:
           enabled: false
           rule_names: []
       backup:
         url: "https://api.example.com"
-        timeout: 120
+        timeout: 300
         outbound_proxy: "direct"
         request_overrides:
           enabled: false
           rule_names: []
+
+`after_headers` injects `: ping` comments only after a successful, uncompressed `text/event-stream` response is confirmed. `full` also covers the response-header wait when PrismCat recognizes `Accept: text/event-stream`, `alt=sse`, or a top-level JSON `stream: true`. Once the first early heartbeat commits HTTP 200, a later upstream 401, 429, or 5xx can only be recorded in PrismCat logs and the downstream observes a terminated stream. Explicit `timeout` values in existing configurations are not migrated when the default changes.
 
 # Request override (opt-in, off by default)
 # Supports ops: set, remove, default, append, prepend for JSON body; set, remove for headers.

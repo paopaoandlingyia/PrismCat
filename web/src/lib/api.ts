@@ -98,12 +98,20 @@ export interface Upstream {
     response_header_timeout: number
     response_body_first_byte_timeout: number
     response_body_idle_timeout: number
+    sse_keepalive: SSEKeepaliveConfig
     order: number
     outbound_proxy: string
     logging_enabled: boolean
     logging_path_filter?: LoggingPathFilter
     active_target?: string
     targets?: Record<string, UpstreamTarget>
+}
+
+export type SSEKeepaliveMode = 'off' | 'after_headers' | 'full'
+
+export interface SSEKeepaliveConfig {
+    mode: SSEKeepaliveMode
+    interval: number
 }
 
 export type PathMatcher = 'ant' | 'regex'
@@ -171,6 +179,7 @@ export interface UpstreamTarget {
     response_header_timeout?: number
     response_body_first_byte_timeout?: number
     response_body_idle_timeout?: number
+    sse_keepalive?: SSEKeepaliveConfig
     outbound_proxy?: string
     request_overrides?: RuleBinding
     usage_extraction?: RuleBinding
@@ -244,7 +253,8 @@ export interface TraceDetail {
 
 // API 调用函数
 const API_BASE = '/api'
-export const DEFAULT_UPSTREAM_TIMEOUT_SECONDS = 120
+export const DEFAULT_UPSTREAM_TIMEOUT_SECONDS = 300
+export const DEFAULT_SSE_KEEPALIVE_INTERVAL_SECONDS = 15
 
 export interface AuthStatus {
     authenticated: boolean
@@ -371,13 +381,14 @@ export async function addUpstream(
     active_target: string = '',
     targets?: Record<string, UpstreamTarget>,
     logging_path_filter?: LoggingPathFilter,
+    sse_keepalive?: SSEKeepaliveConfig,
 ): Promise<void> {
     const response = await fetch(`${API_BASE}/upstreams`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name, target, timeout, response_header_timeout, response_body_first_byte_timeout, response_body_idle_timeout, order, outbound_proxy, logging_enabled, active_target, targets, logging_path_filter }),
+        body: JSON.stringify({ name, target, timeout, response_header_timeout, response_body_first_byte_timeout, response_body_idle_timeout, order, outbound_proxy, logging_enabled, active_target, targets, logging_path_filter, sse_keepalive }),
     })
     if (!response.ok) {
         const error = await response.json().catch(() => ({ error: '请求失败' }))

@@ -693,6 +693,7 @@ func (h *Handler) handleUpstreams(w http.ResponseWriter, r *http.Request) {
 				"response_header_timeout":          resolved.ResponseHeaderTimeout,
 				"response_body_first_byte_timeout": resolved.ResponseBodyFirstByteTimeout,
 				"response_body_idle_timeout":       resolved.ResponseBodyIdleTimeout,
+				"sse_keepalive":                    resolved.SSEKeepalive,
 				"order":                            upCfg.Order,
 				"outbound_proxy":                   resolved.OutboundProxy,
 				"logging_enabled":                  !upCfg.LoggingDisabled,
@@ -722,6 +723,7 @@ func (h *Handler) handleUpstreams(w http.ResponseWriter, r *http.Request) {
 			ResponseHeaderTimeout        int                                    `json:"response_header_timeout"`
 			ResponseBodyFirstByteTimeout int                                    `json:"response_body_first_byte_timeout"`
 			ResponseBodyIdleTimeout      int                                    `json:"response_body_idle_timeout"`
+			SSEKeepalive                 *config.SSEKeepaliveConfig             `json:"sse_keepalive"`
 			Order                        int                                    `json:"order"`
 			OutboundProxy                string                                 `json:"outbound_proxy"`
 			LoggingEnabled               *bool                                  `json:"logging_enabled"`
@@ -741,15 +743,20 @@ func (h *Handler) handleUpstreams(w http.ResponseWriter, r *http.Request) {
 
 		loggingDisabled := false
 		var loggingPathFilter *config.LoggingPathFilterConfig
+		var sseKeepalive *config.SSEKeepaliveConfig
 		if current, ok := h.cfg.GetUpstream(req.Name); ok {
 			loggingDisabled = current.LoggingDisabled
 			loggingPathFilter = current.LoggingPathFilter
+			sseKeepalive = current.SSEKeepalive
 		}
 		if req.LoggingEnabled != nil {
 			loggingDisabled = !*req.LoggingEnabled
 		}
 		if req.LoggingPathFilter != nil {
 			loggingPathFilter = req.LoggingPathFilter
+		}
+		if req.SSEKeepalive != nil {
+			sseKeepalive = req.SSEKeepalive
 		}
 
 		err := h.cfg.AddUpstream(req.Name, config.UpstreamConfig{
@@ -758,6 +765,7 @@ func (h *Handler) handleUpstreams(w http.ResponseWriter, r *http.Request) {
 			ResponseHeaderTimeout:        req.ResponseHeaderTimeout,
 			ResponseBodyFirstByteTimeout: req.ResponseBodyFirstByteTimeout,
 			ResponseBodyIdleTimeout:      req.ResponseBodyIdleTimeout,
+			SSEKeepalive:                 sseKeepalive,
 			Order:                        req.Order,
 			OutboundProxy:                req.OutboundProxy,
 			LoggingDisabled:              loggingDisabled,
@@ -1183,7 +1191,7 @@ func (h *Handler) resolveReplayTarget(upstreamName string, target string, path s
 		if u.Host == "" {
 			return "", "", "", 0, fmt.Errorf("target_url 缺少 host")
 		}
-		return u.String(), u.Host, "env", 120, nil
+		return u.String(), u.Host, "env", config.DefaultUpstreamTimeoutSeconds, nil
 	}
 
 	upstream, ok := h.cfg.GetUpstream(upstreamName)

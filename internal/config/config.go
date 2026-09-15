@@ -14,7 +14,13 @@ import (
 
 var Version = "1.15.0"
 
-const DefaultUpstreamTimeoutSeconds = 120
+const (
+	DefaultUpstreamTimeoutSeconds      = 300
+	DefaultSSEKeepaliveIntervalSeconds = 15
+	SSEKeepaliveModeOff                = "off"
+	SSEKeepaliveModeAfterHeaders       = "after_headers"
+	SSEKeepaliveModeFull               = "full"
+)
 
 // Config 应用配置
 type Config struct {
@@ -75,6 +81,7 @@ type UpstreamConfig struct {
 	ResponseHeaderTimeout        int                             `yaml:"response_header_timeout,omitempty"`          // 秒；0 = 禁用
 	ResponseBodyFirstByteTimeout int                             `yaml:"response_body_first_byte_timeout,omitempty"` // 秒；0 = 禁用
 	ResponseBodyIdleTimeout      int                             `yaml:"response_body_idle_timeout,omitempty"`       // 秒；0 = 禁用
+	SSEKeepalive                 *SSEKeepaliveConfig             `yaml:"sse_keepalive,omitempty"`
 	Order                        int                             `yaml:"order,omitempty"`
 	OutboundProxy                string                          `yaml:"outbound_proxy,omitempty"`
 	LoggingDisabled              bool                            `yaml:"logging_disabled,omitempty"`
@@ -92,6 +99,7 @@ type UpstreamTargetConfig struct {
 	ResponseHeaderTimeout        int                             `yaml:"response_header_timeout,omitempty" json:"response_header_timeout,omitempty"`
 	ResponseBodyFirstByteTimeout int                             `yaml:"response_body_first_byte_timeout,omitempty" json:"response_body_first_byte_timeout,omitempty"`
 	ResponseBodyIdleTimeout      int                             `yaml:"response_body_idle_timeout,omitempty" json:"response_body_idle_timeout,omitempty"`
+	SSEKeepalive                 *SSEKeepaliveConfig             `yaml:"sse_keepalive,omitempty" json:"sse_keepalive,omitempty"`
 	OutboundProxy                string                          `yaml:"outbound_proxy,omitempty" json:"outbound_proxy,omitempty"`
 	RequestOverrides             *RequestOverrideUpstreamBinding `yaml:"request_overrides,omitempty" json:"request_overrides,omitempty"`
 	UsageExtraction              *UsageExtractionUpstreamBinding `yaml:"usage_extraction,omitempty" json:"usage_extraction,omitempty"`
@@ -108,10 +116,18 @@ type ResolvedUpstream struct {
 	ResponseHeaderTimeout        int
 	ResponseBodyFirstByteTimeout int
 	ResponseBodyIdleTimeout      int
+	SSEKeepalive                 SSEKeepaliveConfig
 	Order                        int
 	OutboundProxy                string
 	LoggingDisabled              bool
 	LoggingPathFilter            *LoggingPathFilterConfig
+}
+
+// SSEKeepaliveConfig controls downstream SSE comments injected by PrismCat.
+// The off value is represented as nil in persisted upstream configuration.
+type SSEKeepaliveConfig struct {
+	Mode            string `yaml:"mode" json:"mode"`
+	IntervalSeconds int    `yaml:"interval" json:"interval"`
 }
 
 type RequestOverridesConfig struct {
@@ -496,6 +512,7 @@ func normalizeUpstreams(in map[string]UpstreamConfig) (map[string]UpstreamConfig
 			v.ResponseHeaderTimeout = 0
 			v.ResponseBodyFirstByteTimeout = 0
 			v.ResponseBodyIdleTimeout = 0
+			v.SSEKeepalive = nil
 			v.OutboundProxy = ""
 		} else if strings.TrimSpace(v.OutboundProxy) != "" {
 			outboundProxy, err := NormalizeOutboundProxy(v.OutboundProxy)
@@ -515,6 +532,11 @@ func normalizeUpstreams(in map[string]UpstreamConfig) (map[string]UpstreamConfig
 				v.Timeout = DefaultUpstreamTimeoutSeconds
 			}
 			normalizeUpstreamStageTimeouts(&v)
+			keepalive, err := normalizeSSEKeepalive(v.SSEKeepalive)
+			if err != nil {
+				return nil, fmt.Errorf("upstream %q: %w", n, err)
+			}
+			v.SSEKeepalive = keepalive
 		}
 		out[n] = v
 	}
@@ -540,6 +562,11 @@ func normalizeUpstreamTargets(upstreamName string, in map[string]UpstreamTargetC
 			target.Timeout = DefaultUpstreamTimeoutSeconds
 		}
 		normalizeTargetStageTimeouts(&target)
+		keepalive, err := normalizeSSEKeepalive(target.SSEKeepalive)
+		if err != nil {
+			return nil, fmt.Errorf("upstream %q target %q: %w", upstreamName, n, err)
+		}
+		target.SSEKeepalive = keepalive
 		if strings.TrimSpace(target.OutboundProxy) != "" {
 			outboundProxy, err := NormalizeOutboundProxy(target.OutboundProxy)
 			if err != nil {
@@ -589,6 +616,33 @@ func normalizeUpstreamStageTimeouts(upstream *UpstreamConfig) {
 	if upstream.ResponseBodyIdleTimeout < 0 {
 		upstream.ResponseBodyIdleTimeout = 0
 	}
+}
+
+func normalizeSSEKeepalive(in *SSEKeepaliveConfig) (*SSEKeepaliveConfig, error) {
+	if in == nil {
+		return nil, nil
+	}
+	mode := strings.ToLower(strings.TrimSpace(in.Mode))
+	if mode == SSEKeepaliveModeOff {
+		return nil, nil
+	}
+	if mode != SSEKeepaliveModeAfterHeaders && mode != SSEKeepaliveModeFull {
+		return nil, fmt.Errorf("invalid sse_keepalive mode %q: use off, after_headers, or full", in.Mode)
+	}
+	if in.IntervalSeconds <= 0 {
+		return nil, fmt.Errorf("sse_keepalive interval must be greater than zero when enabled")
+	}
+	return &SSEKeepaliveConfig{Mode: mode, IntervalSeconds: in.IntervalSeconds}, nil
+}
+
+func resolvedSSEKeepalive(in *SSEKeepaliveConfig) SSEKeepaliveConfig {
+	if in == nil {
+		return SSEKeepaliveConfig{
+			Mode:            SSEKeepaliveModeOff,
+			IntervalSeconds: DefaultSSEKeepaliveIntervalSeconds,
+		}
+	}
+	return *in
 }
 
 func NormalizeOutboundProxy(value string) (string, error) {
@@ -1193,10 +1247,18 @@ func (c *Config) ListUpstreams() map[string]UpstreamConfig {
 func cloneUpstreamConfig(in UpstreamConfig) UpstreamConfig {
 	out := in
 	out.LoggingPathFilter = cloneLoggingPathFilter(in.LoggingPathFilter)
+	if in.SSEKeepalive != nil {
+		keepalive := *in.SSEKeepalive
+		out.SSEKeepalive = &keepalive
+	}
 	if len(in.Targets) > 0 {
 		out.Targets = make(map[string]UpstreamTargetConfig, len(in.Targets))
 		for name, target := range in.Targets {
 			next := target
+			if target.SSEKeepalive != nil {
+				keepalive := *target.SSEKeepalive
+				next.SSEKeepalive = &keepalive
+			}
 			if target.RequestOverrides != nil {
 				binding := *target.RequestOverrides
 				binding.RuleNames = append([]string(nil), binding.RuleNames...)
@@ -1240,6 +1302,7 @@ func (c *Config) ResolveUpstreamSnapshot(name string) (ResolvedUpstream, Request
 		resolved.ResponseHeaderTimeout = upstream.ResponseHeaderTimeout
 		resolved.ResponseBodyFirstByteTimeout = upstream.ResponseBodyFirstByteTimeout
 		resolved.ResponseBodyIdleTimeout = upstream.ResponseBodyIdleTimeout
+		resolved.SSEKeepalive = resolvedSSEKeepalive(upstream.SSEKeepalive)
 		resolved.OutboundProxy = upstream.OutboundProxy
 		return resolved, NormalizeRequestOverrides(overrides), true
 	}
@@ -1255,6 +1318,7 @@ func (c *Config) ResolveUpstreamSnapshot(name string) (ResolvedUpstream, Request
 	resolved.ResponseHeaderTimeout = target.ResponseHeaderTimeout
 	resolved.ResponseBodyFirstByteTimeout = target.ResponseBodyFirstByteTimeout
 	resolved.ResponseBodyIdleTimeout = target.ResponseBodyIdleTimeout
+	resolved.SSEKeepalive = resolvedSSEKeepalive(target.SSEKeepalive)
 	resolved.OutboundProxy = target.OutboundProxy
 	if target.RequestOverrides == nil {
 		delete(overrides.Upstreams, name)

@@ -67,8 +67,8 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table'
-import { DEFAULT_UPSTREAM_TIMEOUT_SECONDS, fetchUpstreams, addUpstream, removeUpstream, activateUpstreamTarget, fetchConfig, updateConfig, fetchSystemMetrics, fetchUpdateInfo, fetchStorageUsage, fetchModelPathTemplates } from '@/lib/api'
-import type { Upstream, UpstreamTarget, AppConfig, SystemMetrics, UpdateInfo, StorageUsage, LoggingPathFilter, ModelPathTemplate } from '@/lib/api'
+import { DEFAULT_SSE_KEEPALIVE_INTERVAL_SECONDS, DEFAULT_UPSTREAM_TIMEOUT_SECONDS, fetchUpstreams, addUpstream, removeUpstream, activateUpstreamTarget, fetchConfig, updateConfig, fetchSystemMetrics, fetchUpdateInfo, fetchStorageUsage, fetchModelPathTemplates } from '@/lib/api'
+import type { Upstream, UpstreamTarget, AppConfig, SystemMetrics, UpdateInfo, StorageUsage, LoggingPathFilter, ModelPathTemplate, SSEKeepaliveMode } from '@/lib/api'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -172,6 +172,8 @@ type EditingUpstream = {
     responseHeaderTimeout: number
     responseBodyFirstByteTimeout: number
     responseBodyIdleTimeout: number
+    sseKeepaliveMode: SSEKeepaliveMode
+    sseKeepaliveInterval: number
     order: number
     outboundProxy: string
     loggingEnabled: boolean
@@ -200,6 +202,10 @@ function editingBufferAsTarget(upstream: EditingUpstream): UpstreamTarget {
         response_header_timeout: upstream.responseHeaderTimeout,
         response_body_first_byte_timeout: upstream.responseBodyFirstByteTimeout,
         response_body_idle_timeout: upstream.responseBodyIdleTimeout,
+        sse_keepalive: {
+            mode: upstream.sseKeepaliveMode,
+            interval: upstream.sseKeepaliveInterval,
+        },
         outbound_proxy: upstream.outboundProxy,
         request_overrides: {
             enabled: upstream.overrideEnabled,
@@ -234,6 +240,8 @@ function loadTargetBuffer(upstream: EditingUpstream, targetName: string): Editin
         responseHeaderTimeout: target.response_header_timeout || 0,
         responseBodyFirstByteTimeout: target.response_body_first_byte_timeout || 0,
         responseBodyIdleTimeout: target.response_body_idle_timeout || 0,
+        sseKeepaliveMode: target.sse_keepalive?.mode || 'off',
+        sseKeepaliveInterval: target.sse_keepalive?.interval || DEFAULT_SSE_KEEPALIVE_INTERVAL_SECONDS,
         outboundProxy: target.outbound_proxy || 'env',
         overrideEnabled: target.request_overrides?.enabled ?? false,
         ruleNames: target.request_overrides?.rule_names || [],
@@ -269,6 +277,7 @@ function hasAdvancedValues(source?: {
     response_header_timeout?: number
     response_body_first_byte_timeout?: number
     response_body_idle_timeout?: number
+    sse_keepalive?: { mode?: SSEKeepaliveMode }
     request_overrides?: OverrideBinding
     usage_extraction?: OverrideBinding
 }) {
@@ -276,6 +285,7 @@ function hasAdvancedValues(source?: {
     return (source.response_header_timeout || 0) > 0
         || (source.response_body_first_byte_timeout || 0) > 0
         || (source.response_body_idle_timeout || 0) > 0
+        || (source.sse_keepalive?.mode || 'off') !== 'off'
         || (source.request_overrides?.enabled ?? false)
         || (source.usage_extraction?.enabled ?? false)
         || getBindingRuleNames(source.request_overrides).length > 0
@@ -824,6 +834,8 @@ export function Settings() {
     const [newResponseHeaderTimeout, setNewResponseHeaderTimeout] = useState(0)
     const [newResponseBodyFirstByteTimeout, setNewResponseBodyFirstByteTimeout] = useState(0)
     const [newResponseBodyIdleTimeout, setNewResponseBodyIdleTimeout] = useState(0)
+    const [newSSEKeepaliveMode, setNewSSEKeepaliveMode] = useState<SSEKeepaliveMode>('off')
+    const [newSSEKeepaliveInterval, setNewSSEKeepaliveInterval] = useState(DEFAULT_SSE_KEEPALIVE_INTERVAL_SECONDS)
     const [newOrder, setNewOrder] = useState(100)
     const [newOutboundProxy, setNewOutboundProxy] = useState('env')
     const [newLoggingEnabled, setNewLoggingEnabled] = useState(true)
@@ -1184,6 +1196,7 @@ export function Settings() {
                 '',
                 undefined,
                 newLoggingPathFilter,
+                { mode: newSSEKeepaliveMode, interval: newSSEKeepaliveInterval },
             )
             setNewName('')
             setNewTarget('')
@@ -1191,6 +1204,8 @@ export function Settings() {
             setNewResponseHeaderTimeout(0)
             setNewResponseBodyFirstByteTimeout(0)
             setNewResponseBodyIdleTimeout(0)
+            setNewSSEKeepaliveMode('off')
+            setNewSSEKeepaliveInterval(DEFAULT_SSE_KEEPALIVE_INTERVAL_SECONDS)
             setNewOrder(prev => prev + 10)
             setNewOutboundProxy('env')
             setNewLoggingEnabled(true)
@@ -1613,6 +1628,7 @@ export function Settings() {
                     response_header_timeout: upstream.response_header_timeout,
                     response_body_first_byte_timeout: upstream.response_body_first_byte_timeout,
                     response_body_idle_timeout: upstream.response_body_idle_timeout,
+                    sse_keepalive: upstream.sse_keepalive,
                     request_overrides: binding,
                     usage_extraction: usageBinding,
                 },
@@ -1624,6 +1640,8 @@ export function Settings() {
             responseHeaderTimeout: upstream.response_header_timeout || 0,
             responseBodyFirstByteTimeout: upstream.response_body_first_byte_timeout || 0,
             responseBodyIdleTimeout: upstream.response_body_idle_timeout || 0,
+            sseKeepaliveMode: upstream.sse_keepalive?.mode || 'off',
+            sseKeepaliveInterval: upstream.sse_keepalive?.interval || DEFAULT_SSE_KEEPALIVE_INTERVAL_SECONDS,
             order: upstream.order || 0,
             outboundProxy: upstream.outbound_proxy || 'env',
             loggingEnabled: upstream.logging_enabled !== false,
@@ -1694,6 +1712,10 @@ export function Settings() {
                 response_header_timeout: current.responseHeaderTimeout,
                 response_body_first_byte_timeout: current.responseBodyFirstByteTimeout,
                 response_body_idle_timeout: current.responseBodyIdleTimeout,
+                sse_keepalive: {
+                    mode: current.sseKeepaliveMode,
+                    interval: current.sseKeepaliveInterval,
+                },
                 outbound_proxy: current.outboundProxy,
                 request_overrides: { enabled: false, rule_names: [] },
                 usage_extraction: {
@@ -1777,6 +1799,10 @@ export function Settings() {
                 committed.usesTargetPresets ? committed.activeTarget : '',
                 committed.usesTargetPresets ? committed.targets : undefined,
                 committed.loggingPathFilter,
+                committed.usesTargetPresets ? undefined : {
+                    mode: committed.sseKeepaliveMode,
+                    interval: committed.sseKeepaliveInterval,
+                },
             )
             await updateConfig({
                 request_overrides: buildOverridesPayload(nextBindings, overrideRules),
@@ -2096,6 +2122,50 @@ export function Settings() {
                                                             />
                                                         </FieldBlock>
                                                     </div>
+                                                </AdvancedSettingsGroup>
+
+                                                <AdvancedSettingsGroup
+                                                    title={t('upstream_manager.sse_keepalive')}
+                                                    description={t('upstream_manager.sse_keepalive_hint')}
+                                                    divider
+                                                >
+                                                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                                                        <FieldBlock label={t('upstream_manager.sse_keepalive_mode')}>
+                                                            <Select
+                                                                value={editingUpstream.sseKeepaliveMode}
+                                                                onValueChange={value => setEditingUpstream(current => current ? { ...current, sseKeepaliveMode: value as SSEKeepaliveMode } : current)}
+                                                            >
+                                                                <SelectTrigger className="h-9 rounded-md border-input bg-background text-sm">
+                                                                    <SelectValue />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="off">{t('upstream_manager.sse_keepalive_mode_off')}</SelectItem>
+                                                                    <SelectItem value="after_headers">{t('upstream_manager.sse_keepalive_mode_after_headers')}</SelectItem>
+                                                                    <SelectItem value="full">{t('upstream_manager.sse_keepalive_mode_full')}</SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </FieldBlock>
+                                                        {editingUpstream.sseKeepaliveMode !== 'off' && (
+                                                            <FieldBlock
+                                                                label={t('upstream_manager.sse_keepalive_interval')}
+                                                                hint={t('upstream_manager.sse_keepalive_interval_hint')}
+                                                            >
+                                                                <Input
+                                                                    type="number"
+                                                                    min="1"
+                                                                    value={editingUpstream.sseKeepaliveInterval}
+                                                                    onChange={e => setEditingUpstream(current => current ? { ...current, sseKeepaliveInterval: Number(e.target.value) } : current)}
+                                                                    className="h-9 rounded-md border-input bg-background text-sm"
+                                                                />
+                                                            </FieldBlock>
+                                                        )}
+                                                    </div>
+                                                    {editingUpstream.sseKeepaliveMode === 'full' && (
+                                                        <div className="mt-4 flex gap-2 rounded-lg border border-warning/30 bg-warning/5 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+                                                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                                                            <span>{t('upstream_manager.sse_keepalive_full_warning')}</span>
+                                                        </div>
+                                                    )}
                                                 </AdvancedSettingsGroup>
 
                                                 <AdvancedSettingsGroup title={t('upstream_manager.request_overrides')} divider>
@@ -2450,6 +2520,47 @@ export function Settings() {
                                                                 </div>
                                                             </AdvancedSettingsGroup>
 
+                                                            <AdvancedSettingsGroup
+                                                                title={t('upstream_manager.sse_keepalive')}
+                                                                description={t('upstream_manager.sse_keepalive_hint')}
+                                                                divider
+                                                            >
+                                                                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                                                                    <FieldBlock label={t('upstream_manager.sse_keepalive_mode')}>
+                                                                        <Select value={newSSEKeepaliveMode} onValueChange={value => setNewSSEKeepaliveMode(value as SSEKeepaliveMode)}>
+                                                                            <SelectTrigger className="h-9 rounded-md border-input bg-background text-sm">
+                                                                                <SelectValue />
+                                                                            </SelectTrigger>
+                                                                            <SelectContent>
+                                                                                <SelectItem value="off">{t('upstream_manager.sse_keepalive_mode_off')}</SelectItem>
+                                                                                <SelectItem value="after_headers">{t('upstream_manager.sse_keepalive_mode_after_headers')}</SelectItem>
+                                                                                <SelectItem value="full">{t('upstream_manager.sse_keepalive_mode_full')}</SelectItem>
+                                                                            </SelectContent>
+                                                                        </Select>
+                                                                    </FieldBlock>
+                                                                    {newSSEKeepaliveMode !== 'off' && (
+                                                                        <FieldBlock
+                                                                            label={t('upstream_manager.sse_keepalive_interval')}
+                                                                            hint={t('upstream_manager.sse_keepalive_interval_hint')}
+                                                                        >
+                                                                            <Input
+                                                                                type="number"
+                                                                                min="1"
+                                                                                value={newSSEKeepaliveInterval}
+                                                                                onChange={e => setNewSSEKeepaliveInterval(Number(e.target.value))}
+                                                                                className="h-9 rounded-md border-input bg-background text-sm"
+                                                                            />
+                                                                        </FieldBlock>
+                                                                    )}
+                                                                </div>
+                                                                {newSSEKeepaliveMode === 'full' && (
+                                                                    <div className="mt-4 flex gap-2 rounded-lg border border-warning/30 bg-warning/5 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+                                                                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                                                                        <span>{t('upstream_manager.sse_keepalive_full_warning')}</span>
+                                                                    </div>
+                                                                )}
+                                                            </AdvancedSettingsGroup>
+
                                                             <AdvancedSettingsGroup title={t('upstream_manager.request_logging')} divider>
                                                                 <ToggleSetting
                                                                     label={t('upstream_manager.logging_enabled')}
@@ -2521,6 +2632,9 @@ export function Settings() {
                                                         const flagLabels: string[] = []
                                                         if (overrideEnabled) {
                                                             flagLabels.push(t('log_detail.request_override') + (overrideRuleCount ? ' ×' + overrideRuleCount : ''))
+                                                        }
+                                                        if (upstream.sse_keepalive?.mode && upstream.sse_keepalive.mode !== 'off') {
+                                                            flagLabels.push(t('upstream_manager.sse_keepalive_badge', { mode: t(`upstream_manager.sse_keepalive_mode_${upstream.sse_keepalive.mode}`) }))
                                                         }
                                                         if (upstream.logging_enabled === false) {
                                                             flagLabels.push(t('upstream_manager.logging_disabled_badge'))

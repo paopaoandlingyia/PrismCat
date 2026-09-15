@@ -319,6 +319,13 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	earlySSERequest := false
+	if !webSocketUpgrade && upstream.SSEKeepalive.Mode == config.SSEKeepaliveModeFull {
+		var detectionReason string
+		earlySSERequest, requestBodySource, detectionReason = detectSSERequest(r, requestBodySource)
+		logSSEDetectionFallback(upstreamName, requestURL.Path, detectionReason)
+	}
+
 	if requestBodySource != nil && requestBodySource != http.NoBody {
 		if loggingEnabled {
 			tee := io.TeeReader(requestBodySource, reqCapture)
@@ -397,11 +404,28 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		upstreamReq.Header.Set("Connection", "Upgrade")
 		upstreamReq.Header.Set("Upgrade", r.Header.Get("Upgrade"))
 	}
+	if earlySSERequest {
+		// Full keepalive may inject an uncompressed SSE comment before upstream
+		// headers arrive, so the following upstream body must also be identity.
+		upstreamReq.Header.Set("Accept-Encoding", "identity")
+	}
 
+	var earlyKeepalive *earlySSEKeepalive
+	if earlySSERequest {
+		earlyKeepalive = startEarlySSEKeepalive(
+			ctx,
+			w,
+			time.Duration(upstream.SSEKeepalive.IntervalSeconds)*time.Second,
+			cancel,
+		)
+	}
 	resp, err := client.Do(upstreamReq)
+	earlyResult := earlyKeepalive.stopAndWait()
 	if err != nil {
 		logMu.Lock()
-		if isResponseHeaderTimeout(err) && upstream.ResponseHeaderTimeout > 0 {
+		if earlyResult.err != nil {
+			logEntry.Error = fmt.Sprintf("downstream SSE keepalive failed: %v", earlyResult.err)
+		} else if isResponseHeaderTimeout(err) && upstream.ResponseHeaderTimeout > 0 {
 			logEntry.Error = fmt.Sprintf("upstream response header timeout after %ds", upstream.ResponseHeaderTimeout)
 		} else {
 			logEntry.Error = fmt.Sprintf("upstream request failed: %v", err)
@@ -411,10 +435,27 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			p.completeLive(logEntry)
 		}
 		logMu.Unlock()
-		http.Error(w, fmt.Sprintf("upstream error: %v", err), http.StatusBadGateway)
+		if !earlyResult.committed {
+			http.Error(w, fmt.Sprintf("upstream error: %v", err), http.StatusBadGateway)
+		}
 		return
 	}
 	defer resp.Body.Close()
+	if earlyResult.err != nil {
+		logMu.Lock()
+		logEntry.StatusCode = resp.StatusCode
+		logEntry.ResponseHeaders = p.headerToMap(resp.Header)
+		logEntry.Error = fmt.Sprintf("downstream SSE keepalive failed: %v", earlyResult.err)
+		if loggingEnabled {
+			p.finalizeAndSaveLog(logEntry, startTime, reqCapture, nil)
+			p.completeLive(logEntry)
+		}
+		logMu.Unlock()
+		if !earlyResult.committed {
+			http.Error(w, "downstream SSE keepalive failed", http.StatusBadGateway)
+		}
+		return
+	}
 
 	if webSocketUpgrade && resp.StatusCode == http.StatusSwitchingProtocols {
 		if totalTimeoutTimer != nil {
@@ -454,8 +495,27 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	streaming := isStreaming(resp.Header)
+	sseKeepaliveEnabled := upstream.SSEKeepalive.Mode != config.SSEKeepaliveModeOff && canInjectSSEHeartbeat(resp)
+	if earlyResult.committed && !sseKeepaliveEnabled {
+		logMu.Lock()
+		logEntry.StatusCode = resp.StatusCode
+		logEntry.ResponseHeaders = p.headerToMap(resp.Header)
+		logEntry.Streaming = streaming
+		logEntry.Error = fmt.Sprintf(
+			"upstream returned status %d with content-type %q and content-encoding %q after early SSE keepalive committed",
+			resp.StatusCode,
+			resp.Header.Get("Content-Type"),
+			resp.Header.Get("Content-Encoding"),
+		)
+		if loggingEnabled {
+			p.finalizeAndSaveLog(logEntry, startTime, reqCapture, nil)
+			p.completeLive(logEntry)
+		}
+		logMu.Unlock()
+		return
+	}
 	var firstResponseChunk []byte
-	if upstream.ResponseBodyFirstByteTimeout > 0 {
+	if upstream.ResponseBodyFirstByteTimeout > 0 && !sseKeepaliveEnabled {
 		firstResponseChunk, err = readFirstResponseBodyChunk(
 			resp.Body,
 			time.Duration(upstream.ResponseBodyFirstByteTimeout)*time.Second,
@@ -489,9 +549,28 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	logMu.Unlock()
 
-	// Forward response headers and status code.
-	p.copyResponseHeaders(w.Header(), resp.Header)
-	w.WriteHeader(resp.StatusCode)
+	// Forward response headers and status code. Full keepalive may already have
+	// committed the downstream SSE response while waiting for upstream headers.
+	if !earlyResult.committed {
+		p.copyResponseHeaders(w.Header(), resp.Header)
+		if sseKeepaliveEnabled {
+			w.Header().Del("Content-Length")
+			w.Header().Set("X-Accel-Buffering", "no")
+		}
+		w.WriteHeader(resp.StatusCode)
+		if sseKeepaliveEnabled {
+			if err := http.NewResponseController(w).Flush(); err != nil {
+				logMu.Lock()
+				logEntry.Error = fmt.Sprintf("flush downstream SSE response headers: %v", err)
+				if loggingEnabled {
+					p.finalizeAndSaveLog(logEntry, startTime, reqCapture, nil)
+					p.completeLive(logEntry)
+				}
+				logMu.Unlock()
+				return
+			}
+		}
+	}
 
 	// Forward response body while capturing a bounded preview for logging.
 	var respCapture *limitedCapture
@@ -501,7 +580,13 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		respCaptureWriter = respCapture
 	}
 	var responseBodyReader io.Reader = resp.Body
-	if upstream.ResponseBodyIdleTimeout > 0 {
+	if sseKeepaliveEnabled && (upstream.ResponseBodyFirstByteTimeout > 0 || upstream.ResponseBodyIdleTimeout > 0) {
+		responseBodyReader = &responseBodyStageTimeoutReader{
+			body:             resp.Body,
+			firstByteTimeout: time.Duration(upstream.ResponseBodyFirstByteTimeout) * time.Second,
+			idleTimeout:      time.Duration(upstream.ResponseBodyIdleTimeout) * time.Second,
+		}
+	} else if upstream.ResponseBodyIdleTimeout > 0 {
 		responseBodyReader = &responseBodyIdleTimeoutReader{
 			body:    resp.Body,
 			timeout: time.Duration(upstream.ResponseBodyIdleTimeout) * time.Second,
@@ -511,13 +596,28 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if len(firstResponseChunk) > 0 {
 		responseBodyReader = io.MultiReader(bytes.NewReader(firstResponseChunk), responseBodyReader)
 	}
-	copied, copyErr := copyWithOptionalFlush(
-		w,
-		responseBodyReader,
-		respCaptureWriter,
-		logEntry.Streaming,
-		p.makeLiveChunkPublisherIfEnabled(loggingEnabled, logEntry, resp.Header),
-	)
+	chunkPublisher := p.makeLiveChunkPublisherIfEnabled(loggingEnabled, logEntry, resp.Header)
+	var copied int64
+	var copyErr error
+	if sseKeepaliveEnabled {
+		copied, copyErr = copyWithSSEKeepalive(
+			ctx,
+			w,
+			responseBodyReader,
+			resp.Body,
+			respCaptureWriter,
+			chunkPublisher,
+			time.Duration(upstream.SSEKeepalive.IntervalSeconds)*time.Second,
+		)
+	} else {
+		copied, copyErr = copyWithOptionalFlush(
+			w,
+			responseBodyReader,
+			respCaptureWriter,
+			logEntry.Streaming,
+			chunkPublisher,
+		)
+	}
 	logMu.Lock()
 	logEntry.ResponseBodySize = copied
 	if copyErr != nil {
@@ -526,6 +626,8 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// classify it as an upstream/proxy failure.
 		if isClientCanceledResponse(r.Context(), copyErr) {
 			logEntry.Truncated = true
+		} else if isResponseBodyFirstByteTimeout(copyErr) {
+			logEntry.Error = copyErr.Error()
 		} else if isResponseBodyIdleTimeout(copyErr) {
 			logEntry.Error = copyErr.Error()
 		} else {

@@ -250,6 +250,35 @@ func TestNormalizeUpstreamsDefaultsTimeout(t *testing.T) {
 	}
 }
 
+func TestNormalizeSSEKeepalive(t *testing.T) {
+	got, err := normalizeUpstreams(map[string]UpstreamConfig{
+		"openai": {
+			Target: "https://api.openai.com",
+			SSEKeepalive: &SSEKeepaliveConfig{
+				Mode:            " FULL ",
+				IntervalSeconds: 15,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("normalizeUpstreams returned error: %v", err)
+	}
+	keepalive := got["openai"].SSEKeepalive
+	if keepalive == nil || keepalive.Mode != SSEKeepaliveModeFull || keepalive.IntervalSeconds != 15 {
+		t.Fatalf("SSEKeepalive = %#v", keepalive)
+	}
+
+	_, err = normalizeUpstreams(map[string]UpstreamConfig{
+		"openai": {
+			Target:       "https://api.openai.com",
+			SSEKeepalive: &SSEKeepaliveConfig{Mode: SSEKeepaliveModeFull},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "interval must be greater than zero") {
+		t.Fatalf("invalid interval error = %v", err)
+	}
+}
+
 func TestNormalizeRequestOverridesNormalizesBindingsAndRules(t *testing.T) {
 	cfg := NormalizeRequestOverrides(RequestOverridesConfig{
 		Enabled: true,
@@ -450,12 +479,14 @@ func TestTargetPresetSnapshotAndActivation(t *testing.T) {
 			"a": {
 				URL:              "https://a.example.test",
 				OutboundProxy:    "direct",
+				SSEKeepalive:     &SSEKeepaliveConfig{Mode: SSEKeepaliveModeFull, IntervalSeconds: 11},
 				RequestOverrides: &RequestOverrideUpstreamBinding{Enabled: true, RuleNames: []string{"a-key"}},
 				UsageExtraction:  &UsageExtractionUpstreamBinding{Enabled: true, RuleNames: []string{"a-usage"}},
 			},
 			"b": {
 				URL:              "https://b.example.test",
 				OutboundProxy:    "env",
+				SSEKeepalive:     &SSEKeepaliveConfig{Mode: SSEKeepaliveModeAfterHeaders, IntervalSeconds: 13},
 				RequestOverrides: &RequestOverrideUpstreamBinding{Enabled: true, RuleNames: []string{"b-key"}},
 				UsageExtraction:  &UsageExtractionUpstreamBinding{Enabled: true, RuleNames: []string{"b-usage"}},
 			},
@@ -468,6 +499,9 @@ func TestTargetPresetSnapshotAndActivation(t *testing.T) {
 	if !ok || before.TargetName != "a" || before.Target != "https://a.example.test" || before.OutboundProxy != "direct" {
 		t.Fatalf("unexpected target A snapshot: %#v, ok=%v", before, ok)
 	}
+	if before.SSEKeepalive.Mode != SSEKeepaliveModeFull || before.SSEKeepalive.IntervalSeconds != 11 {
+		t.Fatalf("target A SSE keepalive = %#v", before.SSEKeepalive)
+	}
 	if got := beforeOverrides.Upstreams["codex"].RuleNames; len(got) != 1 || got[0] != "a-key" {
 		t.Fatalf("target A override binding = %v, want [a-key]", got)
 	}
@@ -478,6 +512,9 @@ func TestTargetPresetSnapshotAndActivation(t *testing.T) {
 	after, afterOverrides, ok := cfg.ResolveUpstreamSnapshot("codex")
 	if !ok || after.TargetName != "b" || after.Target != "https://b.example.test" || after.OutboundProxy != "env" {
 		t.Fatalf("unexpected target B snapshot: %#v, ok=%v", after, ok)
+	}
+	if after.SSEKeepalive.Mode != SSEKeepaliveModeAfterHeaders || after.SSEKeepalive.IntervalSeconds != 13 {
+		t.Fatalf("target B SSE keepalive = %#v", after.SSEKeepalive)
 	}
 	if got := afterOverrides.Upstreams["codex"].RuleNames; len(got) != 1 || got[0] != "b-key" {
 		t.Fatalf("target B override binding = %v, want [b-key]", got)

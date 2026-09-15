@@ -296,10 +296,13 @@ storage:
 upstreams:
   openai:
     target: "https://api.openai.com"
-    timeout: 120 # 整个上游请求和响应过程的总超时
+    timeout: 300 # 整个上游请求和响应过程的总超时；新配置默认 5 分钟
     response_header_timeout: 60 # 高级：等待状态码/响应头；0 = 禁用，且始终受总超时约束
     response_body_first_byte_timeout: 30 # 高级：收到响应头后等待首个响应体字节，适用于所有响应
     response_body_idle_timeout: 15 # 高级：响应体开始后连续无新数据的最长时间，每次收到数据重新计时
+    sse_keepalive: # 可选；默认关闭，心跳不会延长总超时
+      mode: off # off、after_headers，或 full（包含等待响应头阶段）
+      interval: 15 # 上游静默多久后向下游发送 SSE 注释
     outbound_proxy: "env"          # env、direct，或 http://127.0.0.1:7890 这样的代理 URL
     logging_path_filter:            # all、allowlist 或 denylist；Ant 与 RE2 正则可混用
       mode: allowlist
@@ -310,7 +313,7 @@ upstreams:
           pattern: "^/v1/chat/completions$"
   gemini:
     target: "https://generativelanguage.googleapis.com"
-    timeout: 120
+    timeout: 300
     response_header_timeout: 0
     response_body_first_byte_timeout: 0
     response_body_idle_timeout: 0 # 0 = 禁用对应阶段超时
@@ -322,18 +325,20 @@ upstreams:
     targets:
       primary:
         url: "https://api.openai.com"
-        timeout: 120
+        timeout: 300
         outbound_proxy: "env"
         request_overrides:
           enabled: false
           rule_names: []
       backup:
         url: "https://api.example.com"
-        timeout: 120
+        timeout: 300
         outbound_proxy: "direct"
         request_overrides:
           enabled: false
           rule_names: []
+
+`sse_keepalive.mode` 的 `after_headers` 仅在确认上游返回成功且未压缩的 `text/event-stream` 后注入 `: ping` 注释。`full` 还会根据 `Accept: text/event-stream`、`alt=sse` 或 JSON 顶层 `stream: true` 覆盖响应头前的等待；第一枚心跳发出后 HTTP 200 已提交，之后的上游 401、429 或 5xx 只能记录到 PrismCat 日志，下游表现为流中断。现有配置中明确写入的 `timeout` 不会随默认值变化而自动迁移。
 
 # 请求参数覆盖（默认关闭）
 # 支持的操作：JSON Body set / remove / default / append / prepend；Header set / remove

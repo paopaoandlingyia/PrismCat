@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -122,5 +124,49 @@ func TestHandleUpstreamsRejectsInvalidLoggingPathFilter(t *testing.T) {
 
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestHandleUpstreamsRoundTripsSSEKeepalive(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configPath, []byte("{}\n"), 0644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	h := &Handler{cfg: cfg}
+	postBody := `{"name":"openai","target":"https://api.openai.com","sse_keepalive":{"mode":"full","interval":17}}`
+	postReq := httptest.NewRequest(http.MethodPost, "/api/upstreams", strings.NewReader(postBody))
+	postRecorder := httptest.NewRecorder()
+
+	h.handleUpstreams(postRecorder, postReq)
+	if postRecorder.Code != http.StatusOK {
+		t.Fatalf("POST status = %d, body = %s", postRecorder.Code, postRecorder.Body.String())
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/upstreams", nil)
+	getRecorder := httptest.NewRecorder()
+	h.handleUpstreams(getRecorder, getReq)
+	if getRecorder.Code != http.StatusOK {
+		t.Fatalf("GET status = %d, body = %s", getRecorder.Code, getRecorder.Body.String())
+	}
+	var upstreams []struct {
+		Name         string                    `json:"name"`
+		Timeout      int                       `json:"timeout"`
+		SSEKeepalive config.SSEKeepaliveConfig `json:"sse_keepalive"`
+	}
+	if err := json.Unmarshal(getRecorder.Body.Bytes(), &upstreams); err != nil {
+		t.Fatalf("decode GET response: %v", err)
+	}
+	if len(upstreams) != 1 || upstreams[0].Name != "openai" {
+		t.Fatalf("upstreams = %#v", upstreams)
+	}
+	if upstreams[0].Timeout != config.DefaultUpstreamTimeoutSeconds {
+		t.Fatalf("timeout = %d, want %d", upstreams[0].Timeout, config.DefaultUpstreamTimeoutSeconds)
+	}
+	if upstreams[0].SSEKeepalive.Mode != config.SSEKeepaliveModeFull || upstreams[0].SSEKeepalive.IntervalSeconds != 17 {
+		t.Fatalf("sse_keepalive = %#v", upstreams[0].SSEKeepalive)
 	}
 }

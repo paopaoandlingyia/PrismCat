@@ -54,7 +54,7 @@ func TestResolveReplayTargetFromCustomURL(t *testing.T) {
 	if outboundProxy != "env" {
 		t.Fatalf("outboundProxy = %q", outboundProxy)
 	}
-	if timeout != 120 {
+	if timeout != config.DefaultUpstreamTimeoutSeconds {
 		t.Fatalf("timeout = %d", timeout)
 	}
 }
