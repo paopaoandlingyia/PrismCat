@@ -38,6 +38,18 @@ type Config struct {
 	mu             sync.RWMutex
 }
 
+// persistedConfig contains only fields that belong in config.yaml. Keeping
+// runtime state out of this snapshot avoids copying Config's mutex during Save.
+type persistedConfig struct {
+	Server    ServerConfig              `yaml:"server"`
+	Upstreams map[string]UpstreamConfig `yaml:"upstreams"`
+	Logging   LoggingConfig             `yaml:"logging"`
+	LogRules  LoggingRulesConfig        `yaml:"logging_rules"`
+	Storage   StorageConfig             `yaml:"storage"`
+	Overrides RequestOverridesConfig    `yaml:"request_overrides"`
+	Usage     UsageExtractionConfig     `yaml:"usage_extraction"`
+}
+
 // ServerConfig 服务器配置
 type ServerConfig struct {
 	Addr           string   `yaml:"addr"`
@@ -1091,12 +1103,20 @@ func (c *Config) Save() error {
 }
 
 func (c *Config) saveLocked() error {
-	saved := *c
+	saved := persistedConfig{
+		Server:    c.Server,
+		Upstreams: c.Upstreams,
+		Logging:   c.Logging,
+		LogRules:  c.LogRules,
+		Storage:   c.Storage,
+		Overrides: c.Overrides,
+		Usage:     c.Usage,
+	}
 	if c.envUIPassword {
 		saved.Server.UIPassword = c.fileUIPassword
 	}
 
-	data, err := yaml.Marshal(saved)
+	data, err := yaml.Marshal(&saved)
 	if err != nil {
 		return fmt.Errorf("序列化配置失败: %w", err)
 	}
