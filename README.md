@@ -37,8 +37,11 @@ Grab the binary for your system from [Releases](https://github.com/paopaoandling
 | Platform | How to Start |
 |----------|-------------|
 | **Windows** | Run `prismcat.exe` — it lives in your system tray |
-| **Linux / macOS** | Run `./prismcat` |
+| **macOS** | Unzip `prismcat-*-macos-universal.zip`, drag `PrismCat.app` into Applications and open it — it lives in the menu bar |
+| **Linux / macOS CLI** | Run `./prismcat` |
 | **Docker** | See [Docker Deployment](#docker-deployment) |
+
+> **First launch on macOS**: the app is not notarized yet, so the first time right-click `PrismCat.app` in Applications → **Open**, or run `xattr -dr com.apple.quarantine /Applications/PrismCat.app`. Data is stored in `~/Library/Application Support/PrismCat`.
 
 Open **`http://localhost:8711`** in your browser.
 

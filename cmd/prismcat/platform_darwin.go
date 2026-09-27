@@ -14,7 +14,7 @@ import (
 )
 
 // 菜单栏模板图标（黑色 + 透明，系统按深浅色自动着色），
-// 由 go run ./scripts/macos/gen-tray-icon 生成。
+// 由 go run ./scripts/macos/gen-icons 生成。
 //
 //go:embed tray_icon_darwin.png
 var trayIconTemplate []byte

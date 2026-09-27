@@ -93,9 +93,59 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  build-macos-app:
+    # 菜单栏依赖 Cocoa，需要 CGO，只能在 macOS 上编译；
+    # 上面 darwin 的裸二进制保留给命令行用户。
+    name: Build macOS app
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Verify release tag
+        shell: bash
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release tag: $RELEASE_TAG" >&2
+            exit 1
+          fi
+          ACTUAL_TAG="$(git describe --tags --exact-match HEAD)"
+          if [[ "$ACTUAL_TAG" != "$RELEASE_TAG" ]]; then
+            echo "Checked out $ACTUAL_TAG instead of $RELEASE_TAG" >&2
+            exit 1
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25.7'
+
+      - name: Build PrismCat.app
+        shell: bash
+        run: VERSION="${RELEASE_TAG#v}" scripts/macos/build-app.sh
+
+      - name: Stage app
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-macos-app
+          path: dist/macos/prismcat-${{ env.RELEASE_TAG }}-macos-universal.zip
+          if-no-files-found: error
+          retention-days: 1
+
   publish:
     name: Publish GitHub Release
-    needs: build
+    needs: [build, build-macos-app]
     runs-on: ubuntu-latest
     permissions:
       contents: write
