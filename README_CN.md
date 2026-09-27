@@ -37,8 +37,11 @@ PrismCat 是一个**自托管的 LLM API 透明代理与调试控制台**。
 | 平台 | 启动方式 |
 |------|---------|
 | **Windows** | 双击 `prismcat.exe`，自动隐藏至系统托盘 |
-| **Linux / macOS** | 终端执行 `./prismcat` |
+| **macOS** | 解压 `prismcat-*-macos-universal.zip`，把 `PrismCat.app` 拖进「应用程序」后打开，常驻顶部菜单栏 |
+| **Linux / macOS 命令行** | 终端执行 `./prismcat` |
 | **Docker** | 参见 [Docker 部署](#docker-部署) |
+
+> **macOS 首次打开**：应用暂未经过 Apple 公证，第一次需要在「应用程序」里右键 `PrismCat.app` →「打开」，或在终端执行 `xattr -dr com.apple.quarantine /Applications/PrismCat.app`。数据保存在 `~/Library/Application Support/PrismCat`。
 
 打开浏览器访问 **`http://localhost:8711`** 进入控制面板。
 

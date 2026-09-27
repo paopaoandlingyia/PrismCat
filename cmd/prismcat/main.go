@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/paopaoandlingyia/PrismCat/internal/config"
@@ -91,6 +92,16 @@ func main() {
 	showConsole := flag.Bool("console", false, "是否显示控制台窗口")
 	flag.Parse()
 
+	// 显式传入的配置路径按启动时的目录解析，不受下面切换工作目录的影响。
+	if *configPath != defaultPath {
+		if abs, err := filepath.Abs(*configPath); err == nil {
+			*configPath = abs
+		}
+	}
+	if err := prepareWorkDir(); err != nil {
+		log.Fatalf("准备工作目录失败: %v", err)
+	}
+
 	// 统一路径处理：如果要使用的是默认路径，但老路径 config.yaml 存在，则尝试迁移或提示
 	if *configPath == defaultPath {
 		if _, err := os.Stat("config.yaml"); err == nil {
@@ -166,7 +177,6 @@ func main() {
 	}
 
 	asyncRepo := storage.NewAsyncRepository(sqliteRepo, cfg, cfg.Storage.AsyncBuffer, blobStore)
-	defer asyncRepo.Close()
 
 	// Best-effort log retention cleanup.
 	stopRetention := make(chan struct{})
@@ -249,13 +259,22 @@ func main() {
 			}
 		}
 	}()
-	defer close(stopRetention)
+
+	// 停止后台清理并把异步队列里的日志写完。macOS 菜单栏模式下进程在托盘
+	// 退出回调里就结束了，不会回到这里执行 defer，所以同时交给 platformRun。
+	shutdown := sync.OnceFunc(func() {
+		close(stopRetention)
+		if err := asyncRepo.Close(); err != nil {
+			log.Printf("关闭存储失败: %v", err)
+		}
+	})
+	defer shutdown()
 
 	// 启动服务器
 	srv := server.New(cfg, asyncRepo, blobStore)
 
-	// 平台相关的运行逻辑（Windows: 系统托盘, 其他: 直接运行）
-	if err := platformRun(srv, cfg, *showConsole); err != nil {
+	// 平台相关的运行逻辑（Windows: 系统托盘, macOS: 菜单栏, 其他: 直接运行）
+	if err := platformRun(srv, cfg, *showConsole, shutdown); err != nil {
 		log.Fatalf("运行失败: %v", err)
 	}
 }

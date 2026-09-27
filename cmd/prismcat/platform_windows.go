@@ -1,14 +1,11 @@
 package main
 
 import (
-	"fmt"
-	"log"
 	"syscall"
 
 	"github.com/getlantern/systray"
 	"github.com/paopaoandlingyia/PrismCat/internal/config"
 	"github.com/paopaoandlingyia/PrismCat/internal/server"
-	"github.com/skratchdot/open-golang/open"
 )
 
 var (
@@ -41,7 +38,11 @@ func getTrayLabels() (openTitle, quitTitle string) {
 	return "Open Dashboard", "Exit"
 }
 
-func platformRun(srv *server.Server, cfg *config.Config, showConsole bool) error {
+func setTrayIcon() {
+	systray.SetIcon(iconData)
+}
+
+func platformRun(srv *server.Server, cfg *config.Config, showConsole bool, shutdown func()) error {
 	// Windows 控制台处理
 	if showConsole {
 		hwnd, _, _ := getConsoleWindow.Call()
@@ -57,40 +58,6 @@ func platformRun(srv *server.Server, cfg *config.Config, showConsole bool) error
 		hideConsole()
 	}
 
-	// 运行系统托盘
-	systray.Run(func() {
-		systray.SetIcon(iconData)
-		systray.SetTitle("PrismCat")
-		systray.SetTooltip("PrismCat LLM Proxy " + config.Version)
-
-		titleOpen, titleQuit := getTrayLabels()
-		mOpen := systray.AddMenuItem(titleOpen, "")
-		systray.AddSeparator()
-		mQuit := systray.AddMenuItem(titleQuit, "")
-
-		// 托盘菜单事件循环
-		go func() {
-			for {
-				select {
-				case <-mOpen.ClickedCh:
-					open.Run(fmt.Sprintf("http://localhost:%d", cfg.Server.Port))
-				case <-mQuit.ClickedCh:
-					systray.Quit()
-				}
-			}
-		}()
-
-		// 在后台启动服务器
-		go func() {
-			if err := srv.Start(); err != nil {
-				log.Printf("服务器错误: %v", err)
-				systray.Quit()
-			}
-		}()
-
-	}, func() {
-		log.Printf("PrismCat %s 正在退出...", config.Version)
-	})
-
+	runTray(srv, cfg, shutdown)
 	return nil
 }
