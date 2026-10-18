@@ -43,12 +43,13 @@ func runTray(srv *server.Server, cfg *config.Config, shutdown func()) {
 		go func() {
 			if err := srv.Start(); err != nil {
 				log.Printf("服务器错误: %v", err)
-				systray.Quit()
 			}
+			systray.Quit()
 		}()
 
 	}, func() {
 		log.Printf("PrismCat %s 正在退出...", config.Version)
+		srv.Shutdown()
 		shutdown()
 	})
 }

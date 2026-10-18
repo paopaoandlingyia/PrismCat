@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -188,6 +189,9 @@ type Server struct {
 	api    *api.Handler
 	auth   *auth.Manager
 	server *http.Server
+	stopCh chan struct{}
+	doneCh chan struct{}
+	stop   sync.Once
 }
 
 // New 创建服务器实例
@@ -195,18 +199,28 @@ func New(cfg *config.Config, repo storage.Repository, blobs storage.BlobStore) *
 	liveRegistry := live.NewRegistry(cfg.LoggingSnapshot().BodyPreviewBytes)
 	traceSeq := trace.NewSequencer()
 	return &Server{
-		cfg:   cfg,
-		repo:  repo,
-		blobs: blobs,
-		live:  liveRegistry,
-		proxy: proxy.New(cfg, repo, liveRegistry, traceSeq),
-		api:   api.New(cfg, repo, blobs, liveRegistry),
-		auth:  auth.NewManager(cfg),
+		cfg:    cfg,
+		repo:   repo,
+		blobs:  blobs,
+		live:   liveRegistry,
+		proxy:  proxy.New(cfg, repo, liveRegistry, traceSeq),
+		api:    api.New(cfg, repo, blobs, liveRegistry),
+		auth:   auth.NewManager(cfg),
+		stopCh: make(chan struct{}),
+		doneCh: make(chan struct{}),
 	}
+}
+
+// Shutdown stops the HTTP server and waits for Start to finish its graceful shutdown.
+func (s *Server) Shutdown() {
+	s.stop.Do(func() { close(s.stopCh) })
+	<-s.doneCh
 }
 
 // Start 启动服务器
 func (s *Server) Start() error {
+	defer close(s.doneCh)
+
 	mux := http.NewServeMux()
 	serverCfg := s.cfg.ServerSnapshot()
 
@@ -310,6 +324,7 @@ func (s *Server) Start() error {
 		}
 		return nil
 	case <-sigChan:
+	case <-s.stopCh:
 	}
 
 	log.Println("正在关闭服务器...")
@@ -327,12 +342,8 @@ func (s *Server) Start() error {
 	}
 
 	// Ensure handlers finish before returning (prevents closing repositories too early).
-	deadline := time.Now().Add(shutdownTimeout)
-	for activeRequests.Load() > 0 && time.Now().Before(deadline) {
+	for activeRequests.Load() > 0 {
 		time.Sleep(50 * time.Millisecond)
-	}
-	if n := activeRequests.Load(); n > 0 {
-		log.Printf("shutdown: %d request(s) still active after timeout", n)
 	}
 
 	if err := <-errCh; err != nil && err != http.ErrServerClosed {

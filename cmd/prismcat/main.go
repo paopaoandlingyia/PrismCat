@@ -180,7 +180,9 @@ func main() {
 
 	// Best-effort log retention cleanup.
 	stopRetention := make(chan struct{})
+	retentionDone := make(chan struct{})
 	go func() {
+		defer close(retentionDone)
 		ticker := time.NewTicker(1 * time.Minute)
 		defer ticker.Stop()
 
@@ -264,6 +266,7 @@ func main() {
 	// 退出回调里就结束了，不会回到这里执行 defer，所以同时交给 platformRun。
 	shutdown := sync.OnceFunc(func() {
 		close(stopRetention)
+		<-retentionDone
 		if err := asyncRepo.Close(); err != nil {
 			log.Printf("关闭存储失败: %v", err)
 		}
