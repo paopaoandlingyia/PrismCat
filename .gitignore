@@ -3,6 +3,7 @@
 /prismcat.exe
 /prismcat.exe~
 /prismcat.exe.lnk
+/dist/
 
 # === 运行时数据 ===
 /data/
